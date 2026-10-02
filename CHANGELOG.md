@@ -8,6 +8,7 @@
 - Windows: every Claude Code session is followed on its own. The pill counts them, puts the one that needs you first and says where it runs (Windows Terminal, Cursor, VS Code) and whether it is in bypass mode; one session finishing no longer marks the others finished.
 - Windows: a question from Claude Code opens a question card instead of Allow / Deny, and **Go to Windows Terminal** / **Go to Cursor** brings that session's window to the front — the exact Windows Terminal window, or the editor window of its workspace. ↗ on the Claude Code pill does the same.
 - Windows: starting Coucou leaves the keyboard where it was; the hidden settings window and tray flyout no longer take it at launch.
+- Windows: the island never holds the keyboard out of sight: it stays out of Alt-Tab, a click does not activate it, and closing the chat gives the keyboard back to the window in front.
 - Windows: a new version of Coucou replaces the hook relay even while Claude Code hooks are running it; the old copy is moved aside and removed on a later start.
 - Windows: Settings → Open projects in picks what the island's buttons open — Cursor, VS Code or nothing; Windows Terminal, a PowerShell window or nothing — with File Explorer as the fallback.
 - Declare the tools you use in Settings: Gemini CLI, Antigravity, Anthropic, Google AI and OpenAI pills join the existing ones (Cursor and Codex pills are coming soon), and you pick the main pill.

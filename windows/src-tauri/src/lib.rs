@@ -128,9 +128,13 @@ fn set_island_rect(app: AppHandle, shared: State<Shared>, x: f64, y: f64, width:
 #[tauri::command]
 fn focus_window(app: AppHandle, focused: bool) {
     let Some(win) = island::window(&app) else { return };
-    platform::set_activating(&win, focused);
     if focused {
+        platform::set_activating(&win, true);
         let _ = win.set_focus();
+    } else {
+        platform::set_activating(&win, false);
+        // Not taking the keyboard any more must also mean not holding it.
+        platform::give_back_foreground(&win);
     }
 }
 

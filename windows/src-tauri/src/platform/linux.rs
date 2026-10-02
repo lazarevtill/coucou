@@ -292,6 +292,10 @@ pub fn make_non_activating(win: &WebviewWindow) {
     crate::log::line("island is a layer-shell overlay");
 }
 
+/// Nothing to do here: the compositor decides where the keyboard goes once the
+/// island stops accepting it.
+pub fn give_back_foreground(_win: &WebviewWindow) {}
+
 /// Temporarily allow keyboard focus so a text field inside the island can be
 /// typed in.
 pub fn set_activating(win: &WebviewWindow, activating: bool) {

@@ -14,12 +14,10 @@ use ::windows::Win32::System::Ole::RevokeDragDrop;
 use ::windows::Win32::System::SystemInformation::GetLocalTime;
 use ::windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 use ::windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
-use ::windows::Win32::UI::WindowsAndMessaging::{
-    EnumChildWindows, GetClassNameW, GetCursorPos, GetWindowLongPtrW, SetWindowLongPtrW,
-    GWL_EXSTYLE, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-};
+use ::windows::Win32::UI::WindowsAndMessaging::{EnumChildWindows, GetClassNameW, GetCursorPos};
 
 mod focus;
+mod island_style;
 mod toast;
 
 use super::{Candidate, FocusMethod, FocusOutcome, LocalTime};
@@ -244,29 +242,33 @@ unsafe extern "system" fn revoke_render_widget(hwnd: HWND, _: LPARAM) -> BOOL {
     true.into()
 }
 
-/// WS_EX_NOACTIVATE keeps clicks from stealing focus; WS_EX_TOOLWINDOW keeps the
-/// island out of Alt-Tab.
+/// Clicks never activate the island and Alt-Tab never lists it, for good: see
+/// island_style.rs for why setting the style once does not last.
 pub fn make_non_activating(win: &WebviewWindow) {
-    let Some(hwnd) = hwnd_of(win) else { return };
-    unsafe {
-        let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-        let want = ex | WS_EX_NOACTIVATE.0 as isize | WS_EX_TOOLWINDOW.0 as isize;
-        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, want);
-    }
+    pin_island(win, false);
 }
 
 /// Temporarily allow activation so a text field inside the island can be typed in.
 pub fn set_activating(win: &WebviewWindow, activating: bool) {
-    let Some(hwnd) = hwnd_of(win) else { return };
-    unsafe {
-        let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-        let want = if activating {
-            ex & !(WS_EX_NOACTIVATE.0 as isize)
-        } else {
-            ex | WS_EX_NOACTIVATE.0 as isize
-        };
-        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, want);
+    pin_island(win, activating);
+}
+
+/// The island let go of the keyboard: the window in front of you gets it back.
+pub fn give_back_foreground(win: &WebviewWindow) {
+    if let Some(hwnd) = hwnd_of(win) {
+        island_style::give_back_foreground(hwnd);
     }
+}
+
+fn pin_island(win: &WebviewWindow, activating: bool) {
+    let Some(hwnd) = hwnd_of(win) else { return };
+    // A window is subclassed from the thread that owns it.
+    let raw = hwnd.0 as isize;
+    let _ = win.run_on_main_thread(move || {
+        if !island_style::pin(HWND(raw as *mut _), activating) {
+            crate::log::line("could not pin the island's window style");
+        }
+    });
 }
 
 /// Click-through here is the poll's WS_EX_TRANSPARENT toggle, not a region.

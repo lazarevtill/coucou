@@ -116,7 +116,10 @@ instance (see [terminals.md](terminals.md#how-this-is-tested)):
   notification; switched off, the island folds into a strip that lets clicks
   through;
 - starting Coucou leaves the foreground window as it was; opening the flyout or
-  Settings gives that window the keyboard.
+  Settings gives that window the keyboard;
+- the island stays a tool window that clicks do not activate (so Alt-Tab never
+  lists it) through its click-through changes; the chat gets the keyboard while
+  it is open, and closing it gives the keyboard to the window in front.
 
 A notification's button cannot be clicked by automation (the notification UI is
 not exposed to it). That a click reaches the program that raised the

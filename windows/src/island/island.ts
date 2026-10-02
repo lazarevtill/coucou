@@ -287,6 +287,12 @@ export class Island {
 
   // ── Mode / view ─────────────────────────────────────────────────────────────
 
+  /** Lets go of the keyboard: no field the island hides may keep it. */
+  private releaseKeyboard() {
+    (document.activeElement as HTMLElement | null)?.blur();
+    void Bridge.focusWindow(false);
+  }
+
   private setMode(mode: IslandMode) {
     const prev = State.mode;
     if (mode === prev) return;
@@ -295,7 +301,7 @@ export class Island {
     if (prev === "expanded") {
       Sound.play("close");
       State.isPinned = false;
-      void Bridge.focusWindow(false);
+      this.releaseKeyboard();
     }
     if (mode !== "expanded") {
       this.engine.resetMorph();
@@ -928,7 +934,7 @@ export class Island {
         void Bridge.focusWindow(true);
         window.setTimeout(() => this.views.get("prompt")?.focus?.(), 120);
       } else if (wasChat) {
-        void Bridge.focusWindow(false);
+        this.releaseKeyboard();
       }
     }
 
