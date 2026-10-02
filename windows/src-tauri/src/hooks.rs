@@ -391,20 +391,51 @@ pub fn ensure_hook_exe(app: &AppHandle) {
     install_relay(&src, &dest);
 }
 
+/// The contents decide whether the relay is current. A new relay is copied
+/// beside the old one and moved into place. The old one cannot be overwritten
+/// while a hook is running it — with many sessions open that is most of the
+/// time — but Windows lets a running program's file be moved: it is moved aside
+/// and removed on a later start, once nothing runs it.
 #[cfg(windows)]
 fn install_relay(src: &Path, dest: &Path) {
-    let same = match (std::fs::metadata(src), std::fs::metadata(dest)) {
-        (Ok(a), Ok(b)) => a.len() == b.len() && a.modified().ok() == b.modified().ok(),
-        _ => false,
-    };
-    if same {
+    clear_set_aside(dest);
+    if matches!((std::fs::read(src), std::fs::read(dest)), (Ok(a), Ok(b)) if a == b) {
         return;
     }
-    // A hook may be running right now and hold the file open; keeping the old
-    // copy is fine, it is the same relay.
-    if let Err(err) = std::fs::copy(src, dest) {
-        if !dest.exists() {
-            crate::log::line(format!("could not install {}: {err}", platform::HOOK_EXE));
+    let pid = std::process::id();
+    let fail = |what: &str, err: std::io::Error| crate::log::line(format!("could not install {}: {what}: {err}", platform::HOOK_EXE));
+    let temp = dest.with_extension(format!("new-{pid}"));
+    if let Err(err) = std::fs::copy(src, &temp) {
+        return fail("copy", err);
+    }
+    if dest.exists() {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+        let aside = dest.with_extension(format!("old-{pid}-{stamp}"));
+        if let Err(err) = std::fs::rename(dest, &aside) {
+            let _ = std::fs::remove_file(&temp);
+            return fail("move the old relay aside", err);
+        }
+        // Gone now if nothing runs it; otherwise on a later start.
+        let _ = std::fs::remove_file(&aside);
+    }
+    if let Err(err) = std::fs::rename(&temp, dest) {
+        fail("move the new relay in", err);
+    }
+}
+
+/// Old relays set aside by earlier updates, and copies an update left half-done.
+#[cfg(windows)]
+fn clear_set_aside(dest: &Path) {
+    let (Some(dir), Some(stem)) = (dest.parent(), dest.file_stem().and_then(|s| s.to_str())) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        let leftover = name
+            .strip_prefix(stem)
+            .and_then(|rest| rest.strip_prefix('.'))
+            .is_some_and(|ext| ext.starts_with("old-") || ext.starts_with("new-"));
+        if leftover {
+            let _ = std::fs::remove_file(entry.path());
         }
     }
 }
@@ -503,6 +534,55 @@ fn unified_diff(before: &str, after: &str) -> String {
         }
     }
     result
+}
+
+#[cfg(all(test, windows))]
+mod relay_install_tests {
+    use super::install_relay;
+    use std::os::windows::fs::OpenOptionsExt;
+
+    const FILE_SHARE_READ: u32 = 0x1;
+    const FILE_SHARE_DELETE: u32 = 0x4;
+
+    fn setup(name: &str, old: &[u8], new: &[u8]) -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("coucou-relay-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("bin")).unwrap();
+        let src = dir.join("coucou-hook.exe");
+        let dest = dir.join("bin").join("coucou-hook.exe");
+        std::fs::write(&src, new).unwrap();
+        std::fs::write(&dest, old).unwrap();
+        (dir, src, dest)
+    }
+
+    #[test]
+    fn a_relay_that_is_running_is_still_replaced_by_a_new_one() {
+        let (dir, src, dest) = setup("busy", b"old relay", b"new relay, longer");
+        // Held the way Windows holds a running program's file: nobody may write
+        // to it, but it may be moved.
+        let running = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_DELETE)
+            .open(&dest)
+            .unwrap();
+        install_relay(&src, &dest);
+        assert_eq!(std::fs::read(&dest).unwrap(), b"new relay, longer");
+        drop(running);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_same_relay_is_left_alone_and_old_copies_are_cleared_away() {
+        let (dir, src, dest) = setup("same", b"same relay", b"same relay");
+        // What an earlier update set aside while that relay was running.
+        std::fs::write(dir.join("bin").join("coucou-hook.old-1-2"), b"x").unwrap();
+        let before = std::fs::metadata(&dest).unwrap().modified().unwrap();
+        install_relay(&src, &dest);
+        assert_eq!(std::fs::metadata(&dest).unwrap().modified().unwrap(), before, "not rewritten");
+        let left: Vec<String> = std::fs::read_dir(dir.join("bin")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+        assert_eq!(left, vec!["coucou-hook.exe"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 #[cfg(test)]
