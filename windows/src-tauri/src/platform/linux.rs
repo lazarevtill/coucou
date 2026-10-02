@@ -163,7 +163,7 @@ pub fn spawn_launch(launch: &crate::launch::Launch) -> std::io::Result<()> {
 
 /// Wayland gives an app no way to raise another program's window, and X11
 /// support is not written yet: jumping to a session's window is not available.
-pub fn focus_window(_candidates: &[Candidate], _hints: &[String]) -> (FocusOutcome, FocusMethod) {
+pub fn focus_window(_window: Option<u64>, _candidates: &[Candidate], _hints: &[String]) -> (FocusOutcome, FocusMethod) {
     (FocusOutcome::NoWindow, FocusMethod::None)
 }
 

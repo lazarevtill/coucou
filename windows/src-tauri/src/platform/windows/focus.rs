@@ -26,7 +26,7 @@ use ::windows::Win32::System::Threading::{
 };
 use ::windows::Win32::UI::WindowsAndMessaging::{
     BringWindowToTop, EnumWindows, FlashWindowEx, GetForegroundWindow, GetWindow, GetWindowLongPtrW,
-    GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, SetForegroundWindow,
+    GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindow, IsWindowVisible, SetForegroundWindow,
     ShowWindow, FLASHWINFO, FLASHW_TIMERNOFG, FLASHW_TRAY, GWL_EXSTYLE, GW_OWNER, SW_RESTORE,
     WS_EX_TOOLWINDOW,
 };
@@ -127,8 +127,38 @@ fn foreground_is(hwnd: HWND) -> bool {
     unsafe { GetForegroundWindow() == hwnd }
 }
 
-/// Brings the best window of the first candidate that has one to the front.
-pub fn focus(candidates: &[Candidate], hints: &[String]) -> (FocusOutcome, FocusMethod) {
+/// A window handle that arrived in a hook payload is only used when the process
+/// that owns it now is a terminal or editor we know: handles are recycled, and
+/// the payload is not proof of anything.
+pub fn trusts_window_of(image: Option<&str>) -> bool {
+    image.and_then(crate::host::host_of_exe).is_some()
+}
+
+/// The exact window, if it is still a visible window of a known host.
+fn verified(window: u64) -> Option<HWND> {
+    let hwnd = HWND(window as usize as *mut core::ffi::c_void);
+    unsafe {
+        if !IsWindow(Some(hwnd)).as_bool() || !IsWindowVisible(hwnd).as_bool() {
+            return None;
+        }
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        (pid != 0 && trusts_window_of(image_name(pid).as_deref())).then_some(hwnd)
+    }
+}
+
+/// Brings the session's window to the front: the exact one when it checks out,
+/// else the best window of the first candidate that has one.
+pub fn focus(window: Option<u64>, candidates: &[Candidate], hints: &[String]) -> (FocusOutcome, FocusMethod) {
+    if let Some(hwnd) = window.and_then(verified) {
+        return match bring_to_front(hwnd) {
+            Some(method) => (FocusOutcome::Focused, method),
+            None => {
+                flash(hwnd);
+                (FocusOutcome::Flashed, FocusMethod::None)
+            }
+        };
+    }
     let all = top_level_windows();
     for candidate in candidates {
         if let Some(expected) = &candidate.exe {
@@ -231,5 +261,17 @@ mod tests {
     #[test]
     fn no_windows_no_pick() {
         assert_eq!(pick(&[], &hints(&["x"])), None);
+    }
+
+    #[test]
+    fn an_exact_window_is_trusted_only_while_a_known_host_owns_it() {
+        assert!(trusts_window_of(Some("WindowsTerminal.exe")));
+        assert!(trusts_window_of(Some("windowsterminal.exe")));
+        assert!(trusts_window_of(Some("Cursor.exe")));
+        assert!(trusts_window_of(Some("Code.exe")));
+        for other in ["explorer.exe", "coucou.exe", "OpenConsole.exe", "powershell.exe", ""] {
+            assert!(!trusts_window_of(Some(other)), "{other}");
+        }
+        assert!(!trusts_window_of(None), "a window whose process is gone");
     }
 }

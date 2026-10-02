@@ -31,7 +31,21 @@ pub struct SessionRecord {
     pub chain: Vec<ChainEntry>,
     pub host: HostInfo,
     pub ide: Option<IdeLock>,
+    /// The terminal window the session's console belongs to, when the relay
+    /// could tell (Windows Terminal). A raw window handle; verified at click time.
+    pub host_window: Option<u64>,
     pub last_seen: Instant,
+}
+
+/// Where a jump to a session should land.
+#[derive(Debug, Clone)]
+pub struct FocusTarget {
+    /// The exact window, if known. Tried first.
+    pub window: Option<u64>,
+    /// Processes whose windows could be the session's, best first.
+    pub candidates: Vec<Candidate>,
+    /// Words that tell the session's window from the process's others.
+    pub hints: Vec<String>,
 }
 
 #[derive(Default)]
@@ -87,6 +101,12 @@ impl Sessions {
         // An event without a chain (an older relay) must not erase a known one.
         let sent = chain_from(payload.get("host_chain"));
         let chain = if sent.is_empty() { previous.as_ref().map(|r| r.chain.clone()).unwrap_or_default() } else { sent };
+        // Window handles are 32-bit values even in a 64-bit process.
+        let host_window = payload
+            .get("host_window")
+            .and_then(Value::as_u64)
+            .filter(|w| (1..=u64::from(u32::MAX)).contains(w))
+            .or_else(|| previous.as_ref().and_then(|r| r.host_window));
         let cwd = match text(payload, "cwd") {
             "" => previous.as_ref().map(|r| r.cwd.clone()).unwrap_or_default(),
             c => c.to_string(),
@@ -107,7 +127,7 @@ impl Sessions {
         }
         map.insert(
             id.to_string(),
-            SessionRecord { id: id.to_string(), cwd, chain, host: host.clone(), ide, last_seen: now },
+            SessionRecord { id: id.to_string(), cwd, chain, host: host.clone(), ide, host_window, last_seen: now },
         );
         Some(host)
     }
@@ -153,9 +173,9 @@ fn last_segment(path: &str) -> Option<String> {
     path.split(['\\', '/']).filter(|s| !s.is_empty()).last().map(str::to_string)
 }
 
-/// The processes whose windows could be the session's, best first, and the words
-/// that tell its window from the host's others.
-pub fn focus_target(record: &SessionRecord) -> (Vec<Candidate>, Vec<String>) {
+/// Where a jump to the session should land: its exact window when known, else
+/// the processes whose windows could be its, and the words that pick one.
+pub fn focus_target(record: &SessionRecord) -> FocusTarget {
     let mut candidates: Vec<Candidate> = Vec::new();
     let mut seen = std::collections::HashSet::new();
     let mut add = |pid: u32, exe: &str| {
@@ -183,7 +203,7 @@ pub fn focus_target(record: &SessionRecord) -> (Vec<Candidate>, Vec<String>) {
             hints.push(name);
         }
     }
-    (candidates, hints)
+    FocusTarget { window: record.host_window, candidates, hints }
 }
 
 #[cfg(test)]
@@ -352,7 +372,8 @@ mod tests {
 
     #[test]
     fn a_windows_terminal_session_targets_the_terminal_process() {
-        let (c, hints) = focus_target(&record(WT_CHAIN, None, r"C:\Users\u\coucou"));
+        let FocusTarget { candidates: c, hints, window } = focus_target(&record(WT_CHAIN, None, r"C:\Users\u\coucou"));
+        assert_eq!(window, None, "this relay found no exact window");
         assert_eq!(c.len(), 1);
         assert_eq!((c[0].pid, c[0].exe.as_deref()), (60, Some("WindowsTerminal.exe")));
         assert_eq!(hints, vec!["coucou"]);
@@ -366,7 +387,8 @@ mod tests {
             workspace_folders: vec![r"c:\Users\u\Documents\work\shop-api".into()],
         };
         let chain = &[(90, "bash.exe"), (80, "claude.exe"), (70, "powershell.exe"), (50, "Cursor.exe"), (40, "Cursor.exe")];
-        let (c, hints) = focus_target(&record(chain, Some(lock), r"C:\Users\u\Documents\work\shop-api\api"));
+        let FocusTarget { candidates: c, hints, .. } =
+            focus_target(&record(chain, Some(lock), r"C:\Users\u\Documents\work\shop-api\api"));
         let pids: Vec<u32> = c.iter().map(|x| x.pid).collect();
         assert_eq!(pids, vec![40, 50], "main process first, each pid once");
         assert!(c.iter().all(|x| x.exe.as_deref() == Some("Cursor.exe")));
@@ -378,13 +400,42 @@ mod tests {
         // A lock file naming some other editor's pid gives us no image to verify,
         // so it must not become a candidate.
         let lock = IdeLock { pid: 999, ide_name: "SomethingElse".into(), workspace_folders: vec![] };
-        let (c, _) = focus_target(&record(WT_CHAIN, Some(lock), r"C:\proj"));
+        let c = focus_target(&record(WT_CHAIN, Some(lock), r"C:\proj")).candidates;
         assert!(c.iter().all(|x| x.pid != 999));
     }
 
     #[test]
     fn a_session_with_no_known_host_has_nothing_to_focus() {
-        let (c, _) = focus_target(&record(&[(80, "claude.exe")], None, r"C:\proj"));
+        let c = focus_target(&record(&[(80, "claude.exe")], None, r"C:\proj")).candidates;
         assert!(c.is_empty());
+    }
+
+    #[test]
+    fn the_exact_window_the_relay_found_is_kept_and_offered() {
+        let s = Sessions::default();
+        let t = Instant::now();
+        let mut p = payload("s1", WT_CHAIN);
+        p["host_window"] = json!(791500);
+        s.observe(&p, t, &no_lock);
+        // A later event that could not read the console (or an older relay).
+        s.observe(&payload("s1", WT_CHAIN), t + Duration::from_secs(1), &no_lock);
+        assert_eq!(focus_target(&s.get("s1").unwrap()).window, Some(791500));
+        // A newer window replaces it: the tab was dragged into another window.
+        let mut moved = payload("s1", WT_CHAIN);
+        moved["host_window"] = json!(4242);
+        s.observe(&moved, t + Duration::from_secs(2), &no_lock);
+        assert_eq!(s.get("s1").unwrap().host_window, Some(4242));
+    }
+
+    #[test]
+    fn only_a_plain_window_handle_is_accepted() {
+        // Window handles are 32-bit values even in a 64-bit process.
+        for bad in [json!(0), json!(-1), json!("791500"), json!(1.5), json!(0x1_0000_0000u64), json!(null)] {
+            let s = Sessions::default();
+            let mut p = payload("s", WT_CHAIN);
+            p["host_window"] = bad.clone();
+            s.observe(&p, Instant::now(), &no_lock);
+            assert_eq!(s.get("s").unwrap().host_window, None, "{bad} must be refused");
+        }
     }
 }

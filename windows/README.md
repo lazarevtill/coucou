@@ -45,11 +45,13 @@ installs for the current user only — no admin prompt.
 | Rest the pointer on Mochi for two seconds | Hearts |
 | Drag a file onto the island | Mochi turns into a box, swallows it, then offers to answer questions about it |
 | `Esc` | Closes the island |
+| **Go to Windows Terminal** / **Go to Cursor** on a card, or ↗ | The window that session runs in comes to the front |
 | Tray icon | Open, Settings…, Pause, Quit |
 
 Everything else happens on its own: a Claude Code permission request opens the
-island with **Deny / Allow**, a finished session shows what it did, and
-your integrations sit in the coloured pills next to Mochi.
+island with **Deny / Allow**, a question opens a card that takes you to the
+session asking it, a finished session shows what it did, and your integrations
+sit in the coloured pills next to Mochi.
 
 ## Claude Code
 
@@ -66,7 +68,16 @@ exits cleanly if the app is closed, slow or crashed — **a Claude Code session 
 never blocked or slowed down by Coucou.** If nobody answers a permission request
 in time, Coucou stays quiet and Claude Code asks in the terminal as usual.
 
-It works from any terminal — Windows Terminal, PowerShell, VS Code, Git Bash.
+It works from any terminal — Windows Terminal, PowerShell, Cursor, VS Code, Git
+Bash — and with any number of sessions at once. The Claude Code pill counts them
+and shows the one that needs you first, with where it runs and whether it is in
+bypass mode. How Coucou tells sessions apart and finds their windows:
+[docs/terminals.md](docs/terminals.md).
+
+**Settings… → Open projects in** picks what the island's buttons open: Cursor,
+VS Code or nothing for the editor; Windows Terminal, a PowerShell window or
+nothing for the terminal. A choice that isn't installed falls back to File
+Explorer.
 
 ## Chat and keys
 
@@ -128,13 +139,19 @@ windows/
     settings/          the settings window
   src-tauri/           Rust backend: window, named pipe, Claude API, pollers
   hook/                coucou-hook.exe, the Claude Code relay
+  docs/                how parts of the app work, in depth
+  tests/               front-end logic tests (`npm test`)
   scripts/             icon generator
 ```
 
+`cargo test --workspace` runs the Rust tests, `npm test` the TypeScript ones
+(Node 22.18 or newer: the tests load the TypeScript sources directly).
+
 ### Log
 
-`%LOCALAPPDATA%\Coucou\coucou.log` — hook events, permission decisions, poller
-problems. It stays on your machine.
+`%LOCALAPPDATA%\Coucou\coucou.log` — hook events, permission decisions, jumps to
+a session's window (the host and how it went, no folder names), poller problems.
+It stays on your machine.
 
 ## What's different from the Mac version
 
@@ -142,9 +159,12 @@ problems. It stays on your machine.
   the top edge instead of hiding in a notch.
 - Permission approval works from **any** terminal; the Mac build only listens to
   VS Code sessions.
-- Not in this version: sending a file by email, dragging Mochi onto a window to
-  attach it as context, and jumping to a specific terminal window — "Open
-  terminal" opens the working folder in VS Code when `code` is on your `PATH`.
+- Each Claude Code session is followed on its own, and a question takes you to
+  the exact Windows Terminal window, or the Cursor or VS Code window of the
+  session's workspace. Tabs are not switched (see
+  [docs/terminals.md](docs/terminals.md)).
+- Not in this version: sending a file by email, and dragging Mochi onto a window
+  to attach it as context.
 - Cal.com shows the next bookings as a list rather than the Mac's calendar.
 
 ## Linux
@@ -177,5 +197,7 @@ What changes on Linux:
 - **Files**: preferences in `~/.config/coucou/`, the log at
   `~/.local/share/coucou/coucou.log`.
 - What the Windows build leaves out, this one does too: sending a file by
-  email, dragging Mochi onto a window, and jumping to a specific terminal
-  window — "Open terminal" opens the folder in VS Code.
+  email and dragging Mochi onto a window. Jumping to a session's window is not
+  available either — Wayland lets no app raise another's window. The editor
+  button opens Cursor or VS Code when it is on your `PATH`; the terminal button
+  opens the folder in the file manager.

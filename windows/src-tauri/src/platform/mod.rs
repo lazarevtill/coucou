@@ -35,7 +35,7 @@ pub fn home_dir() -> PathBuf {
 // ── Finding and focusing the window a session lives in ───────────────────────
 //
 // Each OS file provides:
-//   focus_window(&[Candidate], &[String]) -> (FocusOutcome, FocusMethod)
+//   focus_window(Option<u64>, &[Candidate], &[String]) -> (FocusOutcome, FocusMethod)
 //   process_alive(pid, exe) -> bool
 //   find_all_on_path(stem) -> Vec<PathBuf>
 //   spawn_launch(&Launch) -> io::Result<()>

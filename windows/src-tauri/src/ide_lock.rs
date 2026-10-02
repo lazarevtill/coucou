@@ -57,7 +57,7 @@ pub fn read(port: &str) -> Option<IdeLock> {
 mod tests {
     use super::*;
 
-    /// The shape found on a live machine (user name and token replaced).
+    /// The shape found on a live machine (user name, folders and token replaced).
     const LIVE: &str = r#"{"pid":43196,"workspaceFolders":["c:\\Users\\someone\\Documents\\work\\shop-api"],"ideName":"Cursor","transport":"ws","runningInWindows":true,"authToken":"SECRET-TOKEN-VALUE"}"#;
 
     #[test]

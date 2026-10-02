@@ -3,7 +3,7 @@
 // integrations land here too in a later stage.
 
 import "./settings.css";
-import { Bridge, onEvent, type HookStatus } from "../core/bridge";
+import { Bridge, onEvent, type HookStatus, type LaunchInfo } from "../core/bridge";
 import { DEFAULT_SETTINGS, type Settings } from "../core/state";
 import { h, clear } from "../views/dom";
 
@@ -358,6 +358,50 @@ function integrationsSection(present: Record<string, boolean>): HTMLElement {
   return h("section", {}, h("h2", {}, h("span", { text: "Integrations" })), note, list);
 }
 
+// ── Open-in section ───────────────────────────────────────────────────────────
+
+function openInSection(info: LaunchInfo | null): HTMLElement {
+  /** "(not found)" only when the app could look and did not find it. */
+  const found = (yes: boolean | undefined) => (info && !yes ? " (not found)" : "");
+  const shell = info?.shell === "pwsh" ? "PowerShell 7" : info?.shell === "powershell" ? "Windows PowerShell" : null;
+
+  const editor = h("select", {}) as HTMLSelectElement;
+  editor.append(
+    h("option", { value: "cursor", text: `Cursor${found(info?.cursor)}` }),
+    h("option", { value: "vscode", text: `VS Code${found(info?.vscode)}` }),
+    h("option", { value: "none", text: "None" }),
+  );
+  editor.value = settings.editor;
+  editor.addEventListener("change", () => {
+    settings.editor = editor.value as Settings["editor"];
+    void save();
+  });
+
+  const terminal = h("select", {}) as HTMLSelectElement;
+  terminal.append(
+    h("option", { value: "windowsTerminal", text: `Windows Terminal${found(info?.windowsTerminal)}` }),
+    h("option", { value: "shell", text: `${shell ?? "PowerShell"} window${found(shell !== null)}` }),
+    h("option", { value: "none", text: "None" }),
+  );
+  terminal.value = settings.terminal;
+  terminal.addEventListener("change", () => {
+    settings.terminal = terminal.value as Settings["terminal"];
+    void save();
+  });
+
+  return h(
+    "section",
+    {},
+    h("h2", {}, h("span", { text: "Open projects in" })),
+    h("div", {
+      class: "hint",
+      text: `What the island's buttons open. A missing one falls back to File Explorer.${shell ? ` New terminals start ${shell}.` : ""}`,
+    }),
+    h("div", { class: "row" }, h("label", { text: "Editor" }), editor),
+    h("div", { class: "row" }, h("label", { text: "Terminal" }), terminal),
+  );
+}
+
 // ── General section ───────────────────────────────────────────────────────────
 
 function generalSection(): HTMLElement {
@@ -430,6 +474,7 @@ async function main() {
   };
 
   const hasKey = (await Bridge.secretPresent("anthropic-api-key")) ?? false;
+  const launch = await Bridge.launchInfo();
 
   const keys = [
     "stripe-api-key", "github-token", "vercel-token",
@@ -442,6 +487,7 @@ async function main() {
   root.append(
     h("h1", {}, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
     claudeSection(status),
+    openInSection(launch),
     apiSection(hasKey),
     integrationsSection(present),
     generalSection(),

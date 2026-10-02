@@ -34,6 +34,7 @@ const DROPPED_FIELDS: &[&str] = &["tool_response", "transcript_path"];
 /// less than this anyway.
 const MAX_FIELD_LEN: usize = 2_000;
 
+mod console;
 mod proc;
 
 #[cfg(windows)]
@@ -193,7 +194,12 @@ fn read_event() -> Option<(String, String)> {
         &std::env::var("GIT_ASKPASS").unwrap_or_default(),
     );
     map.insert("host_hint".into(), serde_json::Value::String(hint.into()));
-    let chain: Vec<serde_json::Value> = proc::ancestors()
+    let ancestors = proc::ancestors();
+    // The exact terminal window, where the terminal can tell (see console.rs).
+    if let Some(window) = console::target(&ancestors).and_then(console::owner_window) {
+        map.insert("host_window".into(), serde_json::Value::from(window));
+    }
+    let chain: Vec<serde_json::Value> = ancestors
         .into_iter()
         .map(|a| serde_json::json!({ "pid": a.pid, "exe": a.exe }))
         .collect();

@@ -107,6 +107,11 @@ fn the_relay_forwards_the_event_with_its_process_chain_and_a_path_free_host_hint
     assert_eq!(sent["host_hint"], "cursor");
     assert_eq!(sent["ide_port"], "36005");
     assert!(sent.get("session_pid").is_none(), "the misnamed field must be gone");
+    // Only present when the test itself runs inside a Windows Terminal session,
+    // and then only ever a bare window handle.
+    if let Some(window) = sent.get("host_window") {
+        assert!(window.as_u64().is_some_and(|w| w > 0), "host_window must be a positive number: {window}");
+    }
 
     // The relay's parent is this test process, so the chain must start with it.
     let chain = sent["host_chain"].as_array().expect("host_chain must be an array");

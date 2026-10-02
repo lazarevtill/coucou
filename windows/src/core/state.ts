@@ -2,6 +2,10 @@
 
 import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./layout";
 import type { EyeShape } from "../mochi/engine";
+import { SessionStore } from "./sessions";
+import { claudePill, waitingSession } from "./sessionView";
+
+export const CLAUDE_ID = "integration_claude";
 
 export type AgentSource = "claudeCode" | "n8n" | "agent";
 export type PillBadge = "approval" | "finished" | "error";
@@ -19,6 +23,10 @@ export interface AgentTask {
   miniEye?: EyeShape | null;
   pillBadge?: PillBadge | null;
   sessionCwd?: string | null;
+  /** The pill's label when it differs from `name` ("Claude Code · 3"). */
+  pillLabel?: string;
+  /** The grey line beside the name in the overview ("Claude Code · Cursor"). */
+  toolLabel?: string;
 }
 
 export interface ApprovalInfo {
@@ -58,7 +66,7 @@ const task = (
 
 /** AgentTask.integrationAgents — same ids, names and colours as macOS. */
 export const INTEGRATION_AGENTS: AgentTask[] = [
-  task("integration_claude", "VS Code", "#F5F6F8", "claudeCode"),
+  task(CLAUDE_ID, "Claude Code", "#F5F6F8", "claudeCode"),
   task("integration_resend", "Resend", "#22C55E", "n8n"),
   task("integration_n8n", "n8n", "#F29B38", "n8n"),
   task("integration_vercel", "Vercel", "#7C5CFF", "n8n"),
@@ -146,6 +154,9 @@ class AppState {
 
   integrations: Record<string, IntegrationInfo> = {};
 
+  /** Every Claude Code session, one record each; the Claude pill shows their sum. */
+  sessions = new SessionStore();
+
   lastActivity = performance.now();
 
   settings: Settings = { ...DEFAULT_SETTINGS };
@@ -179,7 +190,27 @@ class AppState {
     if (!t) return;
     this.focusId = id;
     t.pillBadge = null;
+    // Bringing the sessions to the front is looking at them.
+    if (id === CLAUDE_ID) {
+      this.sessions.markSeen();
+      this.syncClaude();
+    }
     this.notify();
+  }
+
+  /** Re-derives the Claude pill from the sessions. Call after any change to them. */
+  syncClaude() {
+    const t = this.tasks.find((x) => x.id === CLAUDE_ID);
+    if (!t) return;
+    const pill = claudePill(this.sessions.summary(Date.now()));
+    t.name = pill.name;
+    t.state = pill.state;
+    t.steps = pill.steps;
+    t.stepIndex = Math.max(0, pill.steps.length - 1);
+    t.sessionCwd = pill.cwd;
+    t.pillBadge = pill.badge;
+    t.pillLabel = pill.pillLabel;
+    t.toolLabel = pill.toolLabel;
   }
 
   updateTask(id: string, state: BotStateName) {
@@ -231,6 +262,7 @@ class AppState {
       return order.indexOf(a.id) - order.indexOf(b.id);
     });
     if (!this.focusId) this.focusId = "integration_claude";
+    this.syncClaude();
     this.notify();
   }
 
@@ -270,7 +302,9 @@ class AppState {
   }
 
   defaultView(): IslandViewName {
-    return this.tasks.length === 0 ? "empty" : "overview";
+    if (this.tasks.length === 0) return "empty";
+    // A session waiting on the human is what opening the island is for.
+    return waitingSession(this.sessions.list()) ? "question" : "overview";
   }
 }
 

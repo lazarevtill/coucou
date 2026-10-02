@@ -127,10 +127,11 @@ pub fn spawn_launch(launch: &crate::launch::Launch) -> std::io::Result<()> {
 
 // ── Windows of other programs ─────────────────────────────────────────────────
 
-/// Brings the best window of the first live candidate to the front, and says
-/// which step of the ladder it took to get there (see focus.rs).
-pub fn focus_window(candidates: &[Candidate], hints: &[String]) -> (FocusOutcome, FocusMethod) {
-    focus::focus(candidates, hints)
+/// Brings the session's window to the front — the exact `window` when it still
+/// belongs to a known host, else the best window of the first live candidate —
+/// and says which step of the ladder it took to get there (see focus.rs).
+pub fn focus_window(window: Option<u64>, candidates: &[Candidate], hints: &[String]) -> (FocusOutcome, FocusMethod) {
+    focus::focus(window, candidates, hints)
 }
 
 /// Is `pid` still running `exe`? Pids are recycled, so a bare pid proves nothing.

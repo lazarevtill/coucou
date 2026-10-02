@@ -60,6 +60,12 @@ export const Bridge = {
   openProject: (target: "editor" | "terminal", path: string | null) =>
     call<OpenResult>("open_project", { target, path }),
 
+  /** Brings the window a Claude Code session lives in to the front. */
+  focusSession: (sessionId: string) => call<FocusResult>("focus_session", { sessionId }),
+
+  /** Which editor and terminal this machine has, for the settings window. */
+  launchInfo: () => call<LaunchInfo>("launch_info"),
+
   quit: () => call<void>("quit_app"),
 
   openSettingsWindow: () => call<void>("open_settings_window"),
@@ -112,6 +118,19 @@ export interface OpenResult {
   /** Explorer was used instead of what the settings asked for. */
   fellBack: boolean;
   error: string | null;
+}
+
+export interface FocusResult {
+  /** `focused`, `focusedUnsure`, `flashed`, `noWindow` or `unknownSession`. */
+  outcome: string;
+}
+
+export interface LaunchInfo {
+  cursor: boolean;
+  vscode: boolean;
+  windowsTerminal: boolean;
+  /** `pwsh` or `powershell`: what a new terminal starts. */
+  shell: string | null;
 }
 
 export interface IntegrationUpdate {

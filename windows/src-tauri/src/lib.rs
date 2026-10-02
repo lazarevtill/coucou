@@ -175,8 +175,8 @@ fn focus_session(sessions: State<Sessions>, session_id: String) -> FocusResult {
     let Some(record) = sessions.get(&session_id) else {
         return FocusResult { outcome: "unknownSession" };
     };
-    let (candidates, hints) = sessions::focus_target(&record);
-    let (outcome, method) = platform::focus_window(&candidates, &hints);
+    let target = sessions::focus_target(&record);
+    let (outcome, method) = platform::focus_window(target.window, &target.candidates, &target.hints);
     // The host and how it went — no folder names, no ids.
     log::line(format!("jump {} -> {outcome:?} ({method:?})", record.host.label));
     FocusResult {

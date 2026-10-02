@@ -5,7 +5,9 @@
 import { h, svg, clear, dot } from "./dom";
 import { ICONS } from "./icons";
 import { Ticker } from "./ticker";
-import { State, type AgentTask } from "../core/state";
+import { CLAUDE_ID, State, type AgentTask } from "../core/state";
+import type { SessionInfo } from "../core/sessions";
+import { finishedSession, jumpLabel, waitingLine, waitingSession } from "../core/sessionView";
 import { washRGBA, type IslandViewName, type Wash } from "../core/layout";
 import { createMiniBot, pruneMiniBots } from "../mochi/minibots";
 import { buildPrompt } from "./chat";
@@ -17,6 +19,8 @@ export interface ViewActions {
   collapse(): void;
   setFocus(id: string): void;
   openTerminal(): void;
+  /** Brings the window a Claude Code session lives in to the front. */
+  jumpTo(sessionId: string): void;
   /** The ↗ button: opens whatever the focused pill points at. */
   openTarget(): void;
   openUrl(url: string): void;
@@ -172,8 +176,8 @@ function buildOverview(actions: ViewActions): ViewHost {
         mode = null;
       }
 
-      // VS Code with a live Claude Code session keeps the ticker; every other
-      // pill shows its own card, exactly like IntegrationCardView.
+      // A live Claude Code session keeps the ticker; every other pill shows its
+      // own card, exactly like IntegrationCardView.
       const sessionActive =
         task?.id === "integration_claude" && (task.state !== "idle" || task.steps.length > 0);
 
@@ -188,7 +192,7 @@ function buildOverview(actions: ViewActions): ViewHost {
         who.append(
           dot(task.color, 7),
           h("span", { class: "name", text: task.name }),
-          h("span", { class: "tool", text: task.source === "claudeCode" ? "Claude Code" : "n8n" }),
+          h("span", { class: "tool", text: task.toolLabel ?? (task.source === "claudeCode" ? "Claude Code" : "n8n") }),
         );
         if (task.steps.length > 1) {
           who.append(h("span", {
@@ -215,7 +219,7 @@ function buildOverview(actions: ViewActions): ViewHost {
       jump.style.display = detailOpen ? "none" : "";
 
       const others = State.otherTasks.slice(0, 4);
-      const pillKey = others.map((t) => `${t.id}:${t.pillBadge ?? ""}`).join("|");
+      const pillKey = others.map((t) => `${t.id}:${t.pillBadge ?? ""}:${t.pillLabel ?? ""}`).join("|");
       if (pillKey !== pillIds) {
         pillIds = pillKey;
         clear(pills);
@@ -227,7 +231,7 @@ function buildOverview(actions: ViewActions): ViewHost {
 }
 
 function buildPill(task: AgentTask, actions: ViewActions): HTMLElement {
-  const label = task.id === "integration_claude" ? "VS Code" : task.name;
+  const label = task.pillLabel ?? task.name;
   const canvas = createMiniBot(task, 24);
   const pill = h(
     "div",
@@ -319,20 +323,47 @@ function buildApproval(actions: ViewActions): ViewHost {
 
 // ── Question ──────────────────────────────────────────────────────────────────
 
-function buildQuestion(): ViewHost {
+/** AgentWho for one Claude Code session: the pill's dot, the session's project. */
+function sessionWho(s: SessionInfo, label: string): HTMLElement {
+  const color = State.tasks.find((t) => t.id === CLAUDE_ID)?.color ?? "#F5F6F8";
+  return h("div", { class: "who-row" },
+    dot(color, 8), h("span", { class: "n", text: s.project }), h("span", { text: label }));
+}
+
+function buildQuestion(actions: ViewActions): ViewHost {
   const who = h("div");
   const title = h("div", { class: "title" });
   const row = h("div", { class: "actions" });
   const el = h("div", { class: "view" }, card("cyan", stack(116, 16, who, title, row)));
+  // Rebuilt only when the session or its host changes: rebuilding between a
+  // mouse-down and a mouse-up would swallow the click.
+  let rowKey = "";
   return {
     el,
     sync() {
+      const s = waitingSession(State.sessions.list());
       clear(who);
-      who.append(agentWho(State.focusTask, "Claude Code is asking a question"));
-      const task = State.focusTask;
-      title.textContent = task?.steps.at(-1) ?? "Claude needs an answer.";
+      if (!s) {
+        // Another agent's question, or the session moved on while the card was up.
+        who.append(agentWho(State.focusTask, "is asking a question"));
+        title.textContent = State.focusTask?.steps.at(-1) ?? "Claude needs an answer.";
+        if (rowKey !== "none") {
+          rowKey = "none";
+          clear(row);
+          row.append(h("div", { class: "sub", text: "Answer in your terminal — Coucou can't reply for you yet." }));
+        }
+        return;
+      }
+      who.append(sessionWho(s, waitingLine(s)));
+      title.textContent = s.waitingFor ?? "Claude needs an answer.";
+      const key = `${s.id}|${s.host?.label ?? ""}`;
+      if (rowKey === key) return;
+      rowKey = key;
       clear(row);
-      row.append(h("div", { class: "sub", text: "Answer in your terminal — Coucou can't reply for you yet." }));
+      row.append(
+        btn("Later", "secondary", () => actions.collapse()),
+        btn(jumpLabel(s), "primary", () => actions.jumpTo(s.id)),
+      );
     },
   };
 }
@@ -365,17 +396,33 @@ function buildError(actions: ViewActions): ViewHost {
 function buildFinished(actions: ViewActions): ViewHost {
   const who = h("div");
   const title = h("div", { class: "title" });
-  const row = h("div", { class: "actions" },
-    btn("Open terminal", "primary", () => actions.openTerminal()),
-    btn("OK", "secondary", () => actions.collapse()),
-  );
+  const row = h("div", { class: "actions" });
   const el = h("div", { class: "view" }, card("green", stack(116, 16, who, title, row)));
+  let rowKey = "";
   return {
     el,
     sync() {
+      const task = State.focusTask;
+      const s = task?.id === CLAUDE_ID ? finishedSession(State.sessions.list()) : null;
       clear(who);
-      who.append(agentWho(State.focusTask, "Claude Code finished"));
-      title.textContent = State.focusTask?.steps.at(-1) ?? "Session finished";
+      who.append(s ? sessionWho(s, "Claude Code finished") : agentWho(task, "Claude Code finished"));
+      title.textContent = (s ? s.steps.at(-1) : task?.steps.at(-1)) ?? "Session finished";
+      const key = s ? `${s.id}|${s.host?.label ?? ""}` : "none";
+      if (rowKey === key) return;
+      rowKey = key;
+      clear(row);
+      row.append(
+        s
+          ? btn(jumpLabel(s), "primary", () => actions.jumpTo(s.id))
+          : btn("Open terminal", "primary", () => actions.openTerminal()),
+        btn("OK", "secondary", () => {
+          if (s) {
+            State.sessions.markSeen(s.id);
+            State.syncClaude();
+          }
+          actions.collapse();
+        }),
+      );
     },
   };
 }
@@ -491,7 +538,7 @@ export function buildViews(
   map.set("overview", buildOverview(actions));
   map.set("empty", buildEmpty(actions));
   map.set("approval", buildApproval(actions));
-  map.set("question", buildQuestion());
+  map.set("question", buildQuestion(actions));
   map.set("error", buildError(actions));
   map.set("finished", buildFinished(actions));
   map.set("confused", buildConfused());

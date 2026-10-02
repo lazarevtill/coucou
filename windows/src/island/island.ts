@@ -10,7 +10,8 @@ import {
   type IslandMode, type IslandViewName,
 } from "../core/layout";
 import { Sound } from "../core/sound";
-import { State } from "../core/state";
+import { CLAUDE_ID, State } from "../core/state";
+import { jumpNote } from "../core/sessionView";
 import { BotEngine, hexToRGB } from "../mochi/engine";
 import { Greeting } from "../mochi/greeting";
 import { createMiniBot, pruneMiniBots, syncMiniBotStates, tickMiniBots } from "../mochi/minibots";
@@ -115,7 +116,9 @@ export class Island {
         const cwd = State.focusTask?.sessionCwd ?? null;
         void Bridge.openProject("terminal", cwd);
       },
-      // The ↗ button — same targets as openAgentTarget() on macOS.
+      jumpTo: (sessionId) => void this.jump(sessionId),
+      // The ↗ button — same targets as openAgentTarget() on macOS, except that
+      // Claude Code goes to the window the session runs in.
       openTarget: () => {
         const task = State.focusTask;
         if (!task) return;
@@ -127,8 +130,11 @@ export class Island {
           integration_notion: "https://notion.so",
           integration_calcom: "https://app.cal.com/bookings",
         };
-        if (task.id === "integration_claude") void Bridge.openProject("editor", task.sessionCwd ?? null);
-        else if (task.id === "integration_n8n") void Bridge.openN8n();
+        if (task.id === CLAUDE_ID) {
+          const top = State.sessions.list()[0];
+          if (top) void this.jump(top.id, task.sessionCwd ?? null);
+          else void Bridge.openProject("editor", null);
+        } else if (task.id === "integration_n8n") void Bridge.openN8n();
         else if (urls[task.id]) void Bridge.openUrl(urls[task.id]);
       },
       openUrl: (url) => {
@@ -143,8 +149,8 @@ export class Island {
         State.pendingApproval = null;
         State.isPinned = false;
         this.fsm.pinned = false;
-        State.updateTask("integration_claude", "working");
-        State.setPillBadge("integration_claude", null);
+        State.sessions.resolveApproval(req.sessionId);
+        State.syncClaude();
         this.setView(State.defaultView());
       },
       toggleSound: () => {
@@ -332,6 +338,36 @@ export class Island {
 
   reveal() {
     this.fsm.reveal();
+  }
+
+  /**
+   * Brings the window a session runs in to the front. When it got there the
+   * island steps aside; when it could not, a note says why. `editorFallback` is
+   * for the ↗ button: a session the app does not know (an older relay) opens
+   * the project in the editor instead.
+   */
+  private async jump(sessionId: string, editorFallback?: string | null) {
+    const result = await Bridge.focusSession(sessionId);
+    const outcome = result?.outcome ?? null;
+    State.sessions.markSeen(sessionId);
+    State.syncClaude();
+    if (outcome === "unknownSession" && editorFallback !== undefined) {
+      void Bridge.openProject("editor", editorFallback);
+    } else if (outcome === "focused" || outcome === "focusedUnsure") {
+      this.collapse();
+    } else {
+      const note = jumpNote(outcome);
+      if (note) this.showNote(note);
+    }
+    State.notify();
+  }
+
+  private showNote(message: string) {
+    State.noteMessage = message;
+    this.setView("note");
+    window.setTimeout(() => {
+      if (State.view === "note") this.setView(State.defaultView());
+    }, 2400);
   }
 
   /** An alert stopped waiting for an answer: let the island auto-close again. */
