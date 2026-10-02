@@ -33,7 +33,7 @@ pub fn parse(bytes: &[u8]) -> Option<IdeLock> {
 
 /// `<home>\.claude\ide`.
 pub fn dir() -> Option<PathBuf> {
-    std::env::var_os("USERPROFILE").map(|home| PathBuf::from(home).join(".claude").join("ide"))
+    Some(crate::platform::home_dir().join(".claude").join("ide"))
 }
 
 /// Reads `<dir>\<port>.lock`. `port` comes from a session's environment, so it is

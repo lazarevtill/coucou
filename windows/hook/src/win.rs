@@ -6,6 +6,8 @@
 //! the pipe name carries our SID, and once connected we check the server process
 //! really belongs to us before sending anything.
 
+use std::time::{Duration, Instant};
+
 use windows::core::PWSTR;
 use windows::Win32::Foundation::{CloseHandle, HANDLE, LocalFree, HLOCAL};
 use windows::Win32::Security::Authorization::ConvertSidToStringSidW;
@@ -14,6 +16,64 @@ use windows::Win32::System::Pipes::GetNamedPipeServerProcessId;
 use windows::Win32::System::Threading::{
     GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
 };
+
+use crate::CONNECT_TIMEOUT;
+
+/// `ERROR_PIPE_BUSY` — every instance is serving someone else right now. This is
+/// the one error worth retrying: the server exists and a slot will free up.
+const ERROR_PIPE_BUSY: i32 = 231;
+
+/// `\\.\pipe\coucou-<sid>`. The SID keeps two accounts on the same machine from
+/// ever meeting on the same pipe; the name falls back to the user name only if
+/// the SID cannot be read at all, which should not happen.
+///
+/// `COUCOU_PIPE` replaces the whole name (after `\\.\pipe\`). It exists so a
+/// development build and the tests can run beside a live Coucou without ever
+/// meeting its pipe. Must match `pipe_name()` in the app (src-tauri/src/pipe.rs).
+fn pipe_path() -> String {
+    let key = current_user_sid()
+        .unwrap_or_else(|| std::env::var("USERNAME").unwrap_or_else(|_| "user".into()));
+    pipe_name_for(std::env::var("COUCOU_PIPE").ok().as_deref(), &key)
+}
+
+fn pipe_name_for(override_name: Option<&str>, key: &str) -> String {
+    match override_name.filter(|n| is_plain_pipe_name(n)) {
+        Some(name) => format!(r"\\.\pipe\{name}"),
+        None => format!(r"\\.\pipe\coucou-{key}"),
+    }
+}
+
+/// 1–64 of `[A-Za-z0-9._-]`, and not a dot-only name: nothing that can leave the
+/// pipe namespace or be read as a path.
+fn is_plain_pipe_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 64
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+        && !name.chars().all(|c| c == '.')
+}
+
+/// Opens the pipe. Retries only while the server is busy: any other error means
+/// there is nothing to talk to, and waiting would only delay Claude Code.
+pub fn connect() -> Option<std::fs::File> {
+    use std::os::windows::io::AsRawHandle;
+    let path = pipe_path();
+    let deadline = Instant::now() + CONNECT_TIMEOUT;
+    loop {
+        match std::fs::OpenOptions::new().read(true).write(true).open(&path) {
+            Ok(file) => {
+                let handle = HANDLE(file.as_raw_handle());
+                // Somebody else's server on our pipe name gets nothing from us.
+                return pipe_server_is_same_user(handle).then_some(file);
+            }
+            Err(err) => {
+                if err.raw_os_error() != Some(ERROR_PIPE_BUSY) || Instant::now() >= deadline {
+                    return None;
+                }
+                std::thread::sleep(Duration::from_millis(15));
+            }
+        }
+    }
+}
 
 /// The SID of the account this process runs as, as `S-1-5-21-…`.
 pub fn current_user_sid() -> Option<String> {
@@ -73,4 +133,24 @@ unsafe fn token_sid(process: HANDLE) -> Option<String> {
     let sid = text.to_string().ok();
     let _ = LocalFree(Some(HLOCAL(text.0 as *mut _)));
     sid
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_pipe_name_is_the_sid_unless_a_valid_override_is_given() {
+        assert_eq!(pipe_name_for(None, "S-1-5-21-1"), r"\\.\pipe\coucou-S-1-5-21-1");
+        assert_eq!(pipe_name_for(Some("coucou-dev-7"), "S-1-5-21-1"), r"\\.\pipe\coucou-dev-7");
+        // Anything that could climb out of the pipe namespace or is not a plain
+        // name is ignored rather than trusted.
+        for bad in ["", "..\\evil", "a/b", "a\\b", "has space", &"x".repeat(65)] {
+            assert_eq!(
+                pipe_name_for(Some(bad), "S-1-5-21-1"),
+                r"\\.\pipe\coucou-S-1-5-21-1",
+                "{bad:?} must not be accepted as a pipe name"
+            );
+        }
+    }
 }

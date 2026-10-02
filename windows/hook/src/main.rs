@@ -1,7 +1,8 @@
 //! coucou-hook — the relay Claude Code runs on every hook event.
 //!
 //! Reads the hook JSON on stdin, adds a little terminal context, and hands it to
-//! Coucou over the named pipe `\\.\pipe\coucou-<sid>`.
+//! Coucou over the named pipe `\\.\pipe\coucou-<sid>` (Windows) or the Unix
+//! socket `$XDG_RUNTIME_DIR/coucou.sock` (Linux).
 //!
 //! Hard rule (docs/CLAUDE.md): **never block Claude Code.**
 //! * If the pipe does not exist — Coucou is closed — we exit 0 immediately with
@@ -17,7 +18,7 @@
 
 use std::io::{Read, Write};
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Budget for getting a pipe connection. Beyond this Claude Code wins, always.
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(300);
@@ -25,10 +26,6 @@ const CONNECT_TIMEOUT: Duration = Duration::from_millis(300);
 const FIRE_AND_FORGET_BUDGET: Duration = Duration::from_secs(2);
 /// How long a permission prompt may stay on screen before the terminal takes over.
 const DECISION_BUDGET: Duration = Duration::from_secs(110);
-
-/// `ERROR_PIPE_BUSY` — every instance is serving someone else right now. This is
-/// the one error worth retrying: the server exists and a slot will free up.
-const ERROR_PIPE_BUSY: i32 = 231;
 
 /// Fields that are pointless to forward and can be enormous (a whole file read,
 /// a full command output). The island never shows them.
@@ -38,36 +35,16 @@ const DROPPED_FIELDS: &[&str] = &["tool_response", "transcript_path"];
 const MAX_FIELD_LEN: usize = 2_000;
 
 mod proc;
+
+#[cfg(windows)]
 mod win;
+#[cfg(windows)]
+use win::connect;
 
-/// `\\.\pipe\coucou-<sid>`. The SID keeps two accounts on the same machine from
-/// ever meeting on the same pipe; the name falls back to the user name only if
-/// the SID cannot be read at all, which should not happen.
-///
-/// `COUCOU_PIPE` replaces the whole name (after `\\.\pipe\`). It exists so a
-/// development build and the tests can run beside a live Coucou without ever
-/// meeting its pipe. Must match `pipe_name()` in the app (src-tauri/src/pipe.rs).
-fn pipe_path() -> String {
-    let key = win::current_user_sid()
-        .unwrap_or_else(|| std::env::var("USERNAME").unwrap_or_else(|_| "user".into()));
-    pipe_name_for(std::env::var("COUCOU_PIPE").ok().as_deref(), &key)
-}
-
-fn pipe_name_for(override_name: Option<&str>, key: &str) -> String {
-    match override_name.filter(|n| is_plain_pipe_name(n)) {
-        Some(name) => format!(r"\\.\pipe\{name}"),
-        None => format!(r"\\.\pipe\coucou-{key}"),
-    }
-}
-
-/// 1–64 of `[A-Za-z0-9._-]`, and not a dot-only name: nothing that can leave the
-/// pipe namespace or be read as a path.
-fn is_plain_pipe_name(name: &str) -> bool {
-    !name.is_empty()
-        && name.len() <= 64
-        && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
-        && !name.chars().all(|c| c == '.')
-}
+#[cfg(target_os = "linux")]
+mod unix;
+#[cfg(target_os = "linux")]
+use unix::connect;
 
 /// Which editor family owns this terminal, as a short token — never a path,
 /// because the paths these variables hold carry the user name. Only a hint: the
@@ -86,29 +63,6 @@ fn host_hint(term_program: &str, git_askpass: &str) -> &'static str {
         "cursor"
     } else {
         "vscode"
-    }
-}
-
-/// Opens the pipe. Retries only while the server is busy: any other error means
-/// there is nothing to talk to, and waiting would only delay Claude Code.
-fn connect() -> Option<std::fs::File> {
-    use std::os::windows::io::AsRawHandle;
-    let path = pipe_path();
-    let deadline = Instant::now() + CONNECT_TIMEOUT;
-    loop {
-        match std::fs::OpenOptions::new().read(true).write(true).open(&path) {
-            Ok(file) => {
-                let handle = windows::Win32::Foundation::HANDLE(file.as_raw_handle());
-                // Somebody else's server on our pipe name gets nothing from us.
-                return win::pipe_server_is_same_user(handle).then_some(file);
-            }
-            Err(err) => {
-                if err.raw_os_error() != Some(ERROR_PIPE_BUSY) || Instant::now() >= deadline {
-                    return None;
-                }
-                std::thread::sleep(Duration::from_millis(15));
-            }
-        }
     }
 }
 
@@ -214,7 +168,7 @@ fn read_event() -> Option<(String, String)> {
         }
     }
 
-    // Which terminal the session runs in. Unlike macOS, Coucou on Windows accepts
+    // Which terminal the session runs in. Unlike macOS, Coucou here accepts
     // events from every terminal, so this is context only — never a filter.
     // `ide_port` is the port of the Claude Code IDE integration (the app reads
     // ~/.claude/ide/<port>.lock to learn which editor window it is).
@@ -327,21 +281,6 @@ mod tests {
         assert!(decision_json("maybe").is_none());
         // The shape the app used to send must not be mistaken for a decision.
         assert!(decision_json(r#"{"permissionDecision":"allow"}"#).is_none());
-    }
-
-    #[test]
-    fn the_pipe_name_is_the_sid_unless_a_valid_override_is_given() {
-        assert_eq!(pipe_name_for(None, "S-1-5-21-1"), r"\\.\pipe\coucou-S-1-5-21-1");
-        assert_eq!(pipe_name_for(Some("coucou-dev-7"), "S-1-5-21-1"), r"\\.\pipe\coucou-dev-7");
-        // Anything that could climb out of the pipe namespace or is not a plain
-        // name is ignored rather than trusted.
-        for bad in ["", "..\\evil", "a/b", "a\\b", "has space", &"x".repeat(65)] {
-            assert_eq!(
-                pipe_name_for(Some(bad), "S-1-5-21-1"),
-                r"\\.\pipe\coucou-S-1-5-21-1",
-                "{bad:?} must not be accepted as a pipe name"
-            );
-        }
     }
 
     #[test]

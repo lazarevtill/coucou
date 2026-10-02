@@ -94,7 +94,24 @@ pub fn ancestors() -> Vec<Ancestor> {
     )
 }
 
+/// No process table on this platform yet: the chain is empty and the app falls
+/// back to the environment hints. A /proc reader belongs here when Linux gets
+/// jump-to-window.
+#[cfg(not(windows))]
+mod sys {
+    use std::collections::HashMap;
+
+    pub fn process_table() -> HashMap<u32, (u32, String)> {
+        HashMap::new()
+    }
+
+    pub fn creation_time(_pid: u32) -> Option<u64> {
+        None
+    }
+}
+
 /// The only Win32 in this module.
+#[cfg(windows)]
 mod sys {
     use std::collections::HashMap;
 

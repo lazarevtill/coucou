@@ -16,10 +16,7 @@ mod secrets;
 mod sessions;
 mod settings;
 mod tray;
-mod win_user;
 
-use std::os::windows::process::CommandExt;
-use std::process::Command;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
@@ -35,9 +32,6 @@ use pipe::Pending;
 use sessions::Sessions;
 use settings::Settings;
 
-/// Keeps spawned helpers from flashing a console window.
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
 pub struct Shared {
     pub settings: Mutex<Settings>,
     pub gate: Arc<PollGate>,
@@ -50,6 +44,9 @@ pub struct BootInfo {
     screen: ScreenInfo,
     version: String,
     hook_path: String,
+    /// False where the OS has no global cursor (Wayland): the page then reports
+    /// the cursor from its own mouse events.
+    cursor_poll: bool,
 }
 
 #[tauri::command]
@@ -63,6 +60,7 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
         screen,
         version: env!("CARGO_PKG_VERSION").to_string(),
         hook_path: settings::hook_exe_path().to_string_lossy().to_string(),
+        cursor_poll: platform::CURSOR_POLL,
     }
 }
 
@@ -101,21 +99,24 @@ fn set_collapsed(app: AppHandle, shared: State<Shared>, collapsed: bool) {
     shared.gate.collapsed.store(collapsed, Ordering::Relaxed);
     island::apply_geometry(&app, &pref, collapsed);
     // The wake strip must always take the mouse, and a resize invalidates the flag.
-    island::set_ignore_cursor(&app, false);
-    shared.gate.forget_ignore_state();
+    island::refresh_click_through(&app, &shared.gate);
     shared.gate.set_active(!collapsed);
 }
 
 /// The front end pushes the island shape; Rust decides click-through from it.
 #[tauri::command]
-fn set_island_rect(shared: State<Shared>, x: f64, y: f64, width: f64, height: f64) {
+fn set_island_rect(app: AppHandle, shared: State<Shared>, x: f64, y: f64, width: f64, height: f64) {
     shared.gate.set_rect(island::IslandRect { x, y, w: width, h: height });
+    // Without the cursor poll the input region is the click-through: it follows the island.
+    if !platform::CURSOR_POLL {
+        island::refresh_click_through(&app, &shared.gate);
+    }
 }
 
 #[tauri::command]
 fn focus_window(app: AppHandle, focused: bool) {
     let Some(win) = island::window(&app) else { return };
-    island::set_activating(&win, focused);
+    platform::set_activating(&win, focused);
     if focused {
         let _ = win.set_focus();
     }
@@ -133,15 +134,14 @@ fn open_url(url: String) {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return;
     }
-    let _ = Command::new("rundll32.exe")
-        .args(["url.dll,FileProtocolHandler", &url])
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn();
+    platform::open_url(&url);
 }
 
 /// The island's two buttons: "Open in <editor>" and "Open terminal here".
 /// `target` is `editor` or `terminal`; the choices come from the settings, and
-/// Explorer is the fallback. See open.rs for the rules.
+/// the system file manager is the fallback. See open.rs for the rules. The folder
+/// arrives in a hook payload, so only an absolute, existing directory goes any
+/// further (see launch::validate_folder).
 #[tauri::command]
 fn open_project(shared: State<Shared>, target: String, path: Option<String>) -> open::OpenResult {
     let Some(target) = open::Target::parse(&target) else {
@@ -151,7 +151,7 @@ fn open_project(shared: State<Shared>, target: String, path: Option<String>) -> 
         let s = shared.settings.lock().unwrap();
         (launch::Editor::from_setting(&s.editor), launch::Terminal::from_setting(&s.terminal))
     };
-    let result = open::open_project(platform::current(), editor, terminal, target, path.as_deref());
+    let result = open::open_project(&open::RealHost, editor, terminal, target, path.as_deref());
     log::line(format!("open {target:?} -> {} (fallback {})", result.via, result.fell_back));
     result
 }
@@ -159,7 +159,7 @@ fn open_project(shared: State<Shared>, target: String, path: Option<String>) -> 
 /// What the settings window shows next to the editor and terminal choices.
 #[tauri::command]
 fn launch_info() -> launch::LaunchInfo {
-    launch::describe(platform::current().launch_env())
+    launch::describe(&launch::SystemEnv)
 }
 
 #[derive(Serialize)]
@@ -176,7 +176,7 @@ fn focus_session(sessions: State<Sessions>, session_id: String) -> FocusResult {
         return FocusResult { outcome: "unknownSession" };
     };
     let (candidates, hints) = sessions::focus_target(&record);
-    let (outcome, method) = platform::current().focus(&candidates, &hints);
+    let (outcome, method) = platform::focus_window(&candidates, &hints);
     // The host and how it went — no folder names, no ids.
     log::line(format!("jump {} -> {outcome:?} ({method:?})", record.host.label));
     FocusResult {
@@ -201,7 +201,7 @@ fn spawn_session_pruner(app: AppHandle) {
                 continue;
             }
             let gone = sessions.prune(std::time::Instant::now(), &|entry| {
-                platform::current().process_alive(entry.pid, &entry.exe)
+                platform::process_alive(entry.pid, &entry.exe)
             });
             for id in gone {
                 let _ = app.emit_to(island::WINDOW_LABEL, "session-ended", id);
@@ -404,6 +404,7 @@ fn open_settings_window(app: AppHandle) {
 }
 
 pub fn run() {
+    platform::prepare_environment();
     let loaded = settings::load();
     let gate = Arc::new(PollGate::new());
 
@@ -456,11 +457,16 @@ pub fn run() {
             create_settings_window(&handle);
 
             if let Some(win) = island::window(&handle) {
-                island::make_non_activating(&win);
+                platform::make_non_activating(&win);
                 island::apply_geometry(&handle, &loaded.screen, false);
                 let _ = win.show();
             }
             gate.collapsed.store(false, Ordering::Relaxed);
+            // Nothing drawn yet, so nothing takes the mouse until the page
+            // reports the island's shape.
+            if !platform::CURSOR_POLL {
+                island::refresh_click_through(&handle, &gate);
+            }
             gate.set_active(true);
             island::spawn_cursor_poll(handle.clone(), gate.clone());
 

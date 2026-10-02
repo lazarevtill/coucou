@@ -4,10 +4,39 @@
 // when the chosen launcher is missing, refused the folder, or failed to start.
 // What happened is reported back so the island can say so.
 
+use std::path::Path;
+
 use serde::Serialize;
 
 use crate::launch::{self, Editor, Terminal};
-use crate::platform::Platform;
+
+/// What opening a project needs from the machine. The real one is `RealHost`;
+/// the tests use one that records instead of starting anything.
+pub trait Host {
+    /// How the launcher sees this machine (PATH, install folders).
+    fn env(&self) -> &dyn launch::Env;
+    /// Starts a planned launch. Never through a shell.
+    fn spawn(&self, launch: &launch::Launch) -> std::io::Result<()>;
+    /// Shows the folder in the system file manager.
+    fn reveal(&self, folder: &Path) -> std::io::Result<()>;
+}
+
+/// This machine, through the platform module.
+pub struct RealHost;
+
+impl Host for RealHost {
+    fn env(&self) -> &dyn launch::Env {
+        &launch::SystemEnv
+    }
+    fn spawn(&self, launch: &launch::Launch) -> std::io::Result<()> {
+        crate::platform::spawn_launch(launch)
+    }
+    fn reveal(&self, folder: &Path) -> std::io::Result<()> {
+        // Best effort, like every other use of it: the file manager is always there.
+        crate::platform::reveal_folder(&folder.to_string_lossy());
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Target {
@@ -30,14 +59,14 @@ impl Target {
 pub struct OpenResult {
     /// `cursor`, `vscode`, `windowsTerminal`, `shell`, `explorer`, or `none`.
     pub via: String,
-    /// Explorer was used instead of what the settings asked for.
+    /// The file manager was used instead of what the settings asked for.
     pub fell_back: bool,
     /// Why the preferred launcher was not used, or why nothing could be opened.
     pub error: Option<String>,
 }
 
 pub fn open_project(
-    platform: &dyn Platform,
+    host: &dyn Host,
     editor: Editor,
     terminal: Terminal,
     target: Target,
@@ -55,7 +84,7 @@ pub fn open_project(
         None if target == Target::Editor => std::path::PathBuf::new(),
         None => return nothing(Some("There is no project folder to open.".into())),
     };
-    let env = platform.launch_env();
+    let env = host.env();
 
     // What the settings ask for. `Ok(None)` is "switched off": do nothing, quietly.
     let planned: Result<Option<launch::Launch>, String> = match target {
@@ -76,17 +105,17 @@ pub fn open_project(
 
     let reason = match planned {
         Ok(None) => return nothing(None),
-        Ok(Some(l)) => match platform.spawn(&l) {
+        Ok(Some(l)) => match host.spawn(&l) {
             Ok(()) => return OpenResult { via: l.via.name().into(), fell_back: false, error: None },
             Err(err) => format!("Could not start it: {err}"),
         },
         Err(reason) => reason,
     };
 
-    // Explorer always works on an existing folder, so it is the answer to any of the above.
-    match platform.spawn(&launch::plan_explorer(&folder)) {
+    // The file manager always works on an existing folder, so it answers any of the above.
+    match host.reveal(&folder) {
         Ok(()) => OpenResult { via: launch::Via::Explorer.name().into(), fell_back: true, error: Some(reason) },
-        Err(err) => nothing(Some(format!("{reason} Explorer failed too: {err}"))),
+        Err(err) => nothing(Some(format!("{reason} The file manager failed too: {err}"))),
     }
 }
 
@@ -95,10 +124,11 @@ mod tests {
     use super::*;
     use crate::launch::fake::*;
     use crate::launch::{Env, Launch, Via};
-    use crate::platform::{Candidate, FocusMethod, FocusOutcome};
+    use std::path::Path;
     use std::sync::Mutex;
 
     /// Records what would have been started, and can refuse chosen launchers.
+    /// Revealing a folder is recorded as an Explorer launch.
     struct FakePlatform {
         env: Fake,
         spawned: Mutex<Vec<Launch>>,
@@ -112,24 +142,30 @@ mod tests {
         fn started(&self) -> Vec<Launch> {
             self.spawned.lock().unwrap().clone()
         }
-    }
-
-    impl Platform for FakePlatform {
-        fn focus(&self, _: &[Candidate], _: &[String]) -> (FocusOutcome, FocusMethod) {
-            (FocusOutcome::NoWindow, FocusMethod::None)
-        }
-        fn process_alive(&self, _: u32, _: &str) -> bool {
-            false
-        }
-        fn launch_env(&self) -> &dyn Env {
-            &self.env
-        }
-        fn spawn(&self, launch: &Launch) -> std::io::Result<()> {
+        fn record(&self, launch: Launch) -> std::io::Result<()> {
             if self.refuse.contains(&launch.via) {
                 return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "refused"));
             }
-            self.spawned.lock().unwrap().push(launch.clone());
+            self.spawned.lock().unwrap().push(launch);
             Ok(())
+        }
+    }
+
+    impl Host for FakePlatform {
+        fn env(&self) -> &dyn Env {
+            &self.env
+        }
+        fn spawn(&self, launch: &Launch) -> std::io::Result<()> {
+            self.record(launch.clone())
+        }
+        fn reveal(&self, folder: &Path) -> std::io::Result<()> {
+            self.record(Launch {
+                program: "explorer.exe".into(),
+                args: vec![folder.as_os_str().to_owned()],
+                cwd: None,
+                new_console: false,
+                via: Via::Explorer,
+            })
         }
     }
 

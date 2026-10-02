@@ -2,13 +2,14 @@
 //
 // Planning is pure and takes its view of the machine from an `Env`, so every
 // decision below is tested without launching anything. Spawning lives in
-// platform/ (see platform/windows.rs).
+// the platform module (`platform::spawn_launch`).
 //
 // The rules this file keeps, all from CLAUDE.md:
 //   * no `cmd /C` and no shell parsing anywhere: the folder is always its own
 //     argument, so `&`, `^` and `%` in a folder name stay part of a name;
 //   * the folder must be an absolute directory that exists;
-//   * Explorer is the fallback when the chosen launcher is missing or fails.
+//   * the system file manager is the fallback when the chosen launcher is missing
+//     or fails.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -49,7 +50,8 @@ impl Terminal {
     }
 }
 
-/// Which launcher a `Launch` goes through. Reported back to the island.
+/// Which launcher a launch goes through. Reported back to the island; `Explorer`
+/// is the system file manager, whatever the OS calls it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Via {
     Cursor,
@@ -117,6 +119,21 @@ fn installed(env: &dyn Env, dir: &str, rest: &str) -> Option<PathBuf> {
     env.file_exists(&candidate).then_some(candidate)
 }
 
+/// The real machine, as the platform module sees it.
+pub struct SystemEnv;
+
+impl Env for SystemEnv {
+    fn find_all(&self, stem: &str) -> Vec<PathBuf> {
+        crate::platform::find_all_on_path(stem)
+    }
+    fn file_exists(&self, path: &Path) -> bool {
+        path.is_file()
+    }
+    fn dir(&self, name: &str) -> Option<PathBuf> {
+        std::env::var_os(name).map(PathBuf::from)
+    }
+}
+
 pub fn plan_editor(editor: Editor, env: &dyn Env, folder: &Path) -> Option<Launch> {
     let (program, via) = match editor {
         Editor::None => return None,
@@ -168,16 +185,6 @@ pub fn plan_terminal(terminal: Terminal, env: &dyn Env, folder: &Path) -> Result
                 via: Via::Shell,
             })
         }
-    }
-}
-
-pub fn plan_explorer(folder: &Path) -> Launch {
-    Launch {
-        program: PathBuf::from("explorer.exe"),
-        args: vec![folder.as_os_str().to_owned()],
-        cwd: None,
-        new_console: false,
-        via: Via::Explorer,
     }
 }
 
@@ -427,14 +434,6 @@ mod tests {
             plan_terminal(Terminal::None, &this_machine(), Path::new(r"C:\p")).unwrap_err(),
             LaunchError::Disabled
         );
-    }
-
-    #[test]
-    fn explorer_is_just_explorer_and_the_folder() {
-        let l = plan_explorer(Path::new(r"C:\p"));
-        assert_eq!(l.program, PathBuf::from("explorer.exe"));
-        assert_eq!(args(&l), vec![r"C:\p"]);
-        assert_eq!(l.via, Via::Explorer);
     }
 
     // ── settings and folders ──────────────────────────────────────────────────

@@ -14,52 +14,22 @@
 // No synthetic key presses: an Alt tap would toggle the menu bar in the very
 // editor being activated.
 //
-// This file depends on nothing but the `windows` crate so it can be exercised
-// on its own against real windows.
+// The pure part (`pick`) is unit tested; the Win32 part was exercised against
+// real Cursor and Windows Terminal windows (see windows/docs/terminals.md).
 
-use windows::core::BOOL;
-use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM};
-use windows::Win32::System::Threading::{
+use crate::platform::{Candidate, FocusMethod, FocusOutcome};
+use ::windows::core::BOOL;
+use ::windows::Win32::Foundation::{CloseHandle, HWND, LPARAM};
+use ::windows::Win32::System::Threading::{
     AttachThreadInput, GetCurrentThreadId, OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
     PROCESS_QUERY_LIMITED_INFORMATION,
 };
-use windows::Win32::UI::WindowsAndMessaging::{
+use ::windows::Win32::UI::WindowsAndMessaging::{
     BringWindowToTop, EnumWindows, FlashWindowEx, GetForegroundWindow, GetWindow, GetWindowLongPtrW,
     GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, SetForegroundWindow,
     ShowWindow, FLASHWINFO, FLASHW_TIMERNOFG, FLASHW_TRAY, GWL_EXSTYLE, GW_OWNER, SW_RESTORE,
     WS_EX_TOOLWINDOW,
 };
-
-/// A process whose windows are candidates. When `exe` is set the process must
-/// really be running that image: pids arrive from outside and are recycled.
-#[derive(Debug, Clone)]
-pub struct Candidate {
-    pub pid: u32,
-    pub exe: Option<String>,
-}
-
-/// Which step of the ladder actually got the window to the front.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Method {
-    /// Plain SetForegroundWindow was enough.
-    Plain,
-    /// Needed the brief input-queue attach.
-    Attached,
-    /// Neither — or nothing was tried.
-    None,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Outcome {
-    /// In front, and it is the window whose title matched.
-    Focused,
-    /// In front, but nothing told this window apart from the process's others.
-    FocusedUnsure,
-    /// Windows would not let us; the taskbar button is flashing instead.
-    Flashed,
-    /// No visible window belongs to any candidate.
-    NoWindow,
-}
 
 /// What `pick` needs to know about a window.
 #[derive(Debug, Clone)]
@@ -135,7 +105,7 @@ pub fn image_name(pid: u32) -> Option<String> {
         let ok = QueryFullProcessImageNameW(
             process,
             PROCESS_NAME_WIN32,
-            windows::core::PWSTR(buf.as_mut_ptr()),
+            ::windows::core::PWSTR(buf.as_mut_ptr()),
             &mut len,
         )
         .is_ok();
@@ -158,7 +128,7 @@ fn foreground_is(hwnd: HWND) -> bool {
 }
 
 /// Brings the best window of the first candidate that has one to the front.
-pub fn focus(candidates: &[Candidate], hints: &[String]) -> (Outcome, Method) {
+pub fn focus(candidates: &[Candidate], hints: &[String]) -> (FocusOutcome, FocusMethod) {
     let all = top_level_windows();
     for candidate in candidates {
         if let Some(expected) = &candidate.exe {
@@ -172,25 +142,25 @@ pub fn focus(candidates: &[Candidate], hints: &[String]) -> (Outcome, Method) {
         let hwnd = mine[index].hwnd;
         return match bring_to_front(hwnd) {
             Some(method) => {
-                (if matched { Outcome::Focused } else { Outcome::FocusedUnsure }, method)
+                (if matched { FocusOutcome::Focused } else { FocusOutcome::FocusedUnsure }, method)
             }
             None => {
                 flash(hwnd);
-                (Outcome::Flashed, Method::None)
+                (FocusOutcome::Flashed, FocusMethod::None)
             }
         };
     }
-    (Outcome::NoWindow, Method::None)
+    (FocusOutcome::NoWindow, FocusMethod::None)
 }
 
-fn bring_to_front(hwnd: HWND) -> Option<Method> {
+fn bring_to_front(hwnd: HWND) -> Option<FocusMethod> {
     unsafe {
         if IsIconic(hwnd).as_bool() {
             let _ = ShowWindow(hwnd, SW_RESTORE);
         }
         let _ = SetForegroundWindow(hwnd);
         if foreground_is(hwnd) {
-            return Some(Method::Plain);
+            return Some(FocusMethod::Plain);
         }
 
         // The foreground lock held. Share the foreground thread's input state for
@@ -204,7 +174,7 @@ fn bring_to_front(hwnd: HWND) -> Option<Method> {
         if attached {
             let _ = AttachThreadInput(ours, their_thread, false);
         }
-        foreground_is(hwnd).then_some(Method::Attached)
+        foreground_is(hwnd).then_some(FocusMethod::Attached)
     }
 }
 
