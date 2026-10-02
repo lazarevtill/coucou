@@ -50,8 +50,13 @@ export const Bridge = {
 
   openUrl: (url: string) => call<void>("open_url", { url }),
 
-  /** "Open terminal" → opens the folder in VS Code when `code` is on PATH. */
-  openInVSCode: (path: string | null) => call<boolean>("open_in_vscode", { path }),
+  /**
+   * The island's two buttons: open the project in the editor, or in a terminal.
+   * Which editor and which terminal come from the settings; Explorer is the
+   * fallback. An editor opens on its own without a folder, a terminal needs one.
+   */
+  openProject: (target: "editor" | "terminal", path: string | null) =>
+    call<OpenResult>("open_project", { target, path }),
 
   quit: () => call<void>("quit_app"),
 
@@ -98,6 +103,14 @@ export const Bridge = {
   /** Tray → Pause. Stops the integration pollers, not just the island. */
   setPaused: (paused: boolean) => call<void>("set_paused", { paused }),
 };
+
+export interface OpenResult {
+  /** `cursor`, `vscode`, `windowsTerminal`, `shell`, `explorer` or `none`. */
+  via: string;
+  /** Explorer was used instead of what the settings asked for. */
+  fellBack: boolean;
+  error: string | null;
+}
 
 export interface IntegrationUpdate {
   id: string;

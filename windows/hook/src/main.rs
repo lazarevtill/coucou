@@ -37,15 +37,56 @@ const DROPPED_FIELDS: &[&str] = &["tool_response", "transcript_path"];
 /// less than this anyway.
 const MAX_FIELD_LEN: usize = 2_000;
 
+mod proc;
 mod win;
 
 /// `\\.\pipe\coucou-<sid>`. The SID keeps two accounts on the same machine from
 /// ever meeting on the same pipe; the name falls back to the user name only if
 /// the SID cannot be read at all, which should not happen.
+///
+/// `COUCOU_PIPE` replaces the whole name (after `\\.\pipe\`). It exists so a
+/// development build and the tests can run beside a live Coucou without ever
+/// meeting its pipe. Must match `pipe_name()` in the app (src-tauri/src/pipe.rs).
 fn pipe_path() -> String {
     let key = win::current_user_sid()
         .unwrap_or_else(|| std::env::var("USERNAME").unwrap_or_else(|_| "user".into()));
-    format!(r"\\.\pipe\coucou-{key}")
+    pipe_name_for(std::env::var("COUCOU_PIPE").ok().as_deref(), &key)
+}
+
+fn pipe_name_for(override_name: Option<&str>, key: &str) -> String {
+    match override_name.filter(|n| is_plain_pipe_name(n)) {
+        Some(name) => format!(r"\\.\pipe\{name}"),
+        None => format!(r"\\.\pipe\coucou-{key}"),
+    }
+}
+
+/// 1–64 of `[A-Za-z0-9._-]`, and not a dot-only name: nothing that can leave the
+/// pipe namespace or be read as a path.
+fn is_plain_pipe_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 64
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+        && !name.chars().all(|c| c == '.')
+}
+
+/// Which editor family owns this terminal, as a short token — never a path,
+/// because the paths these variables hold carry the user name. Only a hint: the
+/// app trusts the process chain over it.
+fn host_hint(term_program: &str, git_askpass: &str) -> &'static str {
+    if term_program != "vscode" {
+        return "";
+    }
+    // Cursor ships its own copy of VS Code's git extension, so its askpass lives
+    // under a directory called `cursor`. Whole path segments only: `cursors` or
+    // `cursor-tools` must not match.
+    let in_cursor_dir = git_askpass
+        .split(['\\', '/'])
+        .any(|segment| segment.eq_ignore_ascii_case("cursor"));
+    if in_cursor_dir {
+        "cursor"
+    } else {
+        "vscode"
+    }
 }
 
 /// Opens the pipe. Retries only while the server is busy: any other error means
@@ -175,18 +216,34 @@ fn read_event() -> Option<(String, String)> {
 
     // Which terminal the session runs in. Unlike macOS, Coucou on Windows accepts
     // events from every terminal, so this is context only — never a filter.
+    // `ide_port` is the port of the Claude Code IDE integration (the app reads
+    // ~/.claude/ide/<port>.lock to learn which editor window it is).
     for (key, var) in [
         ("term_program", "TERM_PROGRAM"),
         ("wt_session", "WT_SESSION"),
         ("term_session_id", "TERM_SESSION_ID"),
         ("vscode_pid", "VSCODE_PID"),
-        ("session_pid", "CLAUDE_CODE_SSE_PORT"),
+        ("ide_port", "CLAUDE_CODE_SSE_PORT"),
     ] {
         if !map.contains_key(key) {
             let value = std::env::var(var).unwrap_or_default();
             map.insert(key.into(), serde_json::Value::String(value));
         }
     }
+
+    // Where the session lives: a token for the editor family, and the process
+    // chain (PIDs and executable names only) so the app can find the window.
+    // Computed here, never taken from the payload.
+    let hint = host_hint(
+        &std::env::var("TERM_PROGRAM").unwrap_or_default(),
+        &std::env::var("GIT_ASKPASS").unwrap_or_default(),
+    );
+    map.insert("host_hint".into(), serde_json::Value::String(hint.into()));
+    let chain: Vec<serde_json::Value> = proc::ancestors()
+        .into_iter()
+        .map(|a| serde_json::json!({ "pid": a.pid, "exe": a.exe }))
+        .collect();
+    map.insert("host_chain".into(), serde_json::Value::Array(chain));
 
     truncate_strings(&mut payload);
 
@@ -270,6 +327,42 @@ mod tests {
         assert!(decision_json("maybe").is_none());
         // The shape the app used to send must not be mistaken for a decision.
         assert!(decision_json(r#"{"permissionDecision":"allow"}"#).is_none());
+    }
+
+    #[test]
+    fn the_pipe_name_is_the_sid_unless_a_valid_override_is_given() {
+        assert_eq!(pipe_name_for(None, "S-1-5-21-1"), r"\\.\pipe\coucou-S-1-5-21-1");
+        assert_eq!(pipe_name_for(Some("coucou-dev-7"), "S-1-5-21-1"), r"\\.\pipe\coucou-dev-7");
+        // Anything that could climb out of the pipe namespace or is not a plain
+        // name is ignored rather than trusted.
+        for bad in ["", "..\\evil", "a/b", "a\\b", "has space", &"x".repeat(65)] {
+            assert_eq!(
+                pipe_name_for(Some(bad), "S-1-5-21-1"),
+                r"\\.\pipe\coucou-S-1-5-21-1",
+                "{bad:?} must not be accepted as a pipe name"
+            );
+        }
+    }
+
+    #[test]
+    fn the_host_hint_names_the_editor_without_leaking_a_path() {
+        // Paths copied from a live Cursor terminal, with the user name replaced.
+        let cursor = r"c:\Users\someone\AppData\Local\Programs\cursor\resources\app\extensions\git\dist\askpass.sh";
+        let code = r"c:\Users\someone\AppData\Local\Programs\Microsoft VS Code\resources\app\extensions\git\dist\askpass.sh";
+        let insiders = r"C:\Program Files\Microsoft VS Code Insiders\resources\app\extensions\git\dist\askpass.sh";
+        assert_eq!(host_hint("vscode", cursor), "cursor");
+        assert_eq!(host_hint("vscode", code), "vscode");
+        assert_eq!(host_hint("vscode", insiders), "vscode");
+        // vscode-family terminal whose askpass says nothing: still the generic family.
+        assert_eq!(host_hint("vscode", ""), "vscode");
+        // Not an editor terminal at all (Windows Terminal sets no TERM_PROGRAM).
+        assert_eq!(host_hint("", ""), "");
+        // A directory that merely contains the letters is not Cursor.
+        assert_eq!(host_hint("vscode", r"C:\tools\cursors\git\askpass.sh"), "vscode");
+        // The answer is a fixed token: it can never echo the input back.
+        for s in [cursor, code, insiders] {
+            assert!(!host_hint("vscode", s).contains("someone"));
+        }
     }
 
     #[test]

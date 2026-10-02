@@ -92,6 +92,10 @@ export interface Settings {
   hooksInstalled: boolean;
   /** Claude model used by the chat. */
   model: string;
+  /** "Open in…" editor. Rust treats any other value as the default. */
+  editor: "cursor" | "vscode" | "none";
+  /** "Open terminal here". */
+  terminal: "windowsTerminal" | "shell" | "none";
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -106,6 +110,8 @@ export const DEFAULT_SETTINGS: Settings = {
   autostart: false,
   hooksInstalled: false,
   model: "claude-opus-5",
+  editor: "cursor",
+  terminal: "windowsTerminal",
 };
 
 type Listener = () => void;

@@ -65,14 +65,17 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
 
   const actions = h("div", { class: "int-actions" });
   if (task.id === "integration_claude") {
-    actions.append(
-      h("button", {
-        class: "link-btn",
-        style: `color:${task.color}b3`,
-        text: "Open Visual Studio Code",
-        onclick: () => void Bridge.openInVSCode(task.sessionCwd ?? null),
-      }),
-    );
+    const editor = { cursor: "Cursor", vscode: "VS Code", none: null }[State.settings.editor];
+    if (editor) {
+      actions.append(
+        h("button", {
+          class: "link-btn",
+          style: `color:${task.color}b3`,
+          text: `Open ${editor}`,
+          onclick: () => void Bridge.openProject("editor", task.sessionCwd ?? null),
+        }),
+      );
+    }
   } else if (task.id === "integration_n8n") {
     actions.append(
       h("button", {

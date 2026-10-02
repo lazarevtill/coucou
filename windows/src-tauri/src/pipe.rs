@@ -20,7 +20,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
@@ -30,6 +30,7 @@ use tokio::sync::mpsc;
 
 use crate::island::WINDOW_LABEL;
 use crate::log;
+use crate::sessions::Sessions;
 
 /// Slightly under coucou-hook's own 110 s wait, so we always answer first.
 const DECISION_TIMEOUT: Duration = Duration::from_secs(108);
@@ -57,10 +58,47 @@ pub struct Pending(pub Mutex<HashMap<String, mpsc::Sender<Reply>>>);
 static COUNTER: AtomicU64 = AtomicU64::new(1);
 
 /// `\\.\pipe\coucou-<sid>` — must match coucou-hook's `pipe_path()` exactly.
+/// `COUCOU_PIPE` replaces the whole name so a development build can run beside a
+/// live Coucou without ever meeting its pipe.
 pub fn pipe_name() -> String {
     let key = crate::win_user::current_user_sid()
         .unwrap_or_else(|| std::env::var("USERNAME").unwrap_or_else(|_| "user".into()));
-    format!(r"\\.\pipe\coucou-{key}")
+    pipe_name_for(std::env::var("COUCOU_PIPE").ok().as_deref(), &key)
+}
+
+fn pipe_name_for(override_name: Option<&str>, key: &str) -> String {
+    match override_name.filter(|n| is_plain_pipe_name(n)) {
+        Some(name) => format!(r"\\.\pipe\{name}"),
+        None => format!(r"\\.\pipe\coucou-{key}"),
+    }
+}
+
+/// 1–64 of `[A-Za-z0-9._-]`, and not dots only. Must match coucou-hook's rule.
+fn is_plain_pipe_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 64
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+        && !name.chars().all(|c| c == '.')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_pipe_name_matches_the_relays_rules() {
+        assert_eq!(pipe_name_for(None, "S-1-5-21-1"), r"\\.\pipe\coucou-S-1-5-21-1");
+        assert_eq!(pipe_name_for(Some("coucou-dev-7"), "S-1-5-21-1"), r"\\.\pipe\coucou-dev-7");
+        // Exactly the names the relay refuses, the app refuses too: otherwise the
+        // two could end up on different pipes.
+        for bad in ["", "..\\evil", "a/b", "a\\b", "has space", &"x".repeat(65), "..", "."] {
+            assert_eq!(
+                pipe_name_for(Some(bad), "S-1-5-21-1"),
+                r"\\.\pipe\coucou-S-1-5-21-1",
+                "{bad:?} must not be accepted as a pipe name"
+            );
+        }
+    }
 }
 
 pub fn start(app: AppHandle) {
@@ -125,9 +163,21 @@ async fn handle(app: AppHandle, mut pipe: NamedPipeServer) {
         .unwrap_or_default()
         .to_string();
 
+    // Where this session lives, so the island can label it and jump to it.
+    let sessions = app.state::<Sessions>();
+    if let Some(host) = sessions.observe(&payload, Instant::now(), &|port| crate::ide_lock::read(port)) {
+        payload["coucou_host"] = serde_json::to_value(host).unwrap_or(Value::Null);
+    }
+
     if event != "PermissionRequest" {
         log::line(format!("hook {event}"));
+        let ended = (event == "SessionEnd")
+            .then(|| payload.get("session_id").and_then(Value::as_str).map(str::to_string))
+            .flatten();
         let _ = app.emit_to(WINDOW_LABEL, "hook", payload);
+        if let Some(id) = ended {
+            sessions.remove(&id);
+        }
         let _ = pipe.disconnect();
         return;
     }

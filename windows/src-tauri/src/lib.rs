@@ -3,11 +3,17 @@
 mod claude;
 mod files;
 mod hooks;
+mod host;
+mod ide_lock;
 mod integrations;
 mod island;
+mod launch;
 mod log;
+mod open;
 mod pipe;
+mod platform;
 mod secrets;
+mod sessions;
 mod settings;
 mod tray;
 mod win_user;
@@ -26,6 +32,7 @@ use files::DroppedFile;
 use hooks::{HookPreview, HookStatus};
 use island::{PollGate, ScreenInfo};
 use pipe::Pending;
+use sessions::Sessions;
 use settings::Settings;
 
 /// Keeps spawned helpers from flashing a console window.
@@ -132,44 +139,75 @@ fn open_url(url: String) {
         .spawn();
 }
 
-/// "Open terminal" opens the working folder in VS Code when `code` is on PATH,
-/// and falls back to Explorer otherwise.
+/// The island's two buttons: "Open in <editor>" and "Open terminal here".
+/// `target` is `editor` or `terminal`; the choices come from the settings, and
+/// Explorer is the fallback. See open.rs for the rules.
 #[tauri::command]
-fn open_in_vscode(path: Option<String>) -> bool {
-    // No `cmd /C` anywhere near this. The path is a project folder chosen by
-    // whoever is using Claude Code, and cmd would happily read `&`, `^` and `%`
-    // in a folder name as syntax. Finding the launcher ourselves and handing the
-    // path over as a separate argument keeps it a path.
-    if let Some(code) = find_on_path("code") {
-        let mut cmd = Command::new(code);
-        if let Some(p) = path.as_deref().filter(|p| !p.is_empty()) {
-            cmd.arg(p);
-        }
-        if cmd.creation_flags(CREATE_NO_WINDOW).spawn().is_ok() {
-            return true;
-        }
-    }
-    if let Some(p) = path.as_deref().filter(|p| !p.is_empty()) {
-        let _ = Command::new("explorer").arg(p).spawn();
-    }
-    false
+fn open_project(shared: State<Shared>, target: String, path: Option<String>) -> open::OpenResult {
+    let Some(target) = open::Target::parse(&target) else {
+        return open::OpenResult { via: "none".into(), fell_back: false, error: Some("unknown target".into()) };
+    };
+    let (editor, terminal) = {
+        let s = shared.settings.lock().unwrap();
+        (launch::Editor::from_setting(&s.editor), launch::Terminal::from_setting(&s.terminal))
+    };
+    let result = open::open_project(platform::current(), editor, terminal, target, path.as_deref());
+    log::line(format!("open {target:?} -> {} (fallback {})", result.via, result.fell_back));
+    result
 }
 
-/// Our own `where`: walks %PATH% against %PATHEXT%, no shell involved.
-/// Rust quotes arguments correctly for `.cmd`/`.bat` targets since 1.77, so
-/// spawning `code.cmd` directly is safe.
-fn find_on_path(stem: &str) -> Option<std::path::PathBuf> {
-    let exts = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
-    let dirs = std::env::var_os("PATH")?;
-    for dir in std::env::split_paths(&dirs) {
-        for ext in exts.split(';').filter(|e| !e.is_empty()) {
-            let candidate = dir.join(format!("{stem}{}", ext.to_lowercase()));
-            if candidate.is_file() {
-                return Some(candidate);
+/// What the settings window shows next to the editor and terminal choices.
+#[tauri::command]
+fn launch_info() -> launch::LaunchInfo {
+    launch::describe(platform::current().launch_env())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FocusResult {
+    /// `focused`, `focusedUnsure`, `flashed`, `noWindow` or `unknownSession`.
+    outcome: &'static str,
+}
+
+/// Click on a session: bring the window it lives in to the front.
+#[tauri::command]
+fn focus_session(sessions: State<Sessions>, session_id: String) -> FocusResult {
+    let Some(record) = sessions.get(&session_id) else {
+        return FocusResult { outcome: "unknownSession" };
+    };
+    let (candidates, hints) = sessions::focus_target(&record);
+    let (outcome, method) = platform::current().focus(&candidates, &hints);
+    // The host and how it went — no folder names, no ids.
+    log::line(format!("jump {} -> {outcome:?} ({method:?})", record.host.label));
+    FocusResult {
+        outcome: match outcome {
+            platform::FocusOutcome::Focused => "focused",
+            platform::FocusOutcome::FocusedUnsure => "focusedUnsure",
+            platform::FocusOutcome::Flashed => "flashed",
+            platform::FocusOutcome::NoWindow => "noWindow",
+        },
+    }
+}
+
+/// Every 20 s, forget sessions whose Claude Code process has exited (a crash or a
+/// closed terminal never says SessionEnd) and tell the island so the row goes.
+fn spawn_session_pruner(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(20));
+        loop {
+            ticker.tick().await;
+            let sessions = app.state::<Sessions>();
+            if sessions.len() == 0 {
+                continue;
+            }
+            let gone = sessions.prune(std::time::Instant::now(), &|entry| {
+                platform::current().process_alive(entry.pid, &entry.exe)
+            });
+            for id in gone {
+                let _ = app.emit_to(island::WINDOW_LABEL, "session-ended", id);
             }
         }
-    }
-    None
+    });
 }
 
 #[tauri::command]
@@ -379,6 +417,7 @@ pub fn run() {
             gate: gate.clone(),
         })
         .manage(Pending::default())
+        .manage(Sessions::default())
         .manage(Chat::default())
         .invoke_handler(tauri::generate_handler![
             boot,
@@ -388,7 +427,9 @@ pub fn run() {
             focus_window,
             reposition,
             open_url,
-            open_in_vscode,
+            open_project,
+            launch_info,
+            focus_session,
             quit_app,
             hooks_status,
             hooks_preview,
@@ -426,6 +467,7 @@ pub fn run() {
             log::line(format!("--- Coucou {} started ---", env!("CARGO_PKG_VERSION")));
             hooks::ensure_hook_exe(&handle);
             pipe::start(handle.clone());
+            spawn_session_pruner(handle.clone());
             integrations::start(handle.clone());
             Ok(())
         })
