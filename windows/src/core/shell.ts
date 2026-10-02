@@ -2,6 +2,7 @@
 // say, the rows of the tray flyout, and which events become toast notifications.
 // Pure, like sessions.ts, so it is tested directly.
 
+import { shownPath, type FileEdit } from "./edits.ts";
 import type { Notable, SessionInfo, SessionState, Summary } from "./sessions";
 import { botState, jumpLabel, waitingLine } from "./sessionView.ts";
 import type { BotStateName } from "./layout";
@@ -65,7 +66,16 @@ export interface SessionRow {
   /** Nothing new to see. */
   dim: boolean;
   jumpLabel: string;
+  /** The latest Edit or Write, for the code view. */
+  edit: FileEdit | null;
+  /** Its file, inside the session's folder when it is there. */
+  editPath: string | null;
+  /** The last few steps, oldest first. */
+  steps: string[];
 }
+
+/** Steps a row shows in its code view. */
+const ROW_STEPS = 4;
 
 function stateLabel(s: SessionInfo): string {
   switch (s.state) {
@@ -97,6 +107,9 @@ export function sessionRows(list: SessionInfo[]): SessionRow[] {
       attention: s.state === "waiting" || s.state === "approval",
       dim: s.state === "idle" || ((s.state === "finished" || s.state === "error") && !s.unseen),
       jumpLabel: jumpLabel(s),
+      edit: s.edit ?? null,
+      editPath: s.edit ? shownPath(s.edit.path, s.cwd) : null,
+      steps: s.steps.slice(-ROW_STEPS),
     };
   });
 }

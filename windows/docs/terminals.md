@@ -60,6 +60,14 @@ the payload:
 | `host_hint` | `cursor` or `vscode` when the terminal belongs to that editor family, from `TERM_PROGRAM` and the *shape* of `GIT_ASKPASS` — the path itself is never sent, it contains the user name |
 | `ide_port` | Claude Code's IDE-integration port, `CLAUDE_CODE_SSE_PORT` |
 
+It removes `transcript_path` and `tool_response`: a tool's result can be a whole
+file read or a command's whole output. One part comes back, for Edit and Write
+only: Claude Code's own patch of the change (`structuredPatch` — the changed
+lines with a little context and their line numbers, at most 10 hunks and 120
+lines, `truncated` when cut) and whether Write created the file. That is what
+the flyout's code view shows. The file as it was before the change
+(`originalFile`) never leaves the relay. Every string is cut at 2,000 bytes.
+
 The app (`src-tauri/src/host.rs`) decides the host from the chain first —
 `Cursor.exe`, `Code.exe`, `WindowsTerminal.exe` — because environment variables
 are inherited and lie: a Windows Terminal started from Cursor still says

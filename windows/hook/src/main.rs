@@ -28,13 +28,15 @@ const FIRE_AND_FORGET_BUDGET: Duration = Duration::from_secs(2);
 const DECISION_BUDGET: Duration = Duration::from_secs(110);
 
 /// Fields that are pointless to forward and can be enormous (a whole file read,
-/// a full command output). The island never shows them.
+/// a full command output). The island never shows them; of `tool_response` only
+/// an edit's patch is put back (patch.rs).
 const DROPPED_FIELDS: &[&str] = &["tool_response", "transcript_path"];
 /// Longest string forwarded for any single field; the island truncates to far
 /// less than this anyway.
 const MAX_FIELD_LEN: usize = 2_000;
 
 mod console;
+mod patch;
 mod proc;
 
 #[cfg(windows)]
@@ -151,8 +153,16 @@ fn read_event() -> Option<(String, String)> {
         .unwrap_or(arg_event);
     map.insert("hook_event_name".into(), serde_json::Value::String(event.clone()));
 
+    // Of a tool's result, an edit's patch and nothing else (see patch.rs).
+    let patch = map.get("tool_response").and_then(|response| {
+        let tool = map.get("tool_name").and_then(|v| v.as_str()).unwrap_or_default();
+        patch::slim(tool, response)
+    });
     for field in DROPPED_FIELDS {
         map.remove(*field);
+    }
+    if let Some(patch) = patch {
+        map.insert("tool_response".into(), patch);
     }
 
     let cwd_missing = map

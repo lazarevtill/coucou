@@ -141,3 +141,30 @@ fn a_relay_with_nobody_listening_exits_quietly_and_fast() {
     assert!(out.stdout.is_empty(), "stdout must stay empty so Claude Code is untouched");
     assert!(took < Duration::from_secs(3), "took {took:?}");
 }
+
+#[test]
+fn of_an_edit_result_only_the_patch_leaves_the_relay() {
+    let pipe = format!("coucou-test-{}-patch", std::process::id());
+    let received = one_shot_server(&pipe);
+
+    // A PostToolUse Edit as Claude Code sends it, whole original file included.
+    let event = serde_json::json!({
+        "hook_event_name": "PostToolUse", "session_id": "s3", "cwd": r"C:\proj", "tool_name": "Edit",
+        "tool_input": { "file_path": r"C:\proj\a.ts", "old_string": "x = 1", "new_string": "x = 2", "replace_all": false },
+        "tool_response": {
+            "filePath": r"C:\proj\a.ts", "oldString": "x = 1", "newString": "x = 2",
+            "originalFile": "THE WHOLE FILE\nx = 1\n", "userModified": false, "replaceAll": false,
+            "structuredPatch": [{ "oldStart": 2, "oldLines": 1, "newStart": 2, "newLines": 1, "lines": ["-x = 1", "+x = 2"] }]
+        }
+    });
+    let (out, _) = run_hook(&pipe, "PostToolUse", &event.to_string(), &[]);
+    assert!(out.status.success());
+
+    let line = received.recv_timeout(Duration::from_secs(10)).expect("the relay should have connected");
+    let sent: Value = serde_json::from_str(&line).unwrap();
+    assert_eq!(
+        sent["tool_response"],
+        serde_json::json!({ "structuredPatch": [{ "oldStart": 2, "oldLines": 1, "newStart": 2, "newLines": 1, "lines": ["-x = 1", "+x = 2"] }] })
+    );
+    assert!(!line.contains("THE WHOLE FILE"), "the original file left the relay: {line}");
+}

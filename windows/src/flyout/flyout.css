@@ -286,6 +286,264 @@ button.jump:hover {
   color: var(--accent);
 }
 
+/* ── A session's code view ──────────────────────────────────────────────────── */
+
+:root {
+  --mono: 12px/1.5 "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  --code-bg: rgba(0, 0, 0, 0.28);
+  --del-bg: rgba(244, 80, 94, 0.16);
+  --del-text: #ff99a4;
+  --add-bg: rgba(52, 211, 153, 0.14);
+  --add-text: #7ee2b8;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --code-bg: rgba(255, 255, 255, 0.85);
+    --del-bg: rgba(196, 43, 28, 0.09);
+    --del-text: #a4262c;
+    --add-bg: rgba(16, 124, 16, 0.09);
+    --add-text: #0e6b0e;
+  }
+}
+
+button.edit-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin: 5px 0 0 -4px;
+  padding: 2px 6px 2px 4px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+button.edit-toggle:hover {
+  background: var(--card-hover);
+  color: var(--text);
+}
+
+button.edit-toggle svg {
+  flex: 0 0 auto;
+  transition: transform 0.12s ease;
+}
+
+button.edit-toggle.open svg {
+  transform: rotate(90deg);
+}
+
+.badge {
+  flex: 0 0 auto;
+  font: 600 9.5px/14px "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #3178c6;
+  color: #ffffff;
+}
+
+.fname {
+  font: var(--mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count {
+  flex: 0 0 auto;
+  font: var(--mono);
+  font-size: 11.5px;
+}
+
+.count.add {
+  color: var(--add-text);
+}
+
+.count.del {
+  color: var(--del-text);
+}
+
+.flag {
+  color: var(--danger);
+}
+
+.session.open .row {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.code {
+  display: none;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--stroke);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  background: var(--card);
+  cursor: auto;
+}
+
+.session.open .code {
+  display: block;
+}
+
+.steps {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.steps li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 1px 0;
+}
+
+.steps li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.steps li.done svg {
+  color: #34d399;
+}
+
+.steps li.current,
+.steps li.waiting {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.steps li.waiting svg {
+  color: var(--attention);
+}
+
+.steps li.error svg {
+  color: var(--danger);
+}
+
+.spinner {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--faint);
+  border-top-color: var(--text);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.file {
+  border-radius: 6px;
+  background: var(--code-bg);
+  border: 1px solid var(--stroke);
+  overflow: hidden;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--stroke);
+  font-size: 12px;
+}
+
+.tab .pending {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--attention);
+}
+
+.tab .fpath {
+  margin-left: auto;
+  min-width: 0;
+  color: var(--faint);
+  font: var(--mono);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: right;
+}
+
+.lines {
+  max-height: 260px;
+  overflow: auto;
+  padding: 4px 0;
+  font: var(--mono);
+  user-select: text;
+}
+
+.l {
+  display: grid;
+  grid-template-columns: 3.2em 1.2em max-content;
+  white-space: pre;
+}
+
+.l .n {
+  padding-right: 6px;
+  text-align: right;
+  color: var(--faint);
+}
+
+.l .s {
+  color: var(--faint);
+}
+
+.l.del {
+  background: var(--del-bg);
+  box-shadow: inset 2px 0 var(--del-text);
+}
+
+.l.del .t {
+  color: var(--del-text);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--del-text) 55%, transparent);
+}
+
+.l.del .n,
+.l.del .s {
+  color: var(--del-text);
+}
+
+.l.add {
+  background: var(--add-bg);
+  box-shadow: inset 2px 0 var(--add-text);
+}
+
+.l.add .n,
+.l.add .s {
+  color: var(--add-text);
+}
+
+.l.gap {
+  color: var(--faint);
+}
+
+.file.failed .lines {
+  opacity: 0.6;
+}
+
+.code-note {
+  margin-top: 6px;
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
 .services .row {
   padding-top: 7px;
   padding-bottom: 7px;

@@ -39,6 +39,13 @@ inside the screen's work area. It closes when it loses focus or on `Esc`.
   question or last step. Clicking a row (or its arrow) brings that session's
   window to the front (see [terminals.md](terminals.md)); a row you have not
   looked at stays bright until you do.
+- **Code view**: under a session that edited a file, its latest change — the
+  file and how many lines were added and removed. Clicking it opens the change
+  under the row: the session's last steps, then the file's lines, removed in red
+  and added in green, with the file's line numbers. An Edit about to run or
+  waiting for your permission shows its old and new text, without line numbers
+  until it is made; a change cut on the way (very long text, a big patch) says
+  so.
 - **Services**: the integrations you switched on, and whether each one works.
 - **Footer**: Ask Claude and Drop a file open the island on the chat or the drop
   zone; Island opens it on the overview.
@@ -94,7 +101,10 @@ taskbar edges, a second display with negative coordinates, the tooltip limit,
 the tray badges, the click that closes the flyout not reopening it, the
 notification document (escaping, the button, no Allow), what a notification
 click may send back, the tray state and tooltip text, the flyout's rows, the
-snapshot, and when a notification is raised or taken back.
+snapshot, and when a notification is raised or taken back; the code view's
+lines from Claude Code's patch (shape captured from Claude Code 2.1.287), the
+diff of an Edit not made yet, cut text, and what the relay keeps of a tool's
+result.
 
 End to end, on Windows 11 at 125 % with the taskbar at the bottom, on a separate
 instance (see [terminals.md](terminals.md#how-this-is-tested)):
@@ -117,6 +127,10 @@ instance (see [terminals.md](terminals.md#how-this-is-tested)):
   through;
 - starting Coucou leaves the foreground window as it was; opening the flyout or
   Settings gives that window the keyboard;
+- a real Claude Code session's Write and Edit calls (one with `replace_all`)
+  show in its code view with the line numbers of Claude Code's patch; an Edit
+  waiting for permission shows its old and new text, unnumbered, while the
+  request goes back to the terminal; `coucou.log` holds none of the code;
 - the island stays a tool window that clicks do not activate (so Alt-Tab never
   lists it) through its click-through changes; the chat gets the keyboard while
   it is open, and closing it gives the keyboard to the window in front.

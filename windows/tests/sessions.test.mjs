@@ -393,3 +393,59 @@ test("step labels, approval targets and project names are unchanged", () => {
   assert.equal(aliasProjectName("NotchBuddy"), "Notch Buddy");
   assert.equal(aliasProjectName("coucou"), "coucou");
 });
+
+// ── The code view: each session's latest edit ────────────────────────────────
+
+const EDIT_INPUT = { file_path: "C:/work/shop/invoice.ts", old_string: "const TVA = 0.196", new_string: "const TVA = 0.2", replace_all: false };
+const EDIT_PATCH = { structuredPatch: [{ oldStart: 4, oldLines: 1, newStart: 4, newLines: 1, lines: ["-const TVA = 0.196", "+const TVA = 0.2"] }] };
+
+test("an edit shows up as soon as it starts, and with line numbers once it ran", () => {
+  const s = new SessionStore();
+  s.apply(ev("a", "SessionStart"), T0);
+  assert.equal(s.get("a").edit, null);
+
+  s.apply(ev("a", "PreToolUse", { tool_name: "Edit", tool_input: EDIT_INPUT }), T0 + 1);
+  assert.equal(s.get("a").edit.status, "pending");
+  assert.equal(s.get("a").edit.numbered, false);
+
+  s.apply(ev("a", "PostToolUse", { tool_name: "Edit", tool_input: EDIT_INPUT, tool_response: EDIT_PATCH }), T0 + 2);
+  const e = s.get("a").edit;
+  assert.equal(e.status, "applied");
+  assert.equal(e.numbered, true);
+  assert.deepEqual(e.lines.map((l) => l.num), [4, 4]);
+});
+
+test("with an older relay that sends no patch, the edit is still marked done", () => {
+  const s = new SessionStore();
+  s.apply(ev("a", "PreToolUse", { tool_name: "Edit", tool_input: EDIT_INPUT }), T0);
+  s.apply(ev("a", "PostToolUse", { tool_name: "Edit", tool_input: EDIT_INPUT }), T0 + 1);
+  assert.equal(s.get("a").edit.status, "applied");
+  assert.equal(s.get("a").edit.numbered, false);
+});
+
+test("a failed edit says so, and other tools leave the last edit in place", () => {
+  const s = new SessionStore();
+  s.apply(ev("a", "PreToolUse", { tool_name: "Edit", tool_input: EDIT_INPUT }), T0);
+  s.apply(ev("a", "PostToolUseFailure", { tool_name: "Edit", tool_input: EDIT_INPUT }), T0 + 1);
+  assert.equal(s.get("a").edit.status, "failed");
+
+  s.apply(ev("a", "PreToolUse", { tool_name: "Bash", tool_input: { command: "npm test" } }), T0 + 2);
+  s.apply(ev("a", "PostToolUse", { tool_name: "Bash", tool_input: { command: "npm test" } }), T0 + 3);
+  assert.equal(s.get("a").edit.name, "invoice.ts");
+});
+
+test("an edit waiting for permission is the one shown", () => {
+  const s = new SessionStore();
+  const write = { file_path: "C:/work/shop/notes.md", content: "alpha" };
+  s.apply(ev("a", "PermissionRequest", { tool_name: "Write", tool_input: write }), T0);
+  assert.equal(s.get("a").edit.name, "notes.md");
+  assert.equal(s.get("a").edit.status, "pending");
+});
+
+test("each session keeps its own edit", () => {
+  const s = new SessionStore();
+  s.apply(ev("a", "PreToolUse", { tool_name: "Edit", tool_input: EDIT_INPUT }), T0);
+  s.apply(ev("b", "PreToolUse", { tool_name: "Write", tool_input: { file_path: "C:/x/main.rs", content: "fn main() {}" } }), T0 + 1);
+  assert.equal(s.get("a").edit.name, "invoice.ts");
+  assert.equal(s.get("b").edit.name, "main.rs");
+});

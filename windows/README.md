@@ -41,6 +41,7 @@ installs for the current user only — no admin prompt.
 |---|---|
 | Click the tray icon | The flyout: your sessions, permission requests and services |
 | Click a session, or **Go to Windows Terminal** / **Go to Cursor** on a notification | The window that session runs in comes to the front |
+| Click the file under a session in the flyout | Its latest change, line by line, with its last steps |
 | Move the mouse to the very top-centre of the screen (island on) | Mochi peeks out |
 | Click the small island | It opens |
 | Click Mochi | It gets annoyed. Three times in a row and it goes dizzy |

@@ -199,3 +199,21 @@ test("a toast is taken back once its session no longer needs anyone", () => {
   s.markSeen("e");
   assert.deepEqual(staleToasts(shown, s.list()).sort(), ["e", "gone", "q"]);
 });
+
+test("a session row carries its latest edit and its last few steps", () => {
+  const s = new SessionStore();
+  const edit = { tool_name: "Edit", tool_input: { file_path: "C:/src/shop/invoice.ts", old_string: "a", new_string: "b" } };
+  for (const cmd of ["ls", "git status", "npm test", "npm run build", "cargo test"]) {
+    s.apply(ev("shop", "PreToolUse", { tool_name: "Bash", tool_input: { command: cmd } }), T0);
+  }
+  s.apply(ev("shop", "PreToolUse", edit), T0 + 1);
+  s.apply(ev("idle", "SessionStart"), T0 + 2);
+
+  const rows = Object.fromEntries(sessionRows(s.list()).map((r) => [r.id, r]));
+  assert.equal(rows.shop.edit.name, "invoice.ts");
+  assert.equal(rows.shop.editPath, "invoice.ts", "shown inside the session's folder");
+  assert.equal(rows.idle.editPath, null);
+  assert.deepEqual(rows.shop.steps, ["Exécute · npm test", "Exécute · npm run build", "Exécute · cargo test", "Modifie · invoice.ts"]);
+  assert.equal(rows.idle.edit, null);
+  assert.deepEqual(rows.idle.steps, []);
+});

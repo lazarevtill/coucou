@@ -11,6 +11,8 @@
 // Kept to erasable TypeScript (no enums, no parameter properties) so Node can run
 // the tests without a build step.
 
+import { editFromPost, editFromPre, type FileEdit } from "./edits.ts";
+
 export type SessionState =
   | "idle"
   | "thinking"
@@ -37,6 +39,8 @@ export interface HookEvent {
   prompt?: string;
   tool_name?: string;
   tool_input?: Record<string, unknown>;
+  /** Of a tool's result, only an edit's patch reaches the island (the relay keeps nothing else). */
+  tool_response?: unknown;
   notification_type?: string;
   last_assistant_message?: string;
   error_message?: string;
@@ -56,6 +60,8 @@ export interface SessionInfo {
   waitingFor: string | null;
   waitingKind: "question" | "permission" | "input" | null;
   steps: string[];
+  /** The latest Edit or Write: about to run, done, or failed. */
+  edit: FileEdit | null;
   permissionMode: string | null;
   lastEventAt: number;
   finishedAt: number | null;
@@ -340,11 +346,20 @@ export class SessionStore {
           s.unseen = false;
           s.finishedAt = null;
           pushStep(s, stepLabel(tool, input));
+          s.edit = editFromPre(tool, input) ?? s.edit;
         }
         break;
 
       case "PostToolUse":
-      case "PostToolUseFailure":
+      case "PostToolUseFailure": {
+        // What happened to the file stays true whatever the session does next.
+        const sent = editFromPre(tool, input);
+        if (name === "PostToolUseFailure") {
+          if (sent) s.edit = { ...sent, status: "failed" };
+        } else {
+          const done = editFromPost(tool, input, ev.tool_response) ?? (sent && { ...sent, status: "applied" as const });
+          if (done) s.edit = done;
+        }
         // After a Stop or a failure this is a race, not a new turn.
         if (s.state !== "finished" && s.state !== "error") {
           s.state = "working";
@@ -352,6 +367,7 @@ export class SessionStore {
           if (name === "PostToolUseFailure") pushStep(s, "⚠ failed");
         }
         break;
+      }
 
       case "Notification": {
         const message = ev.message ?? "";
@@ -382,6 +398,7 @@ export class SessionStore {
           s.state = "approval";
           s.waitingKind = "permission";
           s.waitingFor = approvalTarget(tool, input);
+          s.edit = editFromPre(tool, input) ?? s.edit;
           if (before !== "approval") became = "approval";
         }
         break;
@@ -427,7 +444,7 @@ export class SessionStore {
     if (!s) {
       s = {
         id, cwd: "", project: "Session", host: null, state: "idle",
-        waitingFor: null, waitingKind: null, steps: [], permissionMode: null,
+        waitingFor: null, waitingKind: null, steps: [], edit: null, permissionMode: null,
         lastEventAt: now, finishedAt: null, unseen: false,
       };
       this.map.set(id, s);

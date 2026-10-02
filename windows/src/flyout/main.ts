@@ -8,6 +8,7 @@
 
 import "./flyout.css";
 import { Bridge, onEvent, type ShellAction } from "../core/bridge";
+import type { LineKind } from "../core/edits";
 import type { ApprovalCard, ServiceRow, SessionRow, ShellSnapshot } from "../core/shell";
 import { jumpNote } from "../core/sessionView";
 import type { AgentTask } from "../core/state";
@@ -115,15 +116,22 @@ function renderApproval(card: ApprovalCard | null) {
 }
 
 interface RowParts {
+  /** The row and, under it, its code view. */
   el: HTMLElement;
+  row: HTMLElement;
   project: HTMLElement;
   chips: HTMLElement;
   state: HTMLElement;
   detail: HTMLElement;
   jump: HTMLButtonElement;
+  editToggle: HTMLButtonElement;
+  code: HTMLElement;
+  codeKey: string;
 }
 
 const rows = new Map<string, RowParts>();
+/** Sessions whose code view is open. Kept while the flyout lives. */
+const expanded = new Set<string>();
 
 function makeRow(id: string): RowParts {
   const project = h("span", { class: "project" });
@@ -131,15 +139,113 @@ function makeRow(id: string): RowParts {
   const state = h("div", { class: "state" });
   const detail = h("div", { class: "detail" });
   const jumpBtn = h("button", { class: "jump", onclick: (e: Event) => { e.stopPropagation(); void jump(id); } }, svg(ICONS.arrowUpRight, 14));
-  const el = h("div", { class: "row", role: "listitem", tabindex: "0", onclick: () => void jump(id) },
+  // Opening the code view is its own control: a click on the row still jumps.
+  const editToggle = h("button", {
+    class: "edit-toggle",
+    onclick: (e: Event) => {
+      e.stopPropagation();
+      if (expanded.has(id)) expanded.delete(id);
+      else expanded.add(id);
+      if (lastSnapshot) renderSessions(lastSnapshot.sessions);
+    },
+  });
+  editToggle.addEventListener("keydown", (e) => e.stopPropagation());
+  const row = h("div", { class: "row", tabindex: "0", onclick: () => void jump(id) },
     h("i", { class: "status" }),
-    h("div", { class: "text" }, h("div", { class: "line" }, project, chips), state, detail),
+    h("div", { class: "text" }, h("div", { class: "line" }, project, chips), state, detail, editToggle),
     jumpBtn,
   );
-  el.addEventListener("keydown", (e) => {
+  row.addEventListener("keydown", (e) => {
     if (e.key === "Enter") void jump(id);
   });
-  return { el, project, chips, state, detail, jump: jumpBtn };
+  const code = h("div", { class: "code" });
+  const el = h("div", { class: "session", role: "listitem" }, row, code);
+  return { el, row, project, chips, state, detail, jump: jumpBtn, editToggle, code, codeKey: "" };
+}
+
+const SIGN: Record<LineKind, string> = { ctx: " ", del: "−", add: "+", gap: "⋯" };
+
+/** The toggle's label: the file and how much changed. */
+function renderToggle(parts: RowParts, r: SessionRow) {
+  const e = r.edit;
+  parts.editToggle.style.display = e ? "" : "none";
+  if (!e) return;
+  const open = expanded.has(r.id);
+  clear(parts.editToggle);
+  parts.editToggle.append(
+    ...present(
+      h("span", { class: "badge", text: e.badge }),
+      h("span", { class: "fname", text: e.name }),
+      h("span", { class: "count add", text: `+${e.added}` }),
+      h("span", { class: "count del", text: `−${e.removed}` }),
+      e.status === "failed" ? h("span", { class: "flag", text: "failed" }) : null,
+      svg(ICONS.chevronRight, 12),
+    ),
+  );
+  parts.editToggle.classList.toggle("open", open);
+  parts.editToggle.setAttribute("aria-expanded", String(open));
+  parts.editToggle.title = open ? "Hide the change" : "Show the change";
+}
+
+function stepIcon(kind: "done" | "current" | "waiting" | "error") {
+  if (kind === "current") return h("i", { class: "spinner" });
+  if (kind === "waiting") return svg(ICONS.timer, 12);
+  if (kind === "error") return svg(ICONS.bang, 12);
+  return svg(ICONS.check, 12);
+}
+
+/** The code view: the last steps, then the change, line by line. Text only — never HTML. */
+function renderCode(parts: RowParts, r: SessionRow) {
+  const e = r.edit;
+  const open = !!e && expanded.has(r.id);
+  parts.el.classList.toggle("open", open);
+  const key = open ? JSON.stringify([e, r.editPath, r.steps, r.state, r.attention]) : "";
+  if (key === parts.codeKey) return;
+  parts.codeKey = key;
+  clear(parts.code);
+  if (!open || !e) return;
+
+  const last = r.steps.length - 1;
+  const lastKind = r.state === "working" || r.state === "thinking" ? "current" : r.attention ? "waiting" : r.state === "error" ? "error" : "done";
+  const steps = h("ol", { class: "steps" },
+    ...r.steps.map((s, i) => h("li", { class: i === last ? lastKind : "done" }, stepIcon(i === last ? lastKind : "done"), h("span", { text: s }))),
+  );
+
+  const tab = h("div", { class: "tab" },
+    h("span", { class: "badge", text: e.badge }),
+    h("span", { class: "fname", text: e.name }),
+    e.status === "pending" ? h("i", { class: "pending", title: "Not made yet" }) : null,
+    // The path only when it says more than the name.
+    r.editPath && r.editPath !== e.name ? h("span", { class: "fpath", text: r.editPath, title: e.path }) : null,
+  );
+
+  const lines = h("div", { class: "lines" },
+    ...e.lines.map((l) => h("div", { class: `l ${l.kind}` },
+      h("span", { class: "n", text: l.num == null ? "" : String(l.num) }),
+      h("span", { class: "s", text: SIGN[l.kind] }),
+      h("span", { class: "t", text: l.text }),
+    )),
+  );
+
+  const notes: string[] = [];
+  if (e.status === "pending") notes.push(r.attention ? "Waiting for your permission." : "About to change.");
+  if (e.status === "failed") notes.push("This change did not go through.");
+  if (e.created) notes.push("New file.");
+  if (e.replaceAll) notes.push("Every occurrence in the file.");
+  if (!e.numbered) notes.push("Line numbers once the change is made.");
+  if (e.cut) notes.push("Only part of the change is shown.");
+
+  parts.code.append(
+    ...present(
+      r.steps.length ? steps : null,
+      h("div", { class: `file ${e.status}` }, tab, lines),
+      notes.length ? h("div", { class: "code-note", text: notes.join(" ") }) : null,
+    ),
+  );
+}
+
+function present(...nodes: (Node | null)[]): Node[] {
+  return nodes.filter((n): n is Node => n !== null);
 }
 
 function renderSessions(list: SessionRow[]) {
@@ -151,10 +257,10 @@ function renderSessions(list: SessionRow[]) {
       parts = makeRow(r.id);
       rows.set(r.id, parts);
     }
-    parts.el.dataset.state = r.state;
-    parts.el.classList.toggle("attention", r.attention);
-    parts.el.classList.toggle("dim", r.dim);
-    parts.el.classList.toggle("unseen", r.unseen);
+    parts.row.dataset.state = r.state;
+    parts.row.classList.toggle("attention", r.attention);
+    parts.row.classList.toggle("dim", r.dim);
+    parts.row.classList.toggle("unseen", r.unseen);
     parts.project.textContent = r.project;
     clear(parts.chips);
     if (r.bypass) parts.chips.append(h("span", { class: "chip", text: "bypass" }));
@@ -163,6 +269,8 @@ function renderSessions(list: SessionRow[]) {
     parts.detail.textContent = r.detail;
     parts.jump.title = r.jumpLabel;
     parts.jump.setAttribute("aria-label", r.jumpLabel);
+    renderToggle(parts, r);
+    renderCode(parts, r);
     // Keep the order of the list without re-adding rows that are in place.
     if (sessionList.children[i] !== parts.el) sessionList.insertBefore(parts.el, sessionList.children[i] ?? null);
   });
@@ -170,6 +278,7 @@ function renderSessions(list: SessionRow[]) {
     if (!seen.has(id)) {
       parts.el.remove();
       rows.delete(id);
+      expanded.delete(id);
     }
   }
   empty.style.display = list.length === 0 ? "" : "none";
@@ -202,7 +311,10 @@ function renderServices(list: ServiceRow[]) {
   }
 }
 
+let lastSnapshot: ShellSnapshot | null = null;
+
 function render(s: ShellSnapshot) {
+  lastSnapshot = s;
   headline.textContent = s.headline;
   clear(pauseBtn);
   pauseBtn.append(svg(s.paused ? PLAY : PAUSE, 16));
