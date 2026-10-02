@@ -9,6 +9,7 @@ mod ide_lock;
 mod integrations;
 mod island;
 mod launch;
+mod llm_server;
 mod log;
 mod open;
 mod pipe;
@@ -380,21 +381,48 @@ fn approval_decline(app: AppHandle, request_id: String) {
 
 // ── Chat, files and secrets ───────────────────────────────────────────────────
 
-/// One chat turn. The API key and any file bytes stay on the Rust side.
+/// One chat turn, with whichever source the settings name. The API keys and
+/// any file bytes stay on the Rust side.
 #[tauri::command]
 async fn chat_send(
     shared: State<'_, Shared>,
     chat: State<'_, Chat>,
+    local: State<'_, llm_server::LlmChat>,
     query: String,
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
-    let model = shared.settings.lock().unwrap().model.clone();
+    let (provider, model, url, server_model) = {
+        let s = shared.settings.lock().unwrap();
+        (s.chat_provider.clone(), s.model.clone(), s.llm_server_url.clone(), s.llm_server_model.clone())
+    };
+    if provider == "llmServer" {
+        let cfg = llm_server::ServerConfig {
+            base: llm_server::check_base_url(&url)?,
+            model: server_model,
+            key: secrets::get("llm-server-api-key"),
+        };
+        return llm_server::send(&local, &cfg, query, context).await;
+    }
     claude::send(&chat, &model, query, context).await
 }
 
+/// A new conversation, with either source.
 #[tauri::command]
-fn chat_reset(chat: State<Chat>) {
+fn chat_reset(chat: State<Chat>, local: State<llm_server::LlmChat>) {
     chat.reset();
+    local.reset();
+}
+
+/// The models a server offers — also how the settings window tests an address
+/// before it is saved.
+#[tauri::command]
+async fn llm_server_models(url: String) -> Result<Vec<String>, String> {
+    let cfg = llm_server::ServerConfig {
+        base: llm_server::check_base_url(&url)?,
+        model: String::new(),
+        key: secrets::get("llm-server-api-key"),
+    };
+    llm_server::list_models(&cfg).await
 }
 
 /// Copies a dropped file into the inbox and reports its name back.
@@ -524,6 +552,7 @@ pub fn run() {
         .manage(ShellSnapshot::default())
         .manage(flyout::Flyout::default())
         .manage(Chat::default())
+        .manage(llm_server::LlmChat::default())
         .invoke_handler(tauri::generate_handler![
             boot,
             save_settings,
@@ -553,6 +582,7 @@ pub fn run() {
             log_line,
             chat_send,
             chat_reset,
+            llm_server_models,
             ingest_file,
             secret_present,
             secret_set,

@@ -45,6 +45,8 @@ async function main() {
 
   // The settings window writes preferences; apply them here without a restart.
   await onEvent<Settings>("settings-changed", (s) => {
+    // A conversation does not carry over to another chat source.
+    if (s.chatProvider !== State.settings.chatProvider) State.chatHistory = [];
     State.settings = { ...State.settings, ...s };
     island.applySettings();
     State.loadIntegrationTasks();

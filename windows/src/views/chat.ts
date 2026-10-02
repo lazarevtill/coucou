@@ -122,7 +122,10 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
         log.scrollTop = log.scrollHeight;
       }
 
-      input.placeholder = State.chatHistory.length === 0 ? "Ask me anything…" : "Continue…";
+      // Says who answers, so it is never a surprise where the text goes.
+      const local = State.settings.chatProvider === "llmServer";
+      const who = local ? State.settings.llmServerModel || "your model server" : "Claude";
+      input.placeholder = State.chatHistory.length === 0 ? `Ask ${who}…` : `Continue with ${who}…`;
       input.disabled = sending;
     },
     focus() {

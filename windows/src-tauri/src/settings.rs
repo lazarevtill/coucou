@@ -34,6 +34,16 @@ pub struct Settings {
     /// finishes) or `off`.
     #[serde(default = "default_notifications")]
     pub notifications: String,
+    /// Who answers the chat: `anthropic` (Claude) or `llmServer` (your own
+    /// OpenAI-compatible server — llama.cpp, LM Studio, Ollama…).
+    #[serde(default = "default_chat_provider")]
+    pub chat_provider: String,
+    /// The model server's base URL, up to and including `/v1`.
+    #[serde(default = "default_llm_server_url")]
+    pub llm_server_url: String,
+    /// The model to ask for; empty means the first one the server lists.
+    #[serde(default)]
+    pub llm_server_model: String,
 }
 
 fn default_model() -> String {
@@ -54,6 +64,15 @@ fn default_island() -> String {
 
 fn default_notifications() -> String {
     "needsYou".into()
+}
+
+fn default_chat_provider() -> String {
+    "anthropic".into()
+}
+
+/// Where llama-server listens when started with no options.
+fn default_llm_server_url() -> String {
+    "http://127.0.0.1:8080/v1".into()
 }
 
 impl Default for Settings {
@@ -77,6 +96,9 @@ impl Default for Settings {
             terminal: default_terminal(),
             island: default_island(),
             notifications: default_notifications(),
+            chat_provider: default_chat_provider(),
+            llm_server_url: default_llm_server_url(),
+            llm_server_model: String::new(),
         }
     }
 }
@@ -154,6 +176,9 @@ mod tests {
         .expect("the previous release's settings.json must still parse");
         assert_eq!((s.editor.as_str(), s.terminal.as_str(), s.screen.as_str()), ("vscode", "shell", "cursor"));
         assert_eq!((s.island.as_str(), s.notifications.as_str()), ("off", "needsYou"));
+        assert_eq!(s.chat_provider, "anthropic", "the chat keeps talking to Claude until told otherwise");
+        assert_eq!(s.llm_server_url, "http://127.0.0.1:8080/v1", "llama-server's own default");
+        assert_eq!(s.llm_server_model, "");
     }
 
     #[test]
@@ -163,9 +188,14 @@ mod tests {
         s.terminal = "none".into();
         s.island = "on".into();
         s.notifications = "all".into();
+        s.chat_provider = "llmServer".into();
+        s.llm_server_url = "http://192.168.1.20:8080/v1".into();
+        s.llm_server_model = "qwen2.5".into();
         let back: Settings = serde_json::from_slice(&serde_json::to_vec(&s).unwrap()).unwrap();
         assert_eq!((back.editor.as_str(), back.terminal.as_str()), ("vscode", "none"));
         assert_eq!((back.island.as_str(), back.notifications.as_str()), ("on", "all"));
+        assert_eq!(back.chat_provider, "llmServer");
+        assert_eq!((back.llm_server_url.as_str(), back.llm_server_model.as_str()), ("http://192.168.1.20:8080/v1", "qwen2.5"));
     }
 
     #[test]

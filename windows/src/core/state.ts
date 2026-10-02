@@ -108,6 +108,12 @@ export interface Settings {
   island: "on" | "off";
   /** Windows notifications. */
   notifications: "needsYou" | "all" | "off";
+  /** Who answers the chat: Claude, or your own OpenAI-compatible server. */
+  chatProvider: "anthropic" | "llmServer";
+  /** The model server's base URL, up to and including /v1. */
+  llmServerUrl: string;
+  /** Empty: the first model the server lists. */
+  llmServerModel: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -126,6 +132,9 @@ export const DEFAULT_SETTINGS: Settings = {
   terminal: "windowsTerminal",
   island: "off",
   notifications: "needsYou",
+  chatProvider: "anthropic",
+  llmServerUrl: "http://127.0.0.1:8080/v1",
+  llmServerModel: "",
 };
 
 type Listener = () => void;

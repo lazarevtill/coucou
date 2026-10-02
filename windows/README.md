@@ -84,9 +84,12 @@ Explorer.
 
 ## Chat and keys
 
-**Settings… → Claude** takes your Anthropic API key. Keys live in the **Windows
-Credential Manager**, never on disk and never in the interface — the island can
-only ask whether a key exists. Same for every integration key.
+The chat answers with Claude (**Settings… → Claude** takes your Anthropic API
+key) or with your own model server — llama.cpp's `llama-server`, LM Studio,
+Ollama or anything else that speaks the OpenAI chat API (**Settings… → Chat**,
+details in [docs/model-sources.md](docs/model-sources.md)). Keys live in the
+**Windows Credential Manager**, never on disk and never in the interface — the
+island can only ask whether a key exists. Same for every integration key.
 
 No telemetry. The only network requests Coucou makes are to the services you
 configure yourself.

@@ -62,7 +62,7 @@ pub enum ChatContext {
     Window { app_name: String, title: String, url: Option<String> },
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatReply {
     pub text: String,

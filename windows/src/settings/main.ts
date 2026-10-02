@@ -254,6 +254,108 @@ function apiSection(hasKey: boolean): HTMLElement {
   );
 }
 
+// ── Chat source section ───────────────────────────────────────────────────────
+
+function chatSourceSection(serverKey: boolean): HTMLElement {
+  const provider = h("select", {}) as HTMLSelectElement;
+  provider.append(
+    h("option", { value: "anthropic", text: "Claude (Anthropic API)" }),
+    h("option", { value: "llmServer", text: "Your model server (llama.cpp, LM Studio, Ollama…)" }),
+  );
+  provider.value = settings.chatProvider;
+
+  const url = h("input", {
+    type: "text", value: settings.llmServerUrl, spellcheck: "false", autocomplete: "off",
+    placeholder: "http://127.0.0.1:8080/v1", style: "flex:1 1 auto;min-width:0",
+  }) as HTMLInputElement;
+  const check = h("button", { text: "Check" });
+  const status = h("div", { class: "hint" });
+  const model = h("select", {}) as HTMLSelectElement;
+
+  function fillModels(ids: string[]) {
+    clear(model);
+    model.append(h("option", { value: "", text: ids.length ? `First listed (${ids[0]})` : "First listed by the server" }));
+    for (const id of ids) model.append(h("option", { value: id, text: id }));
+    if (settings.llmServerModel && !ids.includes(settings.llmServerModel)) {
+      model.append(h("option", { value: settings.llmServerModel, text: settings.llmServerModel }));
+    }
+    model.value = settings.llmServerModel;
+  }
+  fillModels([]);
+
+  async function probe() {
+    status.textContent = "Checking…";
+    try {
+      const ids = await Bridge.llmServerModels(url.value.trim());
+      status.textContent = ids.length ? `Connected — ${ids.length} model${ids.length === 1 ? "" : "s"}.` : "Connected, but the server lists no model.";
+      fillModels(ids);
+      return true;
+    } catch (err) {
+      status.textContent = String(err).replace(/^Error:\s*/, "");
+      return false;
+    }
+  }
+
+  check.addEventListener("click", async () => {
+    // Only an address that answers is kept.
+    if (await probe()) {
+      settings.llmServerUrl = url.value.trim();
+      void save();
+    }
+  });
+  model.addEventListener("change", () => {
+    settings.llmServerModel = model.value;
+    void save();
+  });
+
+  const keyField = h("input", {
+    type: "password", autocomplete: "off", spellcheck: "false",
+    placeholder: serverKey ? "••••••••  (stored)" : "Only if the server asks for one",
+    style: "flex:1 1 auto;min-width:0",
+  }) as HTMLInputElement;
+  const keySave = h("button", { text: "Save" });
+  keySave.addEventListener("click", async () => {
+    try {
+      await Bridge.secretSet("llm-server-api-key", keyField.value.trim());
+      keyField.placeholder = keyField.value.trim() ? "••••••••  (stored)" : "Only if the server asks for one";
+      keyField.value = "";
+    } catch (err) {
+      status.textContent = `Could not save the key: ${String(err)}`;
+    }
+  });
+
+  const server = h("div", { style: "display:flex;flex-direction:column;gap:10px" },
+    h("div", {
+      class: "hint",
+      text: "Anything that speaks the OpenAI chat API. Plain http only for this computer and your local network; the conversation goes nowhere else. Text files only — PDFs and images need Claude.",
+    }),
+    h("div", { class: "row" }, h("label", { text: "Address" }), url, check),
+    status,
+    h("div", { class: "row" }, h("label", { text: "Model" }), model),
+    h("div", { class: "row" }, h("label", { text: "API key" }), keyField, keySave),
+  );
+
+  const sync = () => {
+    server.style.display = provider.value === "llmServer" ? "" : "none";
+  };
+  provider.addEventListener("change", () => {
+    settings.chatProvider = provider.value as Settings["chatProvider"];
+    void save();
+    void Bridge.chatReset(); // a conversation does not carry over to another source
+    sync();
+  });
+  sync();
+  if (settings.chatProvider === "llmServer") void probe();
+
+  return h(
+    "section",
+    {},
+    h("h2", {}, h("span", { text: "Chat" })),
+    h("div", { class: "row" }, h("label", { text: "Answers from" }), provider),
+    server,
+  );
+}
+
 // ── Integrations section ──────────────────────────────────────────────────────
 
 interface IntegrationDef {
@@ -513,6 +615,7 @@ async function main() {
   };
 
   const hasKey = (await Bridge.secretPresent("anthropic-api-key")) ?? false;
+  const serverKey = (await Bridge.secretPresent("llm-server-api-key")) ?? false;
   const launch = await Bridge.launchInfo();
 
   const keys = [
@@ -528,6 +631,7 @@ async function main() {
     claudeSection(status),
     shellSection(),
     openInSection(launch),
+    chatSourceSection(serverKey),
     apiSection(hasKey),
     integrationsSection(present),
     generalSection(),
