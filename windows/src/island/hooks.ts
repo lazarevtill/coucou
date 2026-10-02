@@ -13,6 +13,7 @@ import { CLAUDE_ID, State } from "../core/state";
 import { CELEBRATE_MS, approvalTarget, stepLabel, type HookEvent } from "../core/sessions";
 import { reactTo, staleCard } from "../core/sessionView";
 import type { Island } from "./island";
+import { clearStaleToasts, toast } from "./shellLink";
 
 /** Clears the approval card if no decision was made before the hook gave up. */
 let pendingTimeout: number | null = null;
@@ -50,6 +51,7 @@ export function registerHookHandlers(island: Island) {
     if (State.mode === "expanded" && staleCard(State.view, State.sessions.list())) {
       island.setView(State.defaultView());
     }
+    clearStaleToasts();
     State.notify();
   });
 }
@@ -102,6 +104,13 @@ function handleClaude(island: Island, payload: HookPayload) {
     island.reveal();
   }
 
+  // A toast for what needs the human, unless the island just showed it.
+  const s = change.session;
+  if (s && (change.became === "waiting" || change.became === "error" || change.became === "finished")) {
+    toast(change.became, s, island.enabled && reaction.alert !== null);
+  }
+  clearStaleToasts();
+
   // The character celebrates a finish for a while; look again once that is over.
   if (change.became === "finished") {
     window.setTimeout(() => {
@@ -117,9 +126,14 @@ function openApprovalCard(island: Island, sessionId: string, payload: HookPayloa
   // — that would leave a human staring at request B while request A waits for
   // a decision nobody can give. Hand it straight back to the terminal.
   if (State.pendingApproval && State.pendingApproval.requestId !== requestId) {
-    if (requestId) void Bridge.approvalDecline(requestId);
-    State.sessions.handBack(sessionId);
+    handBack(requestId, sessionId);
     Sound.play("question");
+    return;
+  }
+  // Island switched off and the flyout closed: nothing on screen could show the
+  // card, and Claude Code must not wait on one nobody sees.
+  if (!island.enabled && !State.flyoutOpen) {
+    handBack(requestId, sessionId);
     return;
   }
   if (pendingTimeout != null) window.clearTimeout(pendingTimeout);
@@ -154,9 +168,19 @@ function openApprovalCard(island: Island, sessionId: string, payload: HookPayloa
     island.dropPin();
     State.sessions.handBack(pending.sessionId);
     State.syncClaude();
-    if (State.view === "approval") island.setView(State.defaultView());
+    const s = State.sessions.get(pending.sessionId);
+    if (s) toast("waiting", s, false);
+    if (State.mode === "expanded" && State.view === "approval") island.setView(State.defaultView());
     State.notify();
   }, 110_000);
+}
+
+/** The terminal takes this request: decline it here, and point there. */
+function handBack(requestId: string, sessionId: string) {
+  if (requestId) void Bridge.approvalDecline(requestId);
+  State.sessions.handBack(sessionId);
+  const s = State.sessions.get(sessionId);
+  if (s) toast("waiting", s, false);
 }
 
 // ── Other agents (coucou_agent) ───────────────────────────────────────────────

@@ -402,6 +402,45 @@ function openInSection(info: LaunchInfo | null): HTMLElement {
   );
 }
 
+// ── Tray and notifications section ────────────────────────────────────────────
+
+function shellSection(): HTMLElement {
+  const island = h("select", {}) as HTMLSelectElement;
+  island.append(
+    h("option", { value: "off", text: "Tray only" }),
+    h("option", { value: "on", text: "Tray and the island at the top" }),
+  );
+  island.value = settings.island;
+  island.addEventListener("change", () => {
+    settings.island = island.value as Settings["island"];
+    void save();
+  });
+
+  const notify = h("select", {}) as HTMLSelectElement;
+  notify.append(
+    h("option", { value: "needsYou", text: "When a session needs me or fails" }),
+    h("option", { value: "all", text: "Also when a session finishes" }),
+    h("option", { value: "off", text: "Never" }),
+  );
+  notify.value = settings.notifications;
+  notify.addEventListener("change", () => {
+    settings.notifications = notify.value as Settings["notifications"];
+    void save();
+  });
+
+  return h(
+    "section",
+    {},
+    h("h2", {}, h("span", { text: "Tray and notifications" })),
+    h("div", {
+      class: "hint",
+      text: "Click the tray icon for your sessions, permission requests and services. With the island off, a permission request is answered in the terminal unless the tray panel is open, so Claude Code never waits on a card nobody sees.",
+    }),
+    h("div", { class: "row" }, h("label", { text: "Show Coucou in" }), island),
+    h("div", { class: "row" }, h("label", { text: "Notifications" }), notify),
+  );
+}
+
 // ── General section ───────────────────────────────────────────────────────────
 
 function generalSection(): HTMLElement {
@@ -487,6 +526,7 @@ async function main() {
   root.append(
     h("h1", {}, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
     claudeSection(status),
+    shellSection(),
     openInSection(launch),
     apiSection(hasKey),
     integrationsSection(present),

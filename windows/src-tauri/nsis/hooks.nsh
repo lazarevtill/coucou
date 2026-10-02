@@ -14,4 +14,8 @@
   RMDir /r "$LOCALAPPDATA\Coucou\bin"
   RMDir /r "$LOCALAPPDATA\Coucou\inbox"
   Delete "$LOCALAPPDATA\Coucou\coucou.log"
+  ; Notifications: the icon they show and the app identity registered for them
+  ; the first time one was raised (platform/windows/toast.rs).
+  Delete "$LOCALAPPDATA\Coucou\coucou.png"
+  DeleteRegKey HKCU "Software\Classes\AppUserModelId\${BUNDLEID}"
 !macroend

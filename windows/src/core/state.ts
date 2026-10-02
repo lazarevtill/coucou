@@ -104,6 +104,10 @@ export interface Settings {
   editor: "cursor" | "vscode" | "none";
   /** "Open terminal here". */
   terminal: "windowsTerminal" | "shell" | "none";
+  /** The island at the top of the screen; `off` leaves it to the tray flyout. */
+  island: "on" | "off";
+  /** Windows notifications. */
+  notifications: "needsYou" | "all" | "off";
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -120,6 +124,8 @@ export const DEFAULT_SETTINGS: Settings = {
   model: "claude-opus-5",
   editor: "cursor",
   terminal: "windowsTerminal",
+  island: "off",
+  notifications: "needsYou",
 };
 
 type Listener = () => void;
@@ -140,6 +146,8 @@ class AppState {
 
   isPinned = false;
   paused = false;
+  /** The tray flyout is on screen (it can show the permission card). */
+  flyoutOpen = false;
 
   uploadProgress = 0;
   uploadDuration = 2.4;

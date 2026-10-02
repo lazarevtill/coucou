@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { Settings } from "./state";
+import type { ShellSnapshot, ToastSpec } from "./shell";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -35,8 +36,12 @@ export const Bridge = {
 
   saveSettings: (settings: Settings) => call<void>("save_settings", { settings }),
 
-  /** Shrink the window down to the invisible wake strip (hidden) or back to full. */
-  setCollapsed: (collapsed: boolean) => call<void>("set_collapsed", { collapsed }),
+  /**
+   * Shrink the window down to the invisible wake strip (hidden) or back to full.
+   * `interactive: false` makes the strip let every click through (island off).
+   */
+  setCollapsed: (collapsed: boolean, interactive = true) =>
+    call<void>("set_collapsed", { collapsed, interactive }),
 
   /**
    * Pushes the island shape in window coordinates. Rust flips click-through from
@@ -65,6 +70,18 @@ export const Bridge = {
 
   /** Which editor and terminal this machine has, for the settings window. */
   launchInfo: () => call<LaunchInfo>("launch_info"),
+
+  // ── Tray, flyout, notifications ───────────────────────────────────────────
+  /** What the tray icon and the flyout show. Only the island publishes. */
+  publishShell: (snapshot: ShellSnapshot) => call<void>("publish_shell", { snapshot }),
+  shellSnapshot: () => call<ShellSnapshot>("shell_snapshot"),
+  /** A click in the flyout, handed to the island. */
+  shellAction: (action: ShellAction) => call<void>("shell_action", { action }),
+  flyoutShow: () => call<void>("flyout_show"),
+  flyoutHide: () => call<void>("flyout_hide"),
+  flyoutVisible: () => call<boolean>("flyout_visible"),
+  showToast: (spec: ToastSpec) => call<void>("show_toast", { spec }),
+  clearToast: (tag: string) => call<void>("clear_toast", { tag }),
 
   quit: () => call<void>("quit_app"),
 
@@ -119,6 +136,13 @@ export interface OpenResult {
   fellBack: boolean;
   error: string | null;
 }
+
+/** What the flyout asks the island to do. */
+export type ShellAction =
+  | { kind: "decide"; requestId: string; decision: "allow" | "deny" }
+  | { kind: "seen"; id: string }
+  | { kind: "pause" }
+  | { kind: "open"; view: "overview" | "prompt" | "upload"; focus?: string };
 
 export interface FocusResult {
   /** `focused`, `focusedUnsure`, `flashed`, `noWindow` or `unknownSession`. */

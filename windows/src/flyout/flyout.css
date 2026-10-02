@@ -1,0 +1,412 @@
+/* The tray flyout, in the look of Windows 11's own flyouts: Mica behind a tinted
+   layer, Segoe UI Variable, 8 px rounding, the system accent for the main action.
+   Follows the system's light or dark theme. */
+
+:root {
+  --tint: rgba(32, 32, 32, 0.72);
+  --card: rgba(255, 255, 255, 0.055);
+  --card-hover: rgba(255, 255, 255, 0.085);
+  --stroke: rgba(255, 255, 255, 0.08);
+  --text: #ffffff;
+  --muted: rgba(255, 255, 255, 0.64);
+  --faint: rgba(255, 255, 255, 0.42);
+  --accent: #4cc2ff;
+  --accent-text: #00243a;
+  --attention: #f5a524;
+  --danger: #ff99a4;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --tint: rgba(243, 243, 243, 0.78);
+    --card: rgba(255, 255, 255, 0.7);
+    --card-hover: rgba(255, 255, 255, 0.92);
+    --stroke: rgba(0, 0, 0, 0.07);
+    --text: #1a1a1a;
+    --muted: rgba(0, 0, 0, 0.62);
+    --faint: rgba(0, 0, 0, 0.45);
+    --accent: #005fb8;
+    --accent-text: #ffffff;
+    --attention: #9d5d00;
+    --danger: #c42b1c;
+    color-scheme: light;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  /* Mica shows through the window; the tint keeps text readable anywhere. */
+  background: transparent;
+  overflow: hidden;
+}
+
+body {
+  font: 13px/1.35 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+#flyout-root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--tint);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+button:focus-visible,
+.row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────────── */
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px 10px 16px;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+}
+
+/* The engine draws the body at 60 % of its canvas, so the canvas overflows its
+   slot and is centred on it — the same rule as the island's mini Mochis. */
+.avatar .mini {
+  position: relative;
+  display: inline-block;
+}
+
+.avatar canvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.title {
+  font: 600 14px/1.2 "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+}
+
+.headline {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.tools {
+  display: flex;
+  gap: 2px;
+}
+
+button.icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+button.icon:hover {
+  background: var(--card-hover);
+  color: var(--text);
+}
+
+body.paused .headline::after {
+  content: " · paused";
+}
+
+/* ── Body ───────────────────────────────────────────────────────────────────── */
+
+main {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0 10px 8px;
+}
+
+.section {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 12px 6px 6px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 8px 9px 12px;
+  border-radius: 8px;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--card-hover);
+}
+
+.row.dim {
+  opacity: 0.55;
+}
+
+.row .status {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.row[data-state="working"] .status,
+.row[data-state="thinking"] .status {
+  background: #3b9eff;
+}
+
+.row.attention .status {
+  background: var(--attention);
+  box-shadow: 0 0 0 3px rgba(245, 165, 36, 0.25);
+}
+
+.row[data-state="error"] .status {
+  background: #f4505e;
+}
+
+.row[data-state="finished"] .status {
+  background: #34d399;
+}
+
+.row.attention {
+  border-color: rgba(245, 165, 36, 0.45);
+}
+
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.project {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip {
+  font-size: 10.5px;
+  line-height: 16px;
+  padding: 0 6px;
+  border-radius: 4px;
+  color: var(--attention);
+  border: 1px solid currentColor;
+  opacity: 0.85;
+}
+
+.state {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.row.attention .state {
+  color: var(--attention);
+}
+
+.detail {
+  color: var(--faint);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row.attention .detail {
+  color: var(--text);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+button.jump {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+button.jump:hover {
+  background: var(--card-hover);
+  color: var(--accent);
+}
+
+.row.attention button.jump {
+  color: var(--accent);
+}
+
+.services .row {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.services .row.off {
+  opacity: 0.6;
+}
+
+.services .row.error .state {
+  color: var(--danger);
+}
+
+.empty {
+  padding: 18px 8px 10px;
+  text-align: center;
+}
+
+.empty-title {
+  font-weight: 600;
+}
+
+.empty-sub {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.note {
+  display: none;
+  margin: 8px 2px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.note.on {
+  display: block;
+}
+
+/* ── Permission card ────────────────────────────────────────────────────────── */
+
+.approval {
+  margin-top: 4px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--card);
+  border: 1px solid rgba(245, 165, 36, 0.6);
+}
+
+.approval-who {
+  font-weight: 600;
+}
+
+.approval-target {
+  display: block;
+  margin: 8px 0 10px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  font: 12px/1.4 "Cascadia Mono", Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 120px;
+  overflow-y: auto;
+  user-select: text;
+}
+
+@media (prefers-color-scheme: light) {
+  .approval-target {
+    background: rgba(0, 0, 0, 0.05);
+  }
+}
+
+.approval-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.approval-buttons button {
+  min-width: 88px;
+  height: 32px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.approval-buttons .secondary {
+  background: var(--card-hover);
+  border: 1px solid var(--stroke);
+}
+
+.approval-buttons .primary {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────────── */
+
+footer {
+  display: flex;
+  gap: 4px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--stroke);
+}
+
+button.action {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+
+button.action:hover {
+  background: var(--card-hover);
+  color: var(--text);
+}

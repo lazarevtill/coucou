@@ -7,6 +7,7 @@ import { State, type Settings } from "./core/state";
 import { Island } from "./island/island";
 import { registerHookHandlers } from "./island/hooks";
 import { registerIntegrationHandlers, refreshConfigured } from "./island/integrations";
+import { setPaused, startShellLink } from "./island/shellLink";
 
 async function main() {
   const root = document.getElementById("root");
@@ -26,27 +27,16 @@ async function main() {
 
   await onEvent<{ x: number; y: number }>("cursor", ({ x, y }) => island.onCursor(x, y));
 
-  /** Pause has to reach Rust too, or the pollers keep calling out. */
-  const setPaused = (on: boolean) => {
-    if (State.paused === on) return;
-    State.paused = on;
-    void Bridge.setPaused(on);
-  };
-
   await onEvent<string>("tray", (what) => {
     switch (what) {
-      case "settings":
-        setPaused(false);
-        island.alert("settings");
-        break;
       case "open":
-        setPaused(false);
-        island.alert(State.defaultView());
+        setPaused(island, false);
+        // Switched off, "Open" is the flyout — the island only opens on request.
+        if (island.enabled) island.openExplicit(State.defaultView());
+        else void Bridge.flyoutShow();
         break;
       case "pause":
-        setPaused(!State.paused);
-        if (State.paused) island.fsm.forceHidden();
-        else island.reveal();
+        setPaused(island, !State.paused);
         break;
     }
   });
@@ -63,6 +53,7 @@ async function main() {
 
   registerHookHandlers(island);
   registerIntegrationHandlers(island);
+  startShellLink(island);
 
   island.launch();
 

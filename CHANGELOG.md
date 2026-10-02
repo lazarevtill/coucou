@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Windows: Coucou lives in the notification area. The tray icon shows what is going on and who needs you; a click opens a Windows 11 style flyout with every session, the permission card and your services, and jumps to a session's window. Questions and failures raise Windows notifications with a button that goes to the session. The island at the top of the screen is now optional and off by default.
 - Windows: every Claude Code session is followed on its own. The pill counts them, puts the one that needs you first and says where it runs (Windows Terminal, Cursor, VS Code) and whether it is in bypass mode; one session finishing no longer marks the others finished.
 - Windows: a question from Claude Code opens a question card instead of Allow / Deny, and **Go to Windows Terminal** / **Go to Cursor** brings that session's window to the front — the exact Windows Terminal window, or the editor window of its workspace. ↗ on the Claude Code pill does the same.
 - Windows: Settings → Open projects in picks what the island's buttons open — Cursor, VS Code or nothing; Windows Terminal, a PowerShell window or nothing — with File Explorer as the fallback.

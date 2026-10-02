@@ -69,6 +69,8 @@ export class Island {
 
   // Rust starts the window at full size so the launch greeting has room.
   private collapsed = false;
+  /** The island setting last applied; null before the first one. */
+  private wasEnabled: boolean | null = null;
   private collapseTimer: number | null = null;
   private wasInIsland = false;
   /** Last shape handed to Rust for the click-through test. */
@@ -140,19 +142,7 @@ export class Island {
       openUrl: (url) => {
         if (url) void Bridge.openUrl(url);
       },
-      decide: (d) => {
-        const req = State.pendingApproval;
-        void Bridge.log(`decide ${d} req=${req?.requestId ?? "none"}`);
-        if (!req) return;
-        Sound.play(d === "deny" ? "blip" : "approve");
-        void Bridge.approvalDecision(req.requestId, d);
-        State.pendingApproval = null;
-        State.isPinned = false;
-        this.fsm.pinned = false;
-        State.sessions.resolveApproval(req.sessionId);
-        State.syncClaude();
-        this.setView(State.defaultView());
-      },
+      decide: (d) => this.decide(d),
       toggleSound: () => {
         State.settings.soundEnabled = !State.settings.soundEnabled;
         Sound.setEnabled(State.settings.soundEnabled);
@@ -237,6 +227,11 @@ export class Island {
           this.setMode("hidden");
           break;
         case "petit":
+          // Switched off, closing goes all the way: no compact pill at the top.
+          if (!this.enabled) {
+            this.fsm.forceHidden();
+            return;
+          }
           if (from === "coucou") this.greeting.interrupt();
           else if (from === "hidden") Sound.play("peek");
           this.setMode("compact");
@@ -257,7 +252,37 @@ export class Island {
   }
 
   launch() {
+    // Switched off: no greeting at the top of the screen, straight to the strip.
+    if (!this.enabled) {
+      this.updateWindowCollapsed();
+      return;
+    }
     this.fsm.launch();
+  }
+
+  /** Settings → "Island at the top of the screen". Off, the tray flyout carries everything. */
+  get enabled(): boolean {
+    return State.settings.island !== "off";
+  }
+
+  /**
+   * The permission card was answered — from the island or the flyout. With a
+   * `requestId` the answer only counts for that request: a card that changed
+   * under the click must not decide a newer one.
+   */
+  decide(d: "allow" | "deny", requestId?: string) {
+    const req = State.pendingApproval;
+    void Bridge.log(`decide ${d} req=${req?.requestId ?? "none"}`);
+    if (!req || (requestId !== undefined && requestId !== req.requestId)) return;
+    Sound.play(d === "deny" ? "blip" : "approve");
+    void Bridge.approvalDecision(req.requestId, d);
+    State.pendingApproval = null;
+    State.isPinned = false;
+    this.fsm.pinned = false;
+    State.sessions.resolveApproval(req.sessionId);
+    State.syncClaude();
+    if (State.mode === "expanded") this.setView(State.defaultView());
+    State.notify();
   }
 
   // ── Mode / view ─────────────────────────────────────────────────────────────
@@ -329,14 +354,25 @@ export class Island {
     this.fsm.forcePetit();
   }
 
-  /** Alert from the hook server: open on this view. Pinned alerts never auto-close. */
+  /**
+   * Alert from the hook server: open on this view. Pinned alerts never
+   * auto-close. Nothing happens while the island is switched off — the tray
+   * and the notifications carry the news then.
+   */
   alert(view: IslandViewName) {
+    if (!this.enabled) return;
+    this.openExplicit(view);
+  }
+
+  /** Opens the island on `view` because somebody asked — even when it is switched off. */
+  openExplicit(view: IslandViewName) {
     this.fsm.pinned = State.isPinned;
     this.fsm.forceHome();
     this.expand(view);
   }
 
   reveal() {
+    if (!this.enabled) return;
     this.fsm.reveal();
   }
 
@@ -549,7 +585,7 @@ export class Island {
         this.collapseTimer = null;
         if (State.mode !== "hidden") return;
         this.collapsed = true;
-        void Bridge.setCollapsed(true);
+        void Bridge.setCollapsed(true, this.enabled);
       }, 420);
     } else if (this.collapsed) {
       // Grow the window back before the island animates open.
@@ -564,7 +600,7 @@ export class Island {
     // The wake strip is the only thing the OS can hit while the island is hidden.
     this.wakeStrip.addEventListener("mouseenter", () => {
       Sound.resume();
-      if (State.mode === "hidden") this.fsm.mouseEntered();
+      if (State.mode === "hidden" && this.enabled) this.fsm.mouseEntered();
     });
 
     this.islandEl.addEventListener("mousedown", (e) => {
@@ -916,11 +952,18 @@ export class Island {
     this.engine.setState(State.effectiveState);
   }
 
-  /** Applies settings coming from Rust at boot. */
+  /** Applies settings coming from Rust, at boot and whenever they change. */
   applySettings() {
     Sound.setEnabled(State.settings.soundEnabled);
     Sound.setVolume(State.settings.soundVolume);
     this.fsm.homeToPetitDelay = State.settings.autoCloseInterval;
+    const enabled = this.enabled;
+    if (this.wasEnabled !== null && enabled !== this.wasEnabled) {
+      if (!enabled && State.mode !== "hidden") this.fsm.forceHidden();
+      // The strip takes the mouse again, or stops taking it.
+      if (this.collapsed) void Bridge.setCollapsed(true, enabled);
+    }
+    this.wasEnabled = enabled;
     State.notify();
   }
 

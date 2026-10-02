@@ -4,9 +4,9 @@
 
 # Coucou for Windows
 
-**Mochi doesn't get a notch on a PC — so it lives at the top of your screen instead.**
+**Mochi doesn't get a notch on a PC — so it lives in your notification area instead.**
 
-Approve Claude Code permissions, watch your session work, drop a file, chat with Claude, keep an eye on your services — without leaving what you're doing.
+See every Claude Code session at a glance, jump to the one that needs you, approve permissions, drop a file, chat with Claude, keep an eye on your services — without leaving what you're doing.
 
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11-0078D4?logo=windows)
 ![Tauri 2](https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri&logoColor=black)
@@ -39,19 +39,22 @@ installs for the current user only — no admin prompt.
 
 | What you do | What happens |
 |---|---|
-| Move the mouse to the very top-centre of the screen | Mochi peeks out |
+| Click the tray icon | The flyout: your sessions, permission requests and services |
+| Click a session, or **Go to Windows Terminal** / **Go to Cursor** on a notification | The window that session runs in comes to the front |
+| Move the mouse to the very top-centre of the screen (island on) | Mochi peeks out |
 | Click the small island | It opens |
 | Click Mochi | It gets annoyed. Three times in a row and it goes dizzy |
 | Rest the pointer on Mochi for two seconds | Hearts |
 | Drag a file onto the island | Mochi turns into a box, swallows it, then offers to answer questions about it |
 | `Esc` | Closes the island |
-| **Go to Windows Terminal** / **Go to Cursor** on a card, or ↗ | The window that session runs in comes to the front |
-| Tray icon | Open, Settings…, Pause, Quit |
+| Right-click the tray icon | Open, Settings…, Pause, Quit |
 
-Everything else happens on its own: a Claude Code permission request opens the
-island with **Deny / Allow**, a question opens a card that takes you to the
-session asking it, a finished session shows what it did, and your integrations
-sit in the coloured pills next to Mochi.
+Everything else happens on its own: the tray icon's dot and tooltip say what is
+going on, a question raises a Windows notification that takes you to the session
+asking it, and a permission request shows **Deny / Allow** with exactly what it
+authorises. The island at the top of the screen is optional (**Settings… → Tray
+and notifications**); how the tray, the flyout and the notifications behave:
+[docs/shell.md](docs/shell.md).
 
 ## Claude Code
 
@@ -137,6 +140,7 @@ windows/
     island/            state machine, hooks, integrations
     views/             every island view
     settings/          the settings window
+    flyout/            the tray flyout
   src-tauri/           Rust backend: window, named pipe, Claude API, pollers
   hook/                coucou-hook.exe, the Claude Code relay
   docs/                how parts of the app work, in depth
@@ -155,8 +159,9 @@ It stays on your machine.
 
 ## What's different from the Mac version
 
-- No notch, so the island lives at the top centre of the screen and retracts into
-  the top edge instead of hiding in a notch.
+- No notch: Coucou lives in the notification area, with a flyout and Windows
+  notifications. The island is optional; switched on, it sits at the top centre
+  of the screen and retracts into the top edge.
 - Permission approval works from **any** terminal; the Mac build only listens to
   VS Code sessions.
 - Each Claude Code session is followed on its own, and a question takes you to

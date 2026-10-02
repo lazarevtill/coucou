@@ -2,6 +2,7 @@
 
 mod claude;
 mod files;
+mod flyout;
 mod hooks;
 mod host;
 mod ide_lock;
@@ -15,6 +16,7 @@ mod platform;
 mod secrets;
 mod sessions;
 mod settings;
+mod shell;
 mod tray;
 
 use std::sync::atomic::Ordering;
@@ -93,13 +95,19 @@ fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
 
 /// Hidden island → shrink the window to the invisible wake strip and park the
 /// cursor poll; anything else → full panel and 60 Hz polling.
+///
+/// `interactive: false` (island switched off) makes the collapsed strip let every
+/// click through: nothing wakes the island from the top of the screen then.
 #[tauri::command]
-fn set_collapsed(app: AppHandle, shared: State<Shared>, collapsed: bool) {
+fn set_collapsed(app: AppHandle, shared: State<Shared>, collapsed: bool, interactive: Option<bool>) {
     let pref = shared.settings.lock().unwrap().screen.clone();
     shared.gate.collapsed.store(collapsed, Ordering::Relaxed);
     island::apply_geometry(&app, &pref, collapsed);
-    // The wake strip must always take the mouse, and a resize invalidates the flag.
+    // The wake strip must take the mouse, and a resize invalidates the flag.
     island::refresh_click_through(&app, &shared.gate);
+    if collapsed && interactive == Some(false) {
+        island::set_ignore_cursor(&app, true);
+    }
     shared.gate.set_active(!collapsed);
 }
 
@@ -169,24 +177,118 @@ struct FocusResult {
     outcome: &'static str,
 }
 
-/// Click on a session: bring the window it lives in to the front.
-#[tauri::command]
-fn focus_session(sessions: State<Sessions>, session_id: String) -> FocusResult {
-    let Some(record) = sessions.get(&session_id) else {
-        return FocusResult { outcome: "unknownSession" };
+/// Brings the window a session lives in to the front; says how it went.
+fn jump(sessions: &Sessions, session_id: &str) -> &'static str {
+    let Some(record) = sessions.get(session_id) else {
+        return "unknownSession";
     };
     let target = sessions::focus_target(&record);
     let (outcome, method) = platform::focus_window(target.window, &target.candidates, &target.hints);
     // The host and how it went — no folder names, no ids.
     log::line(format!("jump {} -> {outcome:?} ({method:?})", record.host.label));
-    FocusResult {
-        outcome: match outcome {
-            platform::FocusOutcome::Focused => "focused",
-            platform::FocusOutcome::FocusedUnsure => "focusedUnsure",
-            platform::FocusOutcome::Flashed => "flashed",
-            platform::FocusOutcome::NoWindow => "noWindow",
-        },
+    match outcome {
+        platform::FocusOutcome::Focused => "focused",
+        platform::FocusOutcome::FocusedUnsure => "focusedUnsure",
+        platform::FocusOutcome::Flashed => "flashed",
+        platform::FocusOutcome::NoWindow => "noWindow",
     }
+}
+
+/// Click on a session: bring the window it lives in to the front.
+#[tauri::command]
+fn focus_session(sessions: State<Sessions>, session_id: String) -> FocusResult {
+    FocusResult { outcome: jump(&sessions, &session_id) }
+}
+
+// ── Tray, flyout and notifications ────────────────────────────────────────────
+
+/// The last snapshot the island published, for a flyout that opens after it.
+#[derive(Default)]
+pub struct ShellSnapshot(Mutex<Option<serde_json::Value>>);
+
+/// The island publishes what the tray icon and the flyout show. It stays the one
+/// owner of the sessions; everything else draws this.
+#[tauri::command]
+fn publish_shell(app: AppHandle, last: State<ShellSnapshot>, snapshot: serde_json::Value) {
+    let text = |key: &str| snapshot.get(key).and_then(serde_json::Value::as_str).unwrap_or("");
+    tray::show_state(&app, shell::TrayState::parse(text("trayState")), text("tooltip"));
+    *last.0.lock().unwrap() = Some(snapshot.clone());
+    let _ = app.emit_to(flyout::LABEL, "shell-snapshot", snapshot);
+}
+
+#[tauri::command]
+fn shell_snapshot(last: State<ShellSnapshot>) -> Option<serde_json::Value> {
+    last.0.lock().unwrap().clone()
+}
+
+/// A click in the flyout, handed to the island, which owns what it acts on.
+#[tauri::command]
+fn shell_action(app: AppHandle, action: serde_json::Value) -> Result<(), String> {
+    const KINDS: &[&str] = &["decide", "seen", "pause", "open"];
+    let kind = action.get("kind").and_then(serde_json::Value::as_str).unwrap_or("");
+    if !KINDS.contains(&kind) {
+        return Err(format!("unknown action {kind:?}"));
+    }
+    app.emit_to(island::WINDOW_LABEL, "shell-action", action).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn flyout_show(app: AppHandle) {
+    flyout::show(&app);
+}
+
+#[tauri::command]
+fn flyout_hide(app: AppHandle) {
+    flyout::hide(&app);
+}
+
+#[tauri::command]
+fn flyout_visible(app: AppHandle) -> bool {
+    flyout::is_visible(&app)
+}
+
+/// Starts toast notifications the first time one is needed: that is when the
+/// app identity gets registered, not at every launch.
+fn ensure_toasts(app: &AppHandle) {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(|| {
+        let icon = settings::local_dir().join("coucou.png");
+        if !icon.exists() {
+            let _ = platform::ensure_private_dir(&settings::local_dir());
+            let _ = std::fs::write(&icon, include_bytes!("../icons/128x128.png"));
+        }
+        let handle = app.clone();
+        platform::toasts_start(
+            app.config().identifier.clone(),
+            "Coucou".into(),
+            icon,
+            Box::new(move |activation| {
+                let app = handle.clone();
+                let _ = handle.run_on_main_thread(move || match activation {
+                    shell::Activation::Jump(id) => {
+                        let outcome = jump(&app.state::<Sessions>(), &id);
+                        let _ = app.emit_to(island::WINDOW_LABEL, "shell-action", serde_json::json!({ "kind": "seen", "id": id }));
+                        // Nowhere to go: show the session in the flyout instead.
+                        if outcome != "focused" && outcome != "focusedUnsure" {
+                            flyout::show(&app);
+                        }
+                    }
+                    shell::Activation::Open => flyout::show(&app),
+                });
+            }),
+        );
+    });
+}
+
+#[tauri::command]
+fn show_toast(app: AppHandle, spec: shell::ToastSpec) -> Result<(), String> {
+    ensure_toasts(&app);
+    platform::toast_show(spec)
+}
+
+#[tauri::command]
+fn clear_toast(tag: String) {
+    platform::toast_clear(tag);
 }
 
 /// Every 20 s, forget sessions whose Claude Code process has exited (a crash or a
@@ -419,6 +521,8 @@ pub fn run() {
         })
         .manage(Pending::default())
         .manage(Sessions::default())
+        .manage(ShellSnapshot::default())
+        .manage(flyout::Flyout::default())
         .manage(Chat::default())
         .invoke_handler(tauri::generate_handler![
             boot,
@@ -431,6 +535,14 @@ pub fn run() {
             open_project,
             launch_info,
             focus_session,
+            publish_shell,
+            shell_snapshot,
+            shell_action,
+            flyout_show,
+            flyout_hide,
+            flyout_visible,
+            show_toast,
+            clear_toast,
             quit_app,
             hooks_status,
             hooks_preview,
@@ -455,6 +567,7 @@ pub fn run() {
             tray::build(&handle)?;
             // Before the island: see create_settings_window.
             create_settings_window(&handle);
+            flyout::create(&handle, BROWSER_ARGS);
 
             if let Some(win) = island::window(&handle) {
                 platform::make_non_activating(&win);

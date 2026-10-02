@@ -26,6 +26,14 @@ pub struct Settings {
     /// "Open terminal here": `windowsTerminal`, `shell` or `none`.
     #[serde(default = "default_terminal")]
     pub terminal: String,
+    /// The island at the top of the screen: `on`, or `off` when the tray icon and
+    /// its flyout carry everything (the island then only opens for chat and drops).
+    #[serde(default = "default_island")]
+    pub island: String,
+    /// Windows notifications: `needsYou` (questions, failures), `all` (also
+    /// finishes) or `off`.
+    #[serde(default = "default_notifications")]
+    pub notifications: String,
 }
 
 fn default_model() -> String {
@@ -38,6 +46,14 @@ fn default_editor() -> String {
 
 fn default_terminal() -> String {
     "windowsTerminal".into()
+}
+
+fn default_island() -> String {
+    "off".into()
+}
+
+fn default_notifications() -> String {
+    "needsYou".into()
 }
 
 impl Default for Settings {
@@ -59,6 +75,8 @@ impl Default for Settings {
             model: default_model(),
             editor: default_editor(),
             terminal: default_terminal(),
+            island: default_island(),
+            notifications: default_notifications(),
         }
     }
 }
@@ -122,6 +140,20 @@ mod tests {
         // …and the new settings take the defaults the owner asked for.
         assert_eq!(s.editor, "cursor");
         assert_eq!(s.terminal, "windowsTerminal");
+        assert_eq!(s.island, "off", "the tray flyout replaces the island unless asked for");
+        assert_eq!(s.notifications, "needsYou");
+    }
+
+    #[test]
+    fn a_settings_file_with_editor_and_terminal_but_no_shell_settings_loads_intact() {
+        let s: Settings = serde_json::from_str(
+            r#"{"soundEnabled":true,"soundVolume":0.1,"autoCloseInterval":15,"absenceInterval":180,
+                "activeIntegrations":[],"screen":"cursor","autostart":false,"hooksInstalled":true,
+                "model":"claude-opus-5","editor":"vscode","terminal":"shell"}"#,
+        )
+        .expect("the previous release's settings.json must still parse");
+        assert_eq!((s.editor.as_str(), s.terminal.as_str(), s.screen.as_str()), ("vscode", "shell", "cursor"));
+        assert_eq!((s.island.as_str(), s.notifications.as_str()), ("off", "needsYou"));
     }
 
     #[test]
@@ -129,8 +161,11 @@ mod tests {
         let mut s = Settings::default();
         s.editor = "vscode".into();
         s.terminal = "none".into();
+        s.island = "on".into();
+        s.notifications = "all".into();
         let back: Settings = serde_json::from_slice(&serde_json::to_vec(&s).unwrap()).unwrap();
         assert_eq!((back.editor.as_str(), back.terminal.as_str()), ("vscode", "none"));
+        assert_eq!((back.island.as_str(), back.notifications.as_str()), ("on", "all"));
     }
 
     #[test]

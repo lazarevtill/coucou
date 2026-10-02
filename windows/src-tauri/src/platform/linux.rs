@@ -373,3 +373,19 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+// ── Tray flyout and notifications ─────────────────────────────────────────────
+
+/// Corners are the compositor's business on Linux.
+pub fn round_corners(_win: &WebviewWindow) {}
+
+pub type OnActivate = Box<dyn Fn(crate::shell::Activation) + Send + Sync + 'static>;
+
+/// Desktop notifications are not wired up on Linux yet.
+pub fn toasts_start(_aumid: String, _display_name: String, _icon: PathBuf, _on_activate: OnActivate) {}
+
+pub fn toast_show(_spec: crate::shell::ToastSpec) -> Result<(), String> {
+    Err("notifications are not available on Linux yet".into())
+}
+
+pub fn toast_clear(_tag: String) {}

@@ -20,6 +20,7 @@ use ::windows::Win32::UI::WindowsAndMessaging::{
 };
 
 mod focus;
+mod toast;
 
 use super::{Candidate, FocusMethod, FocusOutcome, LocalTime};
 use crate::island::WINDOW_LABEL;
@@ -270,3 +271,35 @@ pub fn set_activating(win: &WebviewWindow, activating: bool) {
 
 /// Click-through here is the poll's WS_EX_TRANSPARENT toggle, not a region.
 pub fn set_input_region(_win: &WebviewWindow, _rect: Option<(f64, f64, f64, f64)>) {}
+
+// ── Tray flyout and notifications ─────────────────────────────────────────────
+
+/// Windows 11 draws undecorated windows square; the flyout gets the same round
+/// corners as the system's own flyouts. Older Windows ignores the request.
+pub fn round_corners(win: &WebviewWindow) {
+    use ::windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND};
+    let Ok(hwnd) = win.hwnd() else { return };
+    let preference = DWMWCP_ROUND;
+    unsafe {
+        let _ = DwmSetWindowAttribute(
+            HWND(hwnd.0),
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            &preference as *const _ as *const core::ffi::c_void,
+            std::mem::size_of_val(&preference) as u32,
+        );
+    }
+}
+
+/// Starts toast notifications under the app identity `aumid` (see toast.rs).
+pub fn toasts_start(aumid: String, display_name: String, icon: PathBuf, on_activate: toast::OnActivate) {
+    toast::start(aumid, display_name, icon, on_activate)
+}
+
+pub fn toast_show(spec: crate::shell::ToastSpec) -> Result<(), String> {
+    toast::show(spec)
+}
+
+/// Takes a toast back from the notification centre.
+pub fn toast_clear(tag: String) {
+    toast::clear(tag)
+}
