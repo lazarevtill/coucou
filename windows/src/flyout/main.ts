@@ -177,7 +177,7 @@ function renderToggle(parts: RowParts, r: SessionRow) {
       h("span", { class: "badge", text: e.badge }),
       h("span", { class: "fname", text: e.name }),
       h("span", { class: "count add", text: `+${e.added}` }),
-      h("span", { class: "count del", text: `−${e.removed}` }),
+      e.removed == null ? null : h("span", { class: "count del", text: `−${e.removed}` }),
       e.status === "failed" ? h("span", { class: "flag", text: "failed" }) : null,
       svg(ICONS.chevronRight, 12),
     ),
@@ -231,6 +231,7 @@ function renderCode(parts: RowParts, r: SessionRow) {
   if (e.status === "pending") notes.push(r.attention ? "Waiting for your permission." : "About to change.");
   if (e.status === "failed") notes.push("This change did not go through.");
   if (e.created) notes.push("New file.");
+  if (e.wholeFile) notes.push("Writes the whole file.");
   if (e.replaceAll) notes.push("Every occurrence in the file.");
   if (!e.numbered) notes.push("Line numbers once the change is made.");
   if (e.cut) notes.push("Only part of the change is shown.");

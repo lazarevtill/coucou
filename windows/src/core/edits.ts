@@ -27,7 +27,10 @@ export interface FileEdit {
   numbered: boolean;
   status: EditStatus;
   added: number;
-  removed: number;
+  /** Null while a Write has not run: it replaces the whole file, and what was there is not known yet. */
+  removed: number | null;
+  /** A Write not made yet: its lines are the whole new file, not a change. */
+  wholeFile: boolean;
   /** Not everything is shown: a long text was cut on the way, or the patch was capped. */
   cut: boolean;
   replaceAll: boolean;
@@ -116,6 +119,7 @@ export function diffLines(before: string[], after: string[]): EditLine[] {
 }
 
 interface Facts {
+  wholeFile: boolean;
   numbered: boolean;
   status: EditStatus;
   cut: boolean;
@@ -130,7 +134,7 @@ function build(path: string, lines: EditLine[], facts: Facts): FileEdit {
     badge: fileBadge(path),
     lines: lines.slice(0, SHOWN_LINES),
     added: lines.filter((l) => l.kind === "add").length,
-    removed: lines.filter((l) => l.kind === "del").length,
+    removed: facts.wholeFile ? null : lines.filter((l) => l.kind === "del").length,
     ...facts,
     cut: facts.cut || lines.length > SHOWN_LINES,
   };
@@ -149,12 +153,12 @@ export function editFromPre(tool: string, input: Record<string, unknown>): FileE
     const before = str(input, "old_string") ?? "";
     const after = str(input, "new_string") ?? "";
     return build(path, diffLines(split(before), split(after)), {
-      numbered: false, status: "pending", cut: isCut(before) || isCut(after), replaceAll: input.replace_all === true, created: false,
+      wholeFile: false, numbered: false, status: "pending", cut: isCut(before) || isCut(after), replaceAll: input.replace_all === true, created: false,
     });
   }
   if (tool === "Write") {
     const content = str(input, "content") ?? "";
-    return build(path, allNew(content), { numbered: true, status: "pending", cut: isCut(content), replaceAll: false, created: false });
+    return build(path, allNew(content), { wholeFile: true, numbered: true, status: "pending", cut: isCut(content), replaceAll: false, created: false });
   }
   return null;
 }
@@ -204,5 +208,5 @@ export function editFromPost(tool: string, input: Record<string, unknown>, respo
       }
     }
   }
-  return build(path, lines, { numbered: true, status: "applied", cut, replaceAll: input.replace_all === true, created });
+  return build(path, lines, { wholeFile: false, numbered: true, status: "applied", cut, replaceAll: input.replace_all === true, created });
 }

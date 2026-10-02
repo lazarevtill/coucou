@@ -47,7 +47,7 @@ installs for the current user only — no admin prompt.
 | Click Mochi | It gets annoyed. Three times in a row and it goes dizzy |
 | Rest the pointer on Mochi for two seconds | Hearts |
 | Drag a file onto the island | Mochi turns into a box, swallows it, then offers to answer questions about it |
-| `Esc` | Closes the island |
+| `Esc` | Closes the island while its chat is open (the island takes the keyboard only for the chat) |
 | Right-click the tray icon | Open, Settings…, Pause, Quit |
 
 Everything else happens on its own: the tray icon's dot and tooltip say what is

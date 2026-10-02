@@ -72,6 +72,19 @@ test("hunks far apart are separated, and a replace_all edit says so", () => {
   assert.equal(e.added, 2);
 });
 
+test("a Write not made yet writes the whole file: nothing claims it removes nothing", () => {
+  const e = editFromPre("Write", { file_path: "C:\\work\\shop\\notes.md", content: "gamma" });
+  assert.equal(e.wholeFile, true, "what it replaces is not known yet");
+  assert.equal(e.removed, null);
+  assert.equal(e.added, 1);
+  const done = editFromPost("Write", { file_path: "C:\\work\\shop\\notes.md", content: "gamma" }, {
+    type: "update", structuredPatch: [{ oldStart: 1, oldLines: 2, newStart: 1, newLines: 1, lines: ["-alpha", "-beta", "+gamma"] }],
+  });
+  assert.equal(done.wholeFile, false);
+  assert.equal(done.removed, 2);
+  assert.equal(editFromPre("Edit", { file_path: FILE, old_string: "a", new_string: "b" }).wholeFile, false);
+});
+
 test("a file Write created is all new lines, numbered from one", () => {
   const e = editFromPost("Write", { file_path: "C:\\work\\shop\\notes.md", content: "alpha\nbeta" }, { type: "create", structuredPatch: [] });
   assert.equal(e.created, true);
