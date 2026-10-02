@@ -110,10 +110,16 @@ instance (see [terminals.md](terminals.md#how-this-is-tested)):
   terminal in about 50 ms with a notification; closing the flyout with a card up
   hands it back;
 - answering a question takes its notification back;
+- a session row's jump brings that session's Windows Terminal window to the
+  front;
 - with the island switched on, a question opens the island and raises no
   notification; switched off, the island folds into a strip that lets clicks
-  through.
+  through;
+- starting Coucou leaves the foreground window as it was; opening the flyout or
+  Settings gives that window the keyboard.
 
 A notification's button cannot be clicked by automation (the notification UI is
-not exposed to it); that a click reaches Coucou with the button's arguments was
-checked by hand.
+not exposed to it). That a click reaches the program that raised the
+notification, with the button's arguments, was checked by hand in a separate
+test program using the same calls; a click on a notification raised by Coucou
+itself has not been tested.
