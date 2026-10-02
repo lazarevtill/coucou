@@ -678,11 +678,13 @@ fn settings_page_url(app: &AppHandle) -> WebviewUrl {
 /// The settings window is created hidden at launch and only ever shown and
 /// hidden afterwards. A WebView2 window created later — on the main thread or
 /// not — silently comes up blank in this app, so the window that works is the
-/// one that exists before the island's webview does.
+/// one that exists before the island's webview does. Not focused when created:
+/// a hidden window must not take the keyboard from whatever you are typing in.
 fn create_settings_window(app: &AppHandle) {
     let url = settings_page_url(app);
     match WebviewWindowBuilder::new(app, "settings", url)
         .additional_browser_args(BROWSER_ARGS)
+        .focused(false)
         .title("Settings — Coucou")
         .inner_size(560.0, 680.0)
         .min_inner_size(460.0, 480.0)

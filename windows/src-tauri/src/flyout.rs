@@ -39,10 +39,13 @@ fn page_url(app: &AppHandle) -> WebviewUrl {
 }
 
 /// Created hidden at launch, like the settings window, and only shown and hidden
-/// afterwards (see `create_settings_window` in lib.rs for why).
+/// afterwards (see `create_settings_window` in lib.rs for why). Not focused when
+/// created: a hidden window that takes the keyboard swallows what you type, and
+/// this one can hold Allow.
 pub fn create(app: &AppHandle, browser_args: &str) {
     let built = WebviewWindowBuilder::new(app, LABEL, page_url(app))
         .additional_browser_args(browser_args)
+        .focused(false)
         .title("Coucou")
         .inner_size(SIZE.0, SIZE.1)
         .resizable(false)
