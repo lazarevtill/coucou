@@ -389,3 +389,15 @@ pub fn toast_show(_spec: crate::shell::ToastSpec) -> Result<(), String> {
 }
 
 pub fn toast_clear(_tag: String) {}
+
+// ── Child processes (plugin servers) ──────────────────────────────────────────
+
+/// The environment a plugin's server starts with, besides what its manifest declares.
+pub const INHERITED_ENV: &[&str] = &["PATH", "HOME", "LANG", "TMPDIR", "XDG_RUNTIME_DIR"];
+
+/// Nothing to hold on Linux: the session kills its server when it ends.
+pub struct ProcessJob;
+
+pub fn contain(_child: &std::process::Child) -> Option<ProcessJob> {
+    Some(ProcessJob)
+}

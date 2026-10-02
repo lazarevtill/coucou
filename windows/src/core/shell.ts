@@ -107,6 +107,43 @@ export interface ServiceRow {
   color: string;
   status: "ok" | "error" | "off";
   detail: string;
+  /** Opened when the row is clicked (plugins with a link). */
+  link?: string;
+}
+
+/** What a plugin from the folder last reported (Rust's PluginStatus). */
+export interface PluginStatus {
+  id: string;
+  name: string;
+  color: string;
+  status: "ok" | "error" | "waiting" | "off" | "changed" | "invalid";
+  headline: string | null;
+  items: { title: string; detail: string }[];
+  error: string | null;
+  link: string | null;
+}
+
+/** Rows for the plugins that are on, or that need a look (changed since approved). */
+export function pluginRows(statuses: Record<string, PluginStatus>): ServiceRow[] {
+  const rows: ServiceRow[] = [];
+  for (const p of Object.values(statuses)) {
+    const base = { id: p.id, name: p.name, color: p.color, ...(p.link ? { link: p.link } : {}) };
+    switch (p.status) {
+      case "ok":
+        rows.push({ ...base, status: "ok", detail: p.headline ?? "Connected" });
+        break;
+      case "error":
+      case "changed":
+        rows.push({ ...base, status: "error", detail: p.error ?? "Not working" });
+        break;
+      case "waiting":
+        rows.push({ ...base, status: "off", detail: "Starting…" });
+        break;
+      default:
+        break; // off, or not a plugin yet: that is for Settings → Plugins
+    }
+  }
+  return rows;
 }
 
 interface TaskLike {
@@ -224,6 +261,8 @@ export interface SnapshotInput {
   pending: { requestId: string; sessionId: string; command: string; tool: string } | null;
   tasks: TaskLike[];
   integrations: Record<string, IntegrationLike | undefined>;
+  /** Plugins from the folder. */
+  plugins?: Record<string, PluginStatus>;
 }
 
 export function buildSnapshot(input: SnapshotInput): ShellSnapshot {
@@ -250,6 +289,6 @@ export function buildSnapshot(input: SnapshotInput): ShellSnapshot {
     botState: botState(sum.state),
     approval,
     sessions: sessionRows(input.store.list()),
-    services: serviceRows(input.tasks, input.integrations),
+    services: [...serviceRows(input.tasks, input.integrations), ...pluginRows(input.plugins ?? {})],
   };
 }

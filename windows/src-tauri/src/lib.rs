@@ -13,12 +13,15 @@ mod llm_server;
 mod log;
 mod open;
 mod pipe;
+mod plugins;
 mod platform;
 mod secrets;
 mod sessions;
 mod settings;
 mod shell;
 mod tray;
+#[cfg(test)]
+mod test_http;
 
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
@@ -413,6 +416,190 @@ fn chat_reset(chat: State<Chat>, local: State<llm_server::LlmChat>) {
     local.reset();
 }
 
+// ── Plugins ───────────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginSecret {
+    key: String,
+    label: String,
+    present: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginTool {
+    name: String,
+    access: plugins::manifest::Access,
+}
+
+/// Everything the settings window shows about a plugin before it is trusted.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginInfo {
+    id: String,
+    approval: plugins::registry::Approval,
+    /// What an approval is pinned to.
+    hash: String,
+    error: Option<String>,
+    name: Option<String>,
+    version: Option<String>,
+    /// `http`, `mcp-stdio` or `mcp-http`.
+    kind: Option<String>,
+    color: Option<String>,
+    hosts: Vec<String>,
+    allow_private_network: bool,
+    secrets: Vec<PluginSecret>,
+    /// The address it reads, or the exact command line it starts.
+    runs: Option<String>,
+    poll_secs: Option<u64>,
+    poll_tool: Option<String>,
+    tools: Vec<PluginTool>,
+    links: Vec<plugins::manifest::Link>,
+}
+
+fn quote_arg(a: &str) -> String {
+    if a.is_empty() || a.contains([' ', '\t', '"']) {
+        format!("\"{}\"", a.replace('"', "\\\""))
+    } else {
+        a.to_string()
+    }
+}
+
+fn plugin_info(p: &plugins::registry::Installed, setting: Option<&settings::PluginSetting>) -> PluginInfo {
+    use plugins::manifest::{McpTransport, Source};
+    let approval = plugins::registry::approval(p, setting);
+    let mut info = PluginInfo {
+        id: p.id.clone(),
+        approval,
+        hash: p.hash.clone(),
+        error: p.manifest.as_ref().err().cloned(),
+        name: None,
+        version: None,
+        kind: None,
+        color: None,
+        hosts: Vec::new(),
+        allow_private_network: false,
+        secrets: Vec::new(),
+        runs: None,
+        poll_secs: None,
+        poll_tool: None,
+        tools: Vec::new(),
+        links: Vec::new(),
+    };
+    let Ok(m) = &p.manifest else { return info };
+    info.name = Some(m.name.clone());
+    info.version = Some(m.version.clone());
+    info.color = Some(m.color.clone());
+    info.hosts = m.allowed_hosts.clone();
+    info.allow_private_network = m.allow_private_network;
+    info.poll_secs = Some(m.poll_secs);
+    info.links = m.links.clone();
+    info.secrets = m
+        .secrets
+        .iter()
+        .map(|s| PluginSecret {
+            key: s.key.clone(),
+            label: s.label.clone(),
+            present: secrets::present(&secrets::plugin_key(&m.id, &s.key)),
+        })
+        .collect();
+    match &m.source {
+        Source::Http { url, .. } => {
+            info.kind = Some("http".into());
+            info.runs = Some(url.clone());
+        }
+        Source::Mcp(mcp) => {
+            match &mcp.transport {
+                McpTransport::Stdio { command, args, .. } => {
+                    info.kind = Some("mcp-stdio".into());
+                    let line: Vec<String> = std::iter::once(command.as_str()).chain(args.iter().map(String::as_str)).map(quote_arg).collect();
+                    info.runs = Some(line.join(" "));
+                }
+                McpTransport::Http { url, .. } => {
+                    info.kind = Some("mcp-http".into());
+                    info.runs = Some(url.clone());
+                }
+            }
+            info.poll_tool = mcp.poll.as_ref().map(|p| p.tool.clone());
+            info.tools = mcp.tools.iter().map(|(name, access)| PluginTool { name: name.clone(), access: *access }).collect();
+        }
+    }
+    info
+}
+
+/// The plugins in the folder, as they are now.
+#[tauri::command]
+fn plugins_list(shared: State<Shared>) -> Vec<PluginInfo> {
+    let settings = shared.settings.lock().unwrap().clone();
+    plugins::registry::scan(&plugins::registry::dir())
+        .iter()
+        .map(|p| plugin_info(p, settings.plugins.get(&p.id)))
+        .collect()
+}
+
+fn save_and_announce(app: &AppHandle, shared: &Shared, change: impl FnOnce(&mut Settings)) -> Result<(), String> {
+    let updated = {
+        let mut s = shared.settings.lock().unwrap();
+        change(&mut s);
+        settings::save(&s).map_err(|e| e.to_string())?;
+        s.clone()
+    };
+    let _ = app.emit("settings-changed", updated);
+    plugins::runner::refresh(app);
+    Ok(())
+}
+
+/// Trusts a plugin — exactly the manifest the user reviewed, identified by
+/// its hash. A manifest that changed in between is refused.
+#[tauri::command]
+fn plugin_enable(app: AppHandle, shared: State<Shared>, id: String, hash: String) -> Result<(), String> {
+    let installed = plugins::registry::scan(&plugins::registry::dir());
+    let p = installed.iter().find(|p| p.id == id).ok_or("That plugin is not in the folder any more.")?;
+    if let Err(e) = &p.manifest {
+        return Err(e.clone());
+    }
+    if p.hash != hash {
+        return Err("The plugin changed while you were reviewing it. Look at it again.".into());
+    }
+    log::line(format!("plugin {id} approved"));
+    save_and_announce(&app, &shared, |s| {
+        s.plugins.insert(id.clone(), settings::PluginSetting { enabled: true, approved_hash: Some(hash.clone()) });
+    })
+}
+
+#[tauri::command]
+fn plugin_disable(app: AppHandle, shared: State<Shared>, id: String) -> Result<(), String> {
+    save_and_announce(&app, &shared, |s| {
+        if let Some(p) = s.plugins.get_mut(&id) {
+            p.enabled = false;
+        }
+    })
+}
+
+/// The tools an approved MCP plugin's server offers. Never before approval:
+/// listing them means starting the server.
+#[tauri::command]
+async fn plugin_tools(shared: State<'_, Shared>, id: String) -> Result<Vec<plugins::mcp::proto::ToolInfo>, String> {
+    let setting = shared.settings.lock().unwrap().plugins.get(&id).cloned();
+    let installed = plugins::registry::scan(&plugins::registry::dir());
+    let p = installed.iter().find(|p| p.id == id).ok_or("That plugin is not in the folder any more.")?;
+    if plugins::registry::approval(p, setting.as_ref()) != plugins::registry::Approval::On {
+        return Err("Switch the plugin on first: listing its tools starts its server.".into());
+    }
+    let m = p.manifest.clone()?;
+    let key_id = m.id.clone();
+    let secret = move |key: &str| secrets::get(&secrets::plugin_key(&key_id, key));
+    plugins::mcp::list_tools(&m, &secret).await
+}
+
+#[tauri::command]
+fn plugins_open_folder() {
+    let dir = plugins::registry::dir();
+    let _ = platform::ensure_private_dir(&dir);
+    platform::reveal_folder(&dir.to_string_lossy());
+}
+
 /// The models a server offers — also how the settings window tests an address
 /// before it is saved.
 #[tauri::command]
@@ -551,6 +738,7 @@ pub fn run() {
         .manage(Sessions::default())
         .manage(ShellSnapshot::default())
         .manage(flyout::Flyout::default())
+        .manage(plugins::runner::Supervisor::default())
         .manage(Chat::default())
         .manage(llm_server::LlmChat::default())
         .invoke_handler(tauri::generate_handler![
@@ -583,6 +771,11 @@ pub fn run() {
             chat_send,
             chat_reset,
             llm_server_models,
+            plugins_list,
+            plugin_enable,
+            plugin_disable,
+            plugin_tools,
+            plugins_open_folder,
             ingest_file,
             secret_present,
             secret_set,
@@ -618,6 +811,7 @@ pub fn run() {
             pipe::start(handle.clone());
             spawn_session_pruner(handle.clone());
             integrations::start(handle.clone());
+            plugins::runner::start(handle.clone());
             Ok(())
         })
         .run(tauri::generate_context!())

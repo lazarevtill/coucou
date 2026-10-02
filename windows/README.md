@@ -91,6 +91,10 @@ details in [docs/model-sources.md](docs/model-sources.md)). Keys live in the
 **Windows Credential Manager**, never on disk and never in the interface — the
 island can only ask whether a key exists. Same for every integration key.
 
+**Plugins** add status sources of your own — a web address read on a timer, or an
+MCP server — next to the built-in integrations. Nothing runs until you review it
+in **Settings… → Plugins** and switch it on: [docs/plugins.md](docs/plugins.md).
+
 No telemetry. The only network requests Coucou makes are to the services you
 configure yourself.
 

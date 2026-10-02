@@ -2,7 +2,18 @@
 // No secret ever lands here — API keys live in the OS keychain (see secrets.rs).
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginSetting {
+    pub enabled: bool,
+    /// SHA-256 of the plugin.json the user approved. Built-ins have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approved_hash: Option<String>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -11,7 +22,14 @@ pub struct Settings {
     pub sound_volume: f64,
     pub auto_close_interval: f64,
     pub absence_interval: f64,
-    pub active_integrations: Vec<String>,
+    /// What is switched on: built-in integrations (`integration_*`) and plugins
+    /// from the plugins folder, which also carry the hash of the manifest the
+    /// user approved.
+    #[serde(default)]
+    pub plugins: BTreeMap<String, PluginSetting>,
+    /// `activeIntegrations`, from before `plugins`: read once to migrate, never written.
+    #[serde(default, rename = "activeIntegrations", skip_serializing)]
+    pub legacy_active: Option<Vec<String>>,
     /// "primary" = the main display, "cursor" = whichever display the mouse is on.
     pub screen: String,
     pub autostart: bool,
@@ -82,12 +100,11 @@ impl Default for Settings {
             sound_volume: 0.12,
             auto_close_interval: 15.0,
             absence_interval: 180.0,
-            active_integrations: vec![
-                "integration_resend".into(),
-                "integration_n8n".into(),
-                "integration_vercel".into(),
-                "integration_github".into(),
-            ],
+            plugins: ["integration_resend", "integration_n8n", "integration_vercel", "integration_github"]
+                .into_iter()
+                .map(|id| (id.to_string(), PluginSetting { enabled: true, approved_hash: None }))
+                .collect(),
+            legacy_active: None,
             screen: "primary".into(),
             autostart: false,
             hooks_installed: false,
@@ -109,23 +126,69 @@ pub fn hook_exe_path() -> PathBuf {
     local_dir().join("bin").join(crate::platform::HOOK_EXE)
 }
 
+impl Settings {
+    /// A built-in integration or a plugin the user switched on.
+    pub fn is_enabled(&self, id: &str) -> bool {
+        self.plugins.get(id).is_some_and(|p| p.enabled)
+    }
+}
+
 fn settings_path() -> PathBuf {
     config_dir().join("settings.json")
 }
 
+/// Set when the file on disk is still in the old shape, until it is rewritten.
+static MIGRATED: AtomicBool = AtomicBool::new(false);
+
+/// Reads a settings file, moving `activeIntegrations` into `plugins`. The flag
+/// says the file on disk still has the old shape.
+pub fn from_json(bytes: &[u8]) -> Result<(Settings, bool), String> {
+    let mut s: Settings = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+    let legacy = s.legacy_active.take();
+    let migrated = match legacy {
+        Some(ids) if s.plugins.is_empty() => {
+            s.plugins = ids.into_iter().map(|id| (id, PluginSetting { enabled: true, approved_hash: None })).collect();
+            true
+        }
+        _ => false,
+    };
+    Ok((s, migrated))
+}
+
 pub fn load() -> Settings {
     match std::fs::read(settings_path()) {
-        Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_default(),
+        Ok(bytes) => match from_json(&bytes) {
+            Ok((s, migrated)) => {
+                MIGRATED.store(migrated, Ordering::Relaxed);
+                s
+            }
+            Err(_) => Settings::default(),
+        },
         Err(_) => Settings::default(),
     }
 }
 
+/// Writes the settings. The first write after a migration first keeps the old
+/// file next to it, dated, byte for byte.
+pub fn save_to(path: &Path, settings: &Settings, migrated: bool) -> std::io::Result<()> {
+    if migrated && path.exists() {
+        let t = crate::platform::local_time();
+        let name = format!(
+            "settings.json.{:04}{:02}{:02}-{:02}{:02}{:02}.bak",
+            t.year, t.month, t.day, t.hour, t.minute, t.second
+        );
+        std::fs::copy(path, path.with_file_name(name))?;
+    }
+    let json = serde_json::to_vec_pretty(settings).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    std::fs::write(path, json)
+}
+
 pub fn save(settings: &Settings) -> std::io::Result<()> {
-    let dir = config_dir();
-    crate::platform::ensure_private_dir(&dir)?;
-    let json = serde_json::to_vec_pretty(settings)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    std::fs::write(settings_path(), json)
+    crate::platform::ensure_private_dir(&config_dir())?;
+    let migrated = MIGRATED.load(Ordering::Relaxed);
+    save_to(&settings_path(), settings, migrated)?;
+    MIGRATED.store(false, Ordering::Relaxed);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -148,16 +211,75 @@ mod tests {
     }"#;
 
     #[test]
+    fn the_real_old_file_migrates_to_exactly_the_same_switched_on_integrations() {
+        let (s, migrated) = from_json(BEFORE_EDITOR_AND_TERMINAL.as_bytes()).unwrap();
+        assert!(migrated);
+        let on: Vec<&str> = s.plugins.iter().filter(|(_, p)| p.enabled).map(|(id, _)| id.as_str()).collect();
+        assert_eq!(on, vec!["integration_github", "integration_n8n", "integration_resend"]);
+        assert!(s.is_enabled("integration_n8n"));
+        assert!(!s.is_enabled("integration_vercel"));
+        // And the old field is never written back.
+        let written = serde_json::to_value(&s).unwrap();
+        assert!(written.get("activeIntegrations").is_none());
+        assert_eq!(written["plugins"]["integration_resend"]["enabled"], true);
+    }
+
+    #[test]
+    fn a_file_already_on_plugins_is_left_as_it_is() {
+        let (s, migrated) = from_json(
+            br#"{"soundEnabled":true,"soundVolume":0.1,"autoCloseInterval":15,"absenceInterval":180,"screen":"primary",
+                "autostart":false,"hooksInstalled":false,"model":"m",
+                "plugins":{"integration_vercel":{"enabled":true},"status-page":{"enabled":true,"approvedHash":"ab12"}}}"#,
+        )
+        .unwrap();
+        assert!(!migrated);
+        assert!(s.is_enabled("integration_vercel"));
+        assert_eq!(s.plugins["status-page"].approved_hash.as_deref(), Some("ab12"));
+    }
+
+    #[test]
+    fn a_new_install_starts_with_the_same_integrations_as_before() {
+        let s = Settings::default();
+        for id in ["integration_resend", "integration_n8n", "integration_vercel", "integration_github"] {
+            assert!(s.is_enabled(id), "{id}");
+        }
+        assert!(!s.is_enabled("integration_stripe"));
+    }
+
+    #[test]
+    fn the_first_save_after_a_migration_keeps_a_dated_backup_of_the_old_file() {
+        let dir = std::env::temp_dir().join(format!("coucou-settings-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("settings.json");
+        std::fs::write(&path, BEFORE_EDITOR_AND_TERMINAL).unwrap();
+
+        let (s, migrated) = from_json(&std::fs::read(&path).unwrap()).unwrap();
+        save_to(&path, &s, migrated).unwrap();
+        let backups: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .filter(|n| n.starts_with("settings.json.") && n.ends_with(".bak"))
+            .collect();
+        assert_eq!(backups.len(), 1, "{backups:?}");
+        assert_eq!(std::fs::read_to_string(dir.join(&backups[0])).unwrap(), BEFORE_EDITOR_AND_TERMINAL, "the backup is the old file, byte for byte");
+        let saved: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert!(saved.get("plugins").is_some() && saved.get("activeIntegrations").is_none());
+
+        // Later saves take no further backup.
+        save_to(&path, &s, false).unwrap();
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_settings_file_from_before_editor_and_terminal_loads_intact() {
-        let s: Settings = serde_json::from_str(BEFORE_EDITOR_AND_TERMINAL)
-            .expect("an older settings.json must still parse");
+        let (s, _) = from_json(BEFORE_EDITOR_AND_TERMINAL.as_bytes()).expect("an older settings.json must still parse");
         // Everything that was there is still there…
         assert!(!s.sound_enabled);
         assert!(s.autostart && s.hooks_installed);
-        assert_eq!(
-            s.active_integrations,
-            vec!["integration_resend", "integration_n8n", "integration_github"]
-        );
+        assert!(["integration_resend", "integration_n8n", "integration_github"].iter().all(|id| s.is_enabled(id)));
         assert_eq!(s.model, "claude-opus-5");
         // …and the new settings take the defaults the owner asked for.
         assert_eq!(s.editor, "cursor");

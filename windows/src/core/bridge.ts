@@ -83,6 +83,14 @@ export const Bridge = {
   showToast: (spec: ToastSpec) => call<void>("show_toast", { spec }),
   clearToast: (tag: string) => call<void>("clear_toast", { tag }),
 
+  // ── Plugins ───────────────────────────────────────────────────────────────
+  pluginsList: () => call<PluginInfo[]>("plugins_list"),
+  /** Trusts exactly the manifest reviewed: `hash` comes from pluginsList. */
+  pluginEnable: (id: string, hash: string) => callOrThrow<void>("plugin_enable", { id, hash }),
+  pluginDisable: (id: string) => callOrThrow<void>("plugin_disable", { id }),
+  pluginTools: (id: string) => callOrThrow<PluginToolInfo[]>("plugin_tools", { id }),
+  pluginsOpenFolder: () => call<void>("plugins_open_folder"),
+
   quit: () => call<void>("quit_app"),
 
   openSettingsWindow: () => call<void>("open_settings_window"),
@@ -137,6 +145,33 @@ export interface OpenResult {
   /** Explorer was used instead of what the settings asked for. */
   fellBack: boolean;
   error: string | null;
+}
+
+export interface PluginInfo {
+  id: string;
+  approval: "off" | "on" | "changed" | "invalid";
+  hash: string;
+  error: string | null;
+  name: string | null;
+  version: string | null;
+  kind: "http" | "mcp-stdio" | "mcp-http" | null;
+  color: string | null;
+  hosts: string[];
+  allowPrivateNetwork: boolean;
+  secrets: { key: string; label: string; present: boolean }[];
+  /** The address it reads, or the exact command line it starts. */
+  runs: string | null;
+  pollSecs: number | null;
+  pollTool: string | null;
+  tools: { name: string; access: "read" | "write" }[];
+  links: { label: string; url: string }[];
+}
+
+export interface PluginToolInfo {
+  name: string;
+  title: string | null;
+  description: string | null;
+  readOnlyHint: boolean | null;
 }
 
 /** What the flyout asks the island to do. */

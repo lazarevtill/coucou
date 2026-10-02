@@ -185,7 +185,16 @@ function renderServices(list: ServiceRow[]) {
   servicesTitle.style.display = list.length === 0 ? "none" : "";
   for (const s of list) {
     serviceList.append(
-      h("div", { class: `row service ${s.status}`, role: "listitem", tabindex: "0", onclick: () => open("overview", s.id) },
+      h("div", {
+        class: `row service ${s.status}`, role: "listitem", tabindex: "0",
+        // A plugin opens its own page; a built-in opens its card on the island.
+        onclick: () => {
+          if (s.link) {
+            void Bridge.openUrl(s.link);
+            void Bridge.flyoutHide();
+          } else open("overview", s.id);
+        },
+      },
         h("i", { class: "status", style: `background:${s.color}` }),
         h("div", { class: "text" }, h("div", { class: "line" }, h("span", { class: "project", text: s.name })), h("div", { class: "state", text: s.detail })),
       ),

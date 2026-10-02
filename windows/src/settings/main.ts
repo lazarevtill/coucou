@@ -3,9 +3,10 @@
 // integrations land here too in a later stage.
 
 import "./settings.css";
-import { Bridge, onEvent, type HookStatus, type LaunchInfo } from "../core/bridge";
+import { Bridge, onEvent, type HookStatus, type LaunchInfo, type PluginInfo } from "../core/bridge";
 import { DEFAULT_SETTINGS, type Settings } from "../core/state";
 import { h, clear } from "../views/dom";
+import { builtinsOn, isOn, MAX_BUILTINS, withOn } from "../core/plugins";
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
 let version = "";
@@ -386,28 +387,24 @@ const INTEGRATIONS: IntegrationDef[] = [
     fields: [{ key: "calcom-api-key", label: "API key", placeholder: "cal_…", secret: true }] },
 ];
 
-const MAX_ACTIVE = 4;
+
 
 function integrationsSection(present: Record<string, boolean>): HTMLElement {
   const note = h("div", { class: "hint" });
   const list = h("div", { style: "display:flex;flex-direction:column;gap:14px" });
 
   function updateNote() {
-    const used = settings.activeIntegrations.length;
-    note.textContent = `Pick up to ${MAX_ACTIVE} pills to show next to Mochi — ${used}/${MAX_ACTIVE} in use. Keys are stored in the Windows Credential Manager, never on disk.`;
+    const used = builtinsOn(settings.plugins).length;
+    note.textContent = `Pick up to ${MAX_BUILTINS} pills to show next to Mochi — ${used}/${MAX_BUILTINS} in use. Keys are stored in the Windows Credential Manager, never on disk.`;
   }
 
   for (const def of INTEGRATIONS) {
-    const active = settings.activeIntegrations.includes(def.id);
+    const active = isOn(settings.plugins, def.id);
     const sw = h("button", { class: active ? "switch on" : "switch" });
     sw.addEventListener("click", () => {
-      const on = settings.activeIntegrations.includes(def.id);
-      if (on) {
-        settings.activeIntegrations = settings.activeIntegrations.filter((x) => x !== def.id);
-      } else {
-        if (settings.activeIntegrations.length >= MAX_ACTIVE) return;
-        settings.activeIntegrations = [...settings.activeIntegrations, def.id];
-      }
+      const on = isOn(settings.plugins, def.id);
+      if (!on && builtinsOn(settings.plugins).length >= MAX_BUILTINS) return;
+      settings.plugins = withOn(settings.plugins, def.id, !on);
       sw.classList.toggle("on", !on);
       updateNote();
       void save();
@@ -501,6 +498,139 @@ function openInSection(info: LaunchInfo | null): HTMLElement {
     }),
     h("div", { class: "row" }, h("label", { text: "Editor" }), editor),
     h("div", { class: "row" }, h("label", { text: "Terminal" }), terminal),
+  );
+}
+
+// ── Plugins section ───────────────────────────────────────────────────────────
+
+const KIND_LABEL: Record<string, string> = {
+  http: "Reads a web address",
+  "mcp-stdio": "Runs a program (MCP server)",
+  "mcp-http": "Talks to an MCP server",
+};
+
+const APPROVAL_LABEL: Record<PluginInfo["approval"], [string, string]> = {
+  on: ["On", "#22c55e"],
+  off: ["Off", "#8e939c"],
+  changed: ["Changed since you approved it", "#f5a524"],
+  invalid: ["Can't be used", "#f4505e"],
+};
+
+function pluginCard(p: PluginInfo, rerender: () => void): HTMLElement {
+  const [label, color] = APPROVAL_LABEL[p.approval];
+  const card = h("div", { class: "plugin-card", style: "border:1px solid #2a2d33;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px" });
+  card.append(
+    h("div", { class: "row", style: "gap:8px" },
+      h("i", { class: "dot", style: `background:${p.color ?? "#8c8c8c"}` }),
+      h("strong", { text: p.name ?? p.id }),
+      h("span", { class: "hint", text: [p.version && `v${p.version}`, p.kind && KIND_LABEL[p.kind]].filter(Boolean).join(" · ") }),
+      h("span", { class: "grow" }),
+      h("span", { style: `color:${color};font-size:12px`, text: label }),
+    ),
+  );
+  const feedback = h("div", {});
+  if (p.error) card.append(h("div", { class: "notice err", text: p.error }));
+  if (p.approval === "invalid") return card;
+
+  // What it does, in full, before anything is trusted.
+  if (p.kind === "mcp-stdio") {
+    card.append(
+      h("div", { class: "hint", text: "Runs this program, with your permissions:" }),
+      h("code", { class: "path", style: "white-space:pre-wrap;word-break:break-all", text: p.runs ?? "" }),
+      h("div", { class: "notice warn", text: "A program can do anything you can do on this computer. Coucou starts it without a shell and with only the environment it needs, but cannot limit what it reaches." }),
+    );
+  } else {
+    card.append(h("div", { class: "row" }, h("label", { text: "Reads" }), h("span", { class: "path", text: p.runs ?? "" })));
+  }
+  if (p.kind !== "mcp-stdio") {
+    card.append(h("div", { class: "row" }, h("label", { text: "May connect to" }), h("span", { class: "path", text: p.hosts.join(", ") || "nothing" })));
+  }
+  if (p.allowPrivateNetwork) card.append(h("div", { class: "hint", text: "It may reach your local network." }));
+  if (p.pollTool) {
+    card.append(h("div", { class: "hint", text: `Every ${Math.round((p.pollSecs ?? 300) / 60)} min it calls ${p.pollTool}, which its manifest marks read-only.` }));
+  }
+  if (p.tools.length) {
+    card.append(h("div", { class: "hint", text: `Declared tools: ${p.tools.map((t) => `${t.name} (${t.access})`).join(", ")}. Only the read-only one above is ever called.` }));
+  }
+
+  for (const s of p.secrets) {
+    const field = h("input", { type: "password", autocomplete: "off", spellcheck: "false", placeholder: s.present ? "••••••••  (stored)" : s.label, style: "flex:1 1 auto;min-width:0" }) as HTMLInputElement;
+    const dotEl = statusDot(s.present);
+    const saveBtn = h("button", { text: "Save" });
+    saveBtn.addEventListener("click", async () => {
+      try {
+        await Bridge.secretSet(`plugin:${p.id}:${s.key}`, field.value.trim());
+        dotEl.style.background = field.value.trim() ? "#22c55e" : "#f4505e";
+        field.placeholder = field.value.trim() ? "••••••••  (stored)" : s.label;
+        field.value = "";
+      } catch (err) {
+        feedback.replaceChildren(h("div", { class: "notice err", text: String(err) }));
+      }
+    });
+    card.append(h("div", { class: "row" }, h("label", { text: s.label }), field, saveBtn, dotEl));
+  }
+
+  const actions = h("div", { class: "row" });
+  if (p.approval === "on") {
+    const off = h("button", { class: "danger", text: "Switch off" });
+    off.addEventListener("click", async () => {
+      await Bridge.pluginDisable(p.id).catch((e) => feedback.replaceChildren(h("div", { class: "notice err", text: String(e) })));
+      rerender();
+    });
+    actions.append(off);
+    if (p.kind === "mcp-stdio" || p.kind === "mcp-http") {
+      const tools = h("button", { text: "Show the server's tools" });
+      tools.addEventListener("click", async () => {
+        try {
+          const list = await Bridge.pluginTools(p.id);
+          feedback.replaceChildren(h("div", { class: "hint", text: list.map((t) => `${t.name}${t.readOnlyHint ? " (read-only, says the server)" : ""}`).join(", ") || "No tools." }));
+        } catch (err) {
+          feedback.replaceChildren(h("div", { class: "notice err", text: String(err).replace(/^Error:\s*/, "") }));
+        }
+      });
+      actions.append(tools);
+    }
+  } else {
+    const trust = h("input", { type: "checkbox" }) as HTMLInputElement;
+    const on = h("button", { class: "primary", text: "Switch on" }) as HTMLButtonElement;
+    on.disabled = true;
+    trust.addEventListener("change", () => (on.disabled = !trust.checked));
+    on.addEventListener("click", async () => {
+      try {
+        // Pinned to the manifest shown here: if it changed meanwhile, this is refused.
+        await Bridge.pluginEnable(p.id, p.hash);
+        rerender();
+      } catch (err) {
+        feedback.replaceChildren(h("div", { class: "notice err", text: String(err).replace(/^Error:\s*/, "") }));
+      }
+    });
+    actions.append(h("label", { style: "display:flex;gap:6px;align-items:center" }, trust, h("span", { text: "I reviewed this and trust it" })), on);
+  }
+  card.append(actions, feedback);
+  return card;
+}
+
+function pluginsSection(): HTMLElement {
+  const list = h("div", { style: "display:flex;flex-direction:column;gap:12px" });
+  async function render() {
+    const plugins = (await Bridge.pluginsList()) ?? [];
+    clear(list);
+    if (plugins.length === 0) {
+      list.append(h("div", { class: "hint", text: "No plugins yet. A plugin is a folder holding a plugin.json; put it in the plugins folder." }));
+    }
+    for (const p of plugins) list.append(pluginCard(p, () => void render()));
+  }
+  void render();
+  return h(
+    "section",
+    {},
+    h("h2", {}, h("span", { text: "Plugins" })),
+    h("div", { class: "hint", text: "Status sources you add yourself: a web address read on a timer, or an MCP server. Nothing runs until you review it and switch it on, and a plugin that changes is switched off until you look again." }),
+    h("div", { class: "row" },
+      h("button", { text: "Open the plugins folder", onclick: () => void Bridge.pluginsOpenFolder() }),
+      h("button", { text: "Look again", onclick: () => void render() }),
+    ),
+    list,
   );
 }
 
@@ -634,6 +764,7 @@ async function main() {
     chatSourceSection(serverKey),
     apiSection(hasKey),
     integrationsSection(present),
+    pluginsSection(),
     generalSection(),
     h("div", {
       class: "hint",

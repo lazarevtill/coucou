@@ -4,7 +4,7 @@
 
 import { Bridge, onEvent, type ShellAction } from "../core/bridge";
 import type { Notable, SessionInfo } from "../core/sessions";
-import { buildSnapshot, staleToasts, toastFor } from "../core/shell";
+import { buildSnapshot, staleToasts, toastFor, type PluginStatus } from "../core/shell";
 import { State } from "../core/state";
 import type { Island } from "./island";
 
@@ -27,6 +27,12 @@ export function setPaused(island: Island, on: boolean) {
 export function startShellLink(island: Island) {
   State.subscribe(schedulePublish);
   schedulePublish();
+
+  // Plugins from the folder report here; the flyout shows them through the snapshot.
+  void onEvent<PluginStatus>("plugin-update", (status) => {
+    State.pluginStatus = { ...State.pluginStatus, [status.id]: status };
+    State.notify();
+  });
 
   void onEvent<ShellAction>("shell-action", (action) => {
     switch (action.kind) {
@@ -69,6 +75,7 @@ function schedulePublish() {
       pending: State.pendingApproval,
       tasks: State.tasks,
       integrations: State.integrations,
+      plugins: State.pluginStatus,
     });
     const text = JSON.stringify(snapshot);
     if (text === lastPublished) return;

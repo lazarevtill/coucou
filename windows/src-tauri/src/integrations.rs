@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use serde::Serialize;
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
 use crate::island::WINDOW_LABEL;
 use crate::log;
@@ -60,47 +60,56 @@ pub fn set_paused(on: bool) {
     PAUSED.store(on, Ordering::Relaxed);
 }
 
-/// Spawns every poller with the macOS delays and intervals.
-pub fn start(app: AppHandle) {
-    spawn(app.clone(), "integration_n8n", 3, 15, poll_n8n);
-    spawn(app.clone(), "integration_vercel", 5, 30, poll_vercel);
-    spawn(app.clone(), "integration_stripe", 6, 30, poll_stripe);
-    spawn(app.clone(), "integration_resend", 6, 60, poll_resend);
-    spawn(app.clone(), "integration_github", 7, 300, poll_github);
-    spawn(app.clone(), "integration_calcom", 8, 300, poll_calcom);
-    spawn(app, "integration_notion", 9, 300, poll_notion);
+type BuiltinPoll = fn(AppHandle) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>;
+
+/// A built-in integration as a plugin: its id, the macOS first-run delay and
+/// interval, and its poller, unchanged.
+pub struct Builtin {
+    id: &'static str,
+    delay_secs: u64,
+    every_secs: u64,
+    poll: BuiltinPoll,
 }
 
-/// True when the user has this integration switched on in settings.
-fn enabled(app: &AppHandle, id: &str) -> bool {
-    app.try_state::<crate::Shared>()
-        .map(|shared| {
-            let settings = shared.settings.lock().unwrap();
-            settings.active_integrations.iter().any(|x| x == id)
+impl crate::plugins::runner::Plugin for Builtin {
+    fn id(&self) -> &str {
+        self.id
+    }
+    fn first_delay(&self) -> Duration {
+        Duration::from_secs(self.delay_secs)
+    }
+    fn every(&self) -> Duration {
+        Duration::from_secs(self.every_secs)
+    }
+    fn poll(&self, app: AppHandle) -> crate::plugins::runner::PollFuture<'_> {
+        let fut = (self.poll)(app);
+        Box::pin(async move {
+            fut.await;
+            Ok(())
         })
-        .unwrap_or(false)
+    }
 }
 
-fn spawn<F, Fut>(app: AppHandle, id: &'static str, delay_secs: u64, every_secs: u64, poll: F)
-where
-    F: Fn(AppHandle) -> Fut + Send + 'static,
-    Fut: std::future::Future<Output = ()> + Send,
-{
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(Duration::from_secs(delay_secs)).await;
-        let mut ticker = tokio::time::interval(Duration::from_secs(every_secs));
-        loop {
-            ticker.tick().await;
-            // The ticker keeps its cadence; we just decline to do the work. An
-            // integration the user switched off, or a paused app, must make no
-            // network calls at all — CLAUDE.md allows talking only to services
-            // the user configured, and a disabled one is not configured.
-            if PAUSED.load(Ordering::Relaxed) || !enabled(&app, id) {
-                continue;
-            }
-            poll(app.clone()).await;
-        }
-    });
+/// Every built-in, with the macOS delays and intervals.
+pub fn builtins() -> Vec<Builtin> {
+    vec![
+        Builtin { id: "integration_n8n", delay_secs: 3, every_secs: 15, poll: |a| Box::pin(poll_n8n(a)) },
+        Builtin { id: "integration_vercel", delay_secs: 5, every_secs: 30, poll: |a| Box::pin(poll_vercel(a)) },
+        Builtin { id: "integration_stripe", delay_secs: 6, every_secs: 30, poll: |a| Box::pin(poll_stripe(a)) },
+        Builtin { id: "integration_resend", delay_secs: 6, every_secs: 60, poll: |a| Box::pin(poll_resend(a)) },
+        Builtin { id: "integration_github", delay_secs: 7, every_secs: 300, poll: |a| Box::pin(poll_github(a)) },
+        Builtin { id: "integration_calcom", delay_secs: 8, every_secs: 300, poll: |a| Box::pin(poll_calcom(a)) },
+        Builtin { id: "integration_notion", delay_secs: 9, every_secs: 300, poll: |a| Box::pin(poll_notion(a)) },
+    ]
+}
+
+/// Starts every built-in. An integration the user switched off, or a paused
+/// app, makes no network calls at all — CLAUDE.md allows talking only to
+/// services the user configured, and a disabled one is not configured.
+pub fn start(app: AppHandle) {
+    for builtin in builtins() {
+        crate::plugins::runner::run_builtin(app.clone(), std::sync::Arc::new(builtin));
+    }
 }
 
 /// One-shot refresh from the Refresh buttons in the island.

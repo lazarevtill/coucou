@@ -303,3 +303,52 @@ pub fn toast_show(spec: crate::shell::ToastSpec) -> Result<(), String> {
 pub fn toast_clear(tag: String) {
     toast::clear(tag)
 }
+
+// ── Child processes (plugin servers) ──────────────────────────────────────────
+
+/// The environment a plugin's server starts with, besides what its manifest
+/// declares: enough for a runtime such as Node to start, nothing of Coucou's.
+pub const INHERITED_ENV: &[&str] = &[
+    "SystemRoot", "SystemDrive", "windir", "PATH", "PATHEXT", "TEMP", "TMP",
+    "USERPROFILE", "APPDATA", "LOCALAPPDATA", "HOMEDRIVE", "HOMEPATH", "ProgramData",
+];
+
+/// A job object that ends every process in it when it is dropped.
+pub struct ProcessJob(::windows::Win32::Foundation::HANDLE);
+
+// The handle is only ever closed, from whichever thread drops it.
+unsafe impl Send for ProcessJob {}
+
+impl Drop for ProcessJob {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = CloseHandle(self.0);
+        }
+    }
+}
+
+/// Puts a started process in a kill-on-close job, so it and anything it starts
+/// end with its session — or with Coucou. A process that started a child in the
+/// instant before this call keeps that child: assignment happens after spawn.
+pub fn contain(child: &std::process::Child) -> Option<ProcessJob> {
+    use std::os::windows::io::AsRawHandle;
+    use ::windows::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+    unsafe {
+        let job = CreateJobObjectW(None, None).ok()?;
+        let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        let set = SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &info as *const _ as *const core::ffi::c_void,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        );
+        let guard = ProcessJob(job);
+        set.ok()?;
+        AssignProcessToJobObject(job, HANDLE(child.as_raw_handle())).ok()?;
+        Some(guard)
+    }
+}

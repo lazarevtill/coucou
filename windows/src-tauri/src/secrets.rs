@@ -20,11 +20,57 @@ pub const KNOWN_KEYS: &[&str] = &[
     "calcom-api-key",
 ];
 
+/// A key Coucou may store: one of its own, or a plugin's.
+pub fn allowed(key: &str) -> bool {
+    if KNOWN_KEYS.contains(&key) {
+        return true;
+    }
+    let Some(rest) = key.strip_prefix("plugin:") else { return false };
+    let mut parts = rest.split(':');
+    let (Some(id), Some(name), None) = (parts.next(), parts.next(), parts.next()) else { return false };
+    let key_ok = !name.is_empty() && name.len() <= 32 && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
+    crate::plugins::manifest::valid_id(id) && key_ok
+}
+
+/// Where a plugin's secret lives: `plugin:<id>:<key>`.
+pub fn plugin_key(id: &str, key: &str) -> String {
+    format!("plugin:{id}:{key}")
+}
+
 fn entry(key: &str) -> Option<Entry> {
-    if !KNOWN_KEYS.contains(&key) {
+    if !allowed(key) {
         return None;
     }
     Entry::new(SERVICE, key).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn coucous_own_keys_and_well_formed_plugin_keys_are_allowed() {
+        assert!(allowed("anthropic-api-key"));
+        assert!(allowed("llm-server-api-key"));
+        assert!(allowed(&plugin_key("status-page", "token")));
+        assert!(allowed("plugin:tickets:api_key"));
+    }
+
+    #[test]
+    fn a_plugin_cannot_reach_outside_its_own_namespace() {
+        for key in [
+            "plugin:x:anthropic-api-key", // a hyphen is not allowed in a plugin's key
+            "plugin:a:b:c",
+            "plugin::token",
+            "plugin:status-page:",
+            "plugin:Status:token",
+            "plugin:integration_stripe:token",
+            "something-else",
+            "",
+        ] {
+            assert!(!allowed(key), "{key:?}");
+        }
+    }
 }
 
 pub fn get(key: &str) -> Option<String> {

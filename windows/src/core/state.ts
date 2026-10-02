@@ -4,6 +4,8 @@ import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./l
 import type { EyeShape } from "../mochi/engine";
 import { SessionStore } from "./sessions";
 import { claudePill, waitingSession } from "./sessionView";
+import { builtinsOn, isOn, MAX_BUILTINS, withOn, type PluginMap } from "./plugins";
+import type { PluginStatus } from "./shell";
 
 export const CLAUDE_ID = "integration_claude";
 
@@ -94,7 +96,8 @@ export interface Settings {
   soundVolume: number;
   autoCloseInterval: number;
   absenceInterval: number;
-  activeIntegrations: string[];
+  /** Built-ins (`integration_*`) and plugins from the folder that are switched on. */
+  plugins: PluginMap;
   screen: "primary" | "cursor";
   autostart: boolean;
   hooksInstalled: boolean;
@@ -121,9 +124,12 @@ export const DEFAULT_SETTINGS: Settings = {
   soundVolume: 0.12,
   autoCloseInterval: 15,
   absenceInterval: 180,
-  activeIntegrations: [
-    "integration_resend", "integration_n8n", "integration_vercel", "integration_github",
-  ],
+  plugins: {
+    integration_resend: { enabled: true },
+    integration_n8n: { enabled: true },
+    integration_vercel: { enabled: true },
+    integration_github: { enabled: true },
+  },
   screen: "primary",
   autostart: false,
   hooksInstalled: false,
@@ -170,6 +176,9 @@ class AppState {
   pendingApproval: ApprovalInfo | null = null;
 
   integrations: Record<string, IntegrationInfo> = {};
+
+  /** What each plugin from the folder last reported. */
+  pluginStatus: Record<string, PluginStatus> = {};
 
   /** Every Claude Code session, one record each; the Claude pill shows their sum. */
   sessions = new SessionStore();
@@ -257,7 +266,7 @@ class AppState {
   loadIntegrationTasks() {
     for (const proto of INTEGRATION_AGENTS) {
       const shouldLoad =
-        proto.id === "integration_claude" || this.settings.activeIntegrations.includes(proto.id);
+        proto.id === "integration_claude" || isOn(this.settings.plugins, proto.id);
       const idx = this.tasks.findIndex((t) => t.id === proto.id);
       if (shouldLoad && idx < 0) this.tasks.push({ ...proto, steps: [] });
       if (!shouldLoad && idx >= 0) this.tasks.splice(idx, 1);
@@ -307,13 +316,13 @@ class AppState {
 
   toggleIntegration(id: string) {
     if (id === "integration_claude") return;
-    const active = this.settings.activeIntegrations;
-    if (active.includes(id)) {
-      this.settings.activeIntegrations = active.filter((x) => x !== id);
+    const plugins = this.settings.plugins;
+    if (isOn(plugins, id)) {
+      this.settings.plugins = withOn(plugins, id, false);
       if (this.focusId === id) this.focusId = "integration_claude";
     } else {
-      if (active.length >= 4) return;
-      this.settings.activeIntegrations = [...active, id];
+      if (builtinsOn(plugins).length >= MAX_BUILTINS) return;
+      this.settings.plugins = withOn(plugins, id, true);
     }
     this.loadIntegrationTasks();
   }
