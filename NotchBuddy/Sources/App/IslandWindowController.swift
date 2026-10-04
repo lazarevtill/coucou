@@ -19,6 +19,9 @@ final class IslandWindowController: NSWindowController {
     // Confused recovery timer (set by handleDizzy)
     private var confusedRecoveryTimer: DispatchWorkItem?
 
+    // Suppress peek sound on next reveal (e.g. musicReveal)
+    var silentNextReveal = false
+
     // Finished-pin timer
     private var finishedPinTimer: DispatchWorkItem?
 
@@ -164,7 +167,11 @@ final class IslandWindowController: NSWindowController {
                     // Fire interrupt first so canvas collapse starts before mode change
                     NotificationCenter.default.post(name: .greetingInterrupt, object: nil)
                 } else if from == .hidden {
-                    SoundEngine.shared.play("peek")
+                    if self.silentNextReveal {
+                        self.silentNextReveal = false
+                    } else {
+                        SoundEngine.shared.play("peek")
+                    }
                 }
                 // setMode BEFORE changing view: onChange(of: state.view) guards on .expanded,
                 // so setting view while already compact won't trigger a spurious open animation.
@@ -191,6 +198,8 @@ final class IslandWindowController: NSWindowController {
         ) { [weak self] _ in
             self?.fsm.greetComplete()
         }
+
+        fsm.isHeldOpen = { AppState.shared.pendingApproval != nil }
     }
 
     // MARK: - 60 Hz polling loop
@@ -330,7 +339,10 @@ final class IslandWindowController: NSWindowController {
             : .spring(response: 0.5, dampingFraction: 0.72)
         withAnimation(anim) { state.mode = mode }
         if mode == .expanded { SoundEngine.shared.play("open") }
-        if prev == .expanded { SoundEngine.shared.play("close"); state.isPinned = false }
+        if prev == .expanded {
+            SoundEngine.shared.play("close")
+            if fsm.isHeldOpen?() != true { state.isPinned = false }
+        }
     }
 
     func expand(to view: IslandView) {
@@ -344,6 +356,7 @@ final class IslandWindowController: NSWindowController {
     }
 
     func collapse() {
+        guard fsm.isHeldOpen?() != true else { return }
         state.isPinned = false
         finishedPinTimer?.cancel()
         // Keep the FSM in step with what is on screen (home/coucou → petit now).
@@ -369,6 +382,7 @@ final class IslandWindowController: NSWindowController {
         // Hook server expand requests (alerts only)
         NotificationCenter.default.addObserver(forName: .hookExpand, object: nil, queue: .main) { [weak self] note in
             guard let self, let view = note.object as? IslandView else { return }
+            self.fsm.openedExternally()
             self.expand(to: view)
         }
 
@@ -378,9 +392,29 @@ final class IslandWindowController: NSWindowController {
             self.fsm.reveal()
         }
 
+        // Music started playing: reveal silently (no peek sound)
+        NotificationCenter.default.addObserver(forName: .musicReveal, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            self.silentNextReveal = true
+            self.fsm.reveal()
+            self.silentNextReveal = false
+        }
+
         // Collapse requests from views (OK button, etc.)
         NotificationCenter.default.addObserver(forName: .islandCollapse, object: nil, queue: .main) { [weak self] _ in
             self?.collapse()
+        }
+
+        // Wardrobe open/close from desktop Mochi right-click (does NOT post .hookExpand)
+        NotificationCenter.default.addObserver(forName: .openWardrobeFromDesktop, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            if self.state.mode == .expanded && self.state.view == .wardrobe {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    self.state.view = .overview
+                }
+            } else {
+                self.expand(to: .wardrobe)
+            }
         }
 
         // .botDizzy — posted by BotEngine.slap() on 3rd hit; show confused view + recover after 3.3s
@@ -401,6 +435,8 @@ final class IslandWindowController: NSWindowController {
                 self.botHovering = false
                 // Drag only starts when clicking directly on the bot head
                 guard self.isBotHit(event.locationInWindow) else { return }
+                // Notch Mochi is invisible when on desktop — no drag, no slap
+                guard !self.state.mochiOnDesktop else { return }
                 self.attachDragStart = NSEvent.mouseLocation
                 // Post slap only when expanded
                 guard self.state.mode == .expanded else { return }
@@ -429,13 +465,38 @@ final class IslandWindowController: NSWindowController {
                 self.inAttachDrag = false
                 self.attachDragStart = nil
                 self.state.stateOverride = nil
-                self.hideDragGhost()
+
                 #if !APPSTORE
-                if let ctx = self.windowContextAtPoint(mouse) {
+                let windowCtx = self.windowContextAtPoint(mouse)
+                let inNotchZone = self.window?.frame.contains(mouse) == true
+
+                if let ctx = windowCtx {
+                    // Drop on a window → attach context as before
+                    self.hideDragGhost()
                     self.state.promptContext = ctx
                     SoundEngine.shared.play("approve")
                     NotificationCenter.default.post(name: .triggerEmote, object: BotEmote.happy)
                     self.expand(to: .prompt)
+                } else if !inNotchZone {
+                    // Drop outside notch zone → install Mochi on the desktop.
+                    // Prevent hideDragGhost from closing the ghost panel so we can promote it.
+                    let ghost = self.dragGhostPanel
+                    self.dragGhostPanel = nil   // nil first so hideDragGhost skips close
+                    self.hideDragGhost()        // resets isDraggingBot, closes highlight panel
+                    DesktopMochiController.shared.install(ghostPanel: ghost, at: mouse)
+                } else {
+                    // Drop back in notch zone → Mochi returns to notch
+                    self.hideDragGhost()
+                }
+                #else
+                let inNotchZoneAS = self.window?.frame.contains(mouse) == true
+                if !inNotchZoneAS {
+                    let ghost = self.dragGhostPanel
+                    self.dragGhostPanel = nil
+                    self.hideDragGhost()
+                    DesktopMochiController.shared.install(ghostPanel: ghost, at: mouse)
+                } else {
+                    self.hideDragGhost()
                 }
                 #endif
             }
@@ -464,6 +525,22 @@ final class IslandWindowController: NSWindowController {
         }
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { _ in
             finishDrag()
+        }
+
+        NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] event in
+            guard let self else { return event }
+            MainActor.assumeIsolated {
+                guard self.wasInIsland, self.isBotHit(event.locationInWindow) else { return }
+                guard !self.state.mochiOnDesktop else { return }
+                if self.state.mode == .expanded && self.state.view == .wardrobe {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        self.state.view = .overview
+                    }
+                } else {
+                    self.expand(to: .wardrobe)
+                }
+            }
+            return event
         }
 
         // Global hotkey to show island
@@ -643,7 +720,7 @@ final class IslandWindowController: NSWindowController {
 
     // MARK: - Window context at screen point (for drag-attach)
 
-    private func windowContextAtPoint(_ screenPoint: NSPoint) -> PromptContext? {
+    func windowContextAtPoint(_ screenPoint: NSPoint) -> PromptContext? {
         let screen = window?.screen ?? NSScreen.main
         // CGWindowList uses top-left origin; NSEvent.mouseLocation uses bottom-left
         let screenMaxY = screen?.frame.maxY ?? NSScreen.main!.frame.maxY
@@ -687,7 +764,8 @@ final class IslandWindowController: NSWindowController {
     // MARK: - Helpers
 
     func defaultView() -> IslandView {
-        state.tasks.isEmpty ? .empty : .overview
+        if state.pendingApproval != nil { return .approval }
+        return state.tasks.isEmpty ? .empty : .overview
     }
 
     func baseMode() -> IslandMode {
@@ -855,10 +933,12 @@ extension Notification.Name {
     static let islandCollapse   = Notification.Name("notchBuddy.islandCollapse")
     static let openFullSettings = Notification.Name("notchBuddy.openFullSettings")
     static let hookReveal       = Notification.Name("notchBuddy.hookReveal")
+    static let musicReveal      = Notification.Name("notchBuddy.musicReveal")
     // Greeting ↔ IslandWindowController
     static let greetComplete    = Notification.Name("notchBuddy.greetComplete")
     static let greetingHover    = Notification.Name("notchBuddy.greetingHover")
     static let greetingInterrupt = Notification.Name("notchBuddy.greetingInterrupt")
+    static let openWardrobeFromDesktop = Notification.Name("notchBuddy.openWardrobeFromDesktop")
 }
 
 // MARK: - islandSize (takes real notch dimensions)
