@@ -44,6 +44,7 @@ installs for the current user only — no admin prompt.
 | Click the file under a session in the flyout | Its latest change, line by line, with its last steps |
 | Move the mouse to the very top-centre of the screen (island on) | Mochi peeks out |
 | Click the small island | It opens |
+| Click a running Claude Code session on the island | Its details: where it runs, its last steps and its latest change, line by line; tabs switch between sessions, ↗ goes to its window |
 | Click Mochi | It gets annoyed. Three times in a row and it goes dizzy |
 | Rest the pointer on Mochi for two seconds | Hearts |
 | Drag a file onto the island | Mochi turns into a box, swallows it, then offers to answer questions about it |

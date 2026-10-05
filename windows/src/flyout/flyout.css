@@ -450,7 +450,7 @@ button.edit-toggle.open svg {
   overflow: hidden;
 }
 
-.tab {
+.file-tab {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -459,7 +459,7 @@ button.edit-toggle.open svg {
   font-size: 12px;
 }
 
-.tab .pending {
+.file-tab .pending {
   flex: 0 0 auto;
   width: 6px;
   height: 6px;
@@ -467,7 +467,7 @@ button.edit-toggle.open svg {
   background: var(--attention);
 }
 
-.tab .fpath {
+.file-tab .fpath {
   margin-left: auto;
   min-width: 0;
   color: var(--faint);

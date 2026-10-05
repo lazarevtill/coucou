@@ -1358,3 +1358,345 @@ input[type="range"]::-webkit-slider-thumb {
 .int-card.detail {
   padding-top: 8px;
 }
+
+/* ── A session's details (the "session" view) ──────────────────────────── */
+
+/* The overview card of a live session opens it. */
+.card-body.opens {
+  cursor: pointer;
+  border-radius: 20px;
+  transition: background 0.12s ease-out;
+}
+
+.card-body.opens:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.session-view .card {
+  display: flex;
+}
+
+/* Mochi sits at the top of this column (layout.ts: botX 80, botY 92). */
+.s-left {
+  flex: 0 0 168px;
+  width: 168px;
+  padding: 86px 12px 12px 20px;
+  min-width: 0;
+}
+
+.s-name {
+  font: 600 14px var(--font);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.s-where {
+  font: 400 11.5px var(--font);
+  color: var(--dim-2);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.s-steps {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.s-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 22px;
+  font: 500 12.5px var(--font);
+  color: var(--dim-3);
+}
+
+.s-steps li span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.s-steps li svg,
+.s-steps li .spinner {
+  flex: 0 0 auto;
+}
+
+.s-steps li.done svg {
+  color: var(--green-2);
+}
+
+.s-steps li.current {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.s-steps li.waiting {
+  color: var(--amber);
+  font-weight: 600;
+}
+
+.s-steps li.error {
+  color: var(--red-text);
+  font-weight: 600;
+}
+
+.s-steps .spinner {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--ink);
+  animation: s-spin 0.8s linear infinite;
+}
+
+@keyframes s-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.s-right {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px 12px 0;
+}
+
+.s-tabs {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  padding-right: 22px; /* the ↗ button */
+}
+
+.s-tabs:empty {
+  display: none;
+}
+
+.s-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 120px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--dim-2);
+  font: 500 11px var(--font);
+  cursor: default;
+}
+
+.s-tab span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.s-tab:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.s-tab.on {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--ink);
+}
+
+.s-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dim-4);
+}
+
+.s-dot.working,
+.s-dot.thinking {
+  background: #3b9eff;
+}
+
+.s-dot.waiting,
+.s-dot.approval {
+  background: var(--amber);
+}
+
+.s-dot.error {
+  background: var(--red);
+}
+
+.s-dot.finished {
+  background: var(--green-2);
+}
+
+.s-file {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.s-code {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  background: var(--card-flat);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.s-code .file-tab {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.s-code .badge {
+  flex: 0 0 auto;
+  font: 700 9px/14px var(--font);
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #3178c6;
+  color: #fff;
+}
+
+.s-code .fname {
+  font: 500 12px var(--mono);
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.s-code .pending {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+.s-code .fpath {
+  margin-left: auto;
+  min-width: 0;
+  font: 400 11px var(--mono);
+  color: var(--dim-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: right;
+}
+
+.s-code .lines {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 0;
+  font: 400 12px/1.6 var(--mono);
+  color: #e8e9ec;
+  user-select: text;
+}
+
+.s-code .lines::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.s-code .lines::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+
+.s-code .l {
+  display: grid;
+  grid-template-columns: 3em 1.6em max-content;
+  white-space: pre;
+}
+
+.s-code .l .n {
+  padding-right: 10px;
+  text-align: right;
+  color: var(--dim-5);
+}
+
+.s-code .l .s {
+  color: var(--dim-5);
+}
+
+.s-code .l.del {
+  background: rgba(244, 80, 94, 0.13);
+  box-shadow: inset 2px 0 var(--red);
+}
+
+.s-code .l.del .t {
+  color: var(--red-text);
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 141, 151, 0.55);
+}
+
+.s-code .l.del .n,
+.s-code .l.del .s {
+  color: var(--red-text);
+}
+
+.s-code .l.add {
+  background: rgba(52, 211, 153, 0.12);
+  box-shadow: inset 2px 0 var(--green-2);
+}
+
+.s-code .l.add .n,
+.s-code .l.add .s {
+  color: var(--green-2);
+}
+
+.s-code .l.gap {
+  color: var(--dim-5);
+}
+
+.s-code.failed .lines {
+  opacity: 0.55;
+}
+
+.s-note {
+  flex: 0 0 auto;
+  margin-top: 6px;
+  font: 400 11px var(--font);
+  color: var(--dim-3);
+}
+
+.s-empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: var(--card-flat);
+}
+
+.s-empty-title {
+  font: 600 13.5px var(--font);
+  color: var(--ink-2);
+}
+
+.s-empty-sub {
+  font: 400 12px var(--font);
+  color: var(--dim-3);
+}

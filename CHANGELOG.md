@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Windows: a running Claude Code session on the island opens its details — where it runs, its last steps and its latest change, line by line, with tabs between sessions and ↗ to its window. A finish or a failure no longer pulls you out of it; a question still does.
+- Windows: the island's step ticker no longer freezes half-way (two lines over each other, or the previous step shown as current): it keeps animating until it is done, whatever Mochi is doing.
+- Windows: opening a project in Cursor, VS Code or the terminal says it is on its way, and the same launch is not started again while it starts — repeated clicks no longer open several windows.
+- Windows: the idle Claude Code card says whether the hooks are installed instead of "Connected · loading…", and drops a Refresh button that did nothing.
 - Windows: the tray flyout shows each session's latest code change — the file, its lines removed in red and added in green with their line numbers — and its last steps. An Edit waiting for your permission shows its old and new text. The relay passes on only Claude Code's patch of an Edit or Write, never the file.
 - Windows: plugins — status sources you add as a folder with a plugin.json: a web address read on a timer, or an MCP server (stdio or HTTP, protocol 2026-07-28 with a fallback for 2025-11-25) whose read-only tool is polled. They show in the tray flyout. A plugin runs only after you review and approve exactly its manifest; hosts are allowlisted and pinned, secrets stay in the Credential Manager, and MCP programs start without a shell, in a job object. The built-in integrations run on the same mechanism; settings.json moves from activeIntegrations to plugins, keeping a dated backup.
 - Windows: the chat can answer with your own model server — llama.cpp's llama-server, LM Studio, Ollama or anything that speaks the OpenAI chat API — instead of Claude. Plain http only on this computer and the local network, no redirects, the key in the Credential Manager; text files work, PDFs and images still need Claude.

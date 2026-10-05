@@ -210,3 +210,16 @@ export function editFromPost(tool: string, input: Record<string, unknown>, respo
   }
   return build(path, lines, { wholeFile: false, numbered: true, status: "applied", cut, replaceAll: input.replace_all === true, created });
 }
+
+/** What the lines of a change do not say themselves. */
+export function editNotes(e: FileEdit, waitingOnYou: boolean): string[] {
+  const notes: string[] = [];
+  if (e.status === "pending") notes.push(waitingOnYou ? "Waiting for your permission." : "About to change.");
+  if (e.status === "failed") notes.push("This change did not go through.");
+  if (e.created) notes.push("New file.");
+  if (e.wholeFile) notes.push("Writes the whole file.");
+  if (e.replaceAll) notes.push("Every occurrence in the file.");
+  if (!e.numbered) notes.push("Line numbers once the change is made.");
+  if (e.cut) notes.push("Only part of the change is shown.");
+  return notes;
+}

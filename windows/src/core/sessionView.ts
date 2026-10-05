@@ -9,6 +9,7 @@ import type { Change, SessionInfo, SessionState, Summary } from "./sessions";
 import type { BotStateName, IslandViewName } from "./layout";
 import type { PillBadge } from "./state";
 import type { SoundName } from "./sound";
+import { shownPath, type FileEdit } from "./edits.ts";
 
 /** The character has no "waiting" face; a question is what it is waiting on. */
 export function botState(s: SessionState): BotStateName {
@@ -61,6 +62,8 @@ export interface Reaction {
 
 /** Cards that wait on the human: nothing else may replace them. */
 const HOLDING: ReadonlySet<IslandViewName> = new Set(["approval", "question"]);
+/** Opened on purpose to read: a finish or a failure shows there, not over it. */
+const READING: ReadonlySet<IslandViewName> = new Set(["session"]);
 
 const NOTHING: Reaction = { sound: null, alert: null, reveal: false };
 
@@ -71,7 +74,7 @@ const NOTHING: Reaction = { sound: null, alert: null, reveal: false };
  */
 export function reactTo(change: Change, eventName: string, ctx: { focused: boolean; view: IslandViewName }): Reaction {
   if (!change.session) return NOTHING;
-  const holding = HOLDING.has(ctx.view);
+  const holding = HOLDING.has(ctx.view) || READING.has(ctx.view);
   switch (change.became) {
     case "waiting": {
       // A newer question may replace an older one, never a permission card.
@@ -148,4 +151,78 @@ export function jumpNote(outcome: string | null): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * The idle Claude Code card's status line. There is nothing to load for Claude
+ * Code — sessions arrive through the hooks — so it says whether they can.
+ */
+export function claudeIdleLine(hooksInstalled: boolean): { text: string; ok: boolean } {
+  return hooksInstalled
+    ? { text: "Hooks installed · no session running", ok: true }
+    : { text: "Hooks not installed", ok: false };
+}
+
+export type StepKind = "done" | "current" | "waiting" | "error";
+export interface StepRow { text: string; kind: StepKind }
+
+/** Steps shown with a session's details. */
+const DETAIL_STEPS = 4;
+
+/** The last few steps; the newest says whether it is still going, waits on you, or failed. */
+export function stepRows(steps: string[], state: SessionState): StepRow[] {
+  const shown = steps.slice(-DETAIL_STEPS);
+  const newest: StepKind =
+    state === "working" || state === "thinking" ? "current"
+    : state === "waiting" || state === "approval" ? "waiting"
+    : state === "error" ? "error"
+    : "done";
+  return shown.map((text, i) => ({ text, kind: i === shown.length - 1 ? newest : "done" }));
+}
+
+export interface SessionTab { id: string; project: string; state: SessionState; attention: boolean; selected: boolean }
+export interface SessionDetail {
+  session: SessionInfo;
+  tabs: SessionTab[];
+  steps: StepRow[];
+  edit: FileEdit | null;
+  editPath: string | null;
+  /** "Windows Terminal · PowerShell"… */
+  where: string;
+  /** Just "Windows Terminal", for where there is little room. */
+  host: string | null;
+  jumpLabel: string;
+}
+
+/** Sessions offered as tabs in the island's session view. */
+const DETAIL_TABS = 5;
+
+/**
+ * What the island's session view shows: the chosen session (or, when it is
+ * gone, the one that matters most), its last steps and latest change, and tabs
+ * to the others.
+ */
+export function sessionDetail(list: SessionInfo[], selected: string | null): SessionDetail | null {
+  const session = list.find((s) => s.id === selected) ?? list[0];
+  if (!session) return null;
+  let shown = list.slice(0, DETAIL_TABS);
+  if (!shown.includes(session)) shown = [...shown.slice(0, DETAIL_TABS - 1), session];
+  const tabs = list.length < 2 ? [] : shown.map((s) => ({
+    id: s.id,
+    project: s.project,
+    state: s.state,
+    attention: s.state === "waiting" || s.state === "approval",
+    selected: s === session,
+  }));
+  const host = session.host && session.host.kind !== "unknown" ? session.host : null;
+  return {
+    session,
+    tabs,
+    steps: stepRows(session.steps, session.state),
+    edit: session.edit ?? null,
+    editPath: session.edit ? shownPath(session.edit.path, session.cwd) : null,
+    where: [host?.label, host?.shellLabel].filter(Boolean).join(" · "),
+    host: host?.label ?? null,
+    jumpLabel: jumpLabel(session),
+  };
 }

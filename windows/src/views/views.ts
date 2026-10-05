@@ -7,8 +7,11 @@ import { ICONS } from "./icons";
 import { Ticker } from "./ticker";
 import { CLAUDE_ID, State, type AgentTask } from "../core/state";
 import type { SessionInfo } from "../core/sessions";
-import { finishedSession, jumpLabel, waitingLine, waitingSession } from "../core/sessionView";
+import { finishedSession, jumpLabel, sessionDetail, waitingLine, waitingSession, type StepKind } from "../core/sessionView";
+import { editNotes } from "../core/edits";
+import { codeLines, fileTab } from "./code";
 import { washRGBA, type IslandViewName, type Wash } from "../core/layout";
+import { stillStarting } from "../core/launching";
 import { createMiniBot, pruneMiniBots } from "../mochi/minibots";
 import { buildPrompt } from "./chat";
 import { buildChoose, buildUpload, buildUploading } from "./upload";
@@ -19,8 +22,12 @@ export interface ViewActions {
   collapse(): void;
   setFocus(id: string): void;
   openTerminal(): void;
+  /** Opens the project in the editor or terminal and says it is on its way. */
+  openProject(target: "editor" | "terminal", path: string | null): void;
   /** Brings the window a Claude Code session lives in to the front. */
   jumpTo(sessionId: string): void;
+  /** Opens a session's details; null = the one that matters most. */
+  openSession(sessionId: string | null): void;
   /** The ↗ button: opens whatever the focused pill points at. */
   openTarget(): void;
   openUrl(url: string): void;
@@ -39,6 +46,8 @@ export interface ViewHost {
   focus?(): void;
   /** Called every frame while the view is on screen. */
   tick?(nowMs: number): void;
+  /** Something of its own is still moving: the island keeps drawing frames. */
+  animating?(): boolean;
 }
 
 // ── Shared pieces ─────────────────────────────────────────────────────────────
@@ -105,7 +114,7 @@ export function buildHeader(actions: ViewActions): ViewHost {
     el,
     sync() {
       const v = State.view;
-      tabHome.classList.toggle("on", v === "overview" || v === "empty");
+      tabHome.classList.toggle("on", v === "overview" || v === "empty" || v === "session");
       tabChat.classList.toggle("on", v === "prompt");
       tabDrop.classList.toggle("on", v === "upload");
       gearBtn.classList.toggle("on", v === "settings");
@@ -123,7 +132,12 @@ export function buildHeader(actions: ViewActions): ViewHost {
 function buildOverview(actions: ViewActions): ViewHost {
   const ticker = new Ticker();
   const who = h("div", { class: "who" });
-  const tickerBody = h("div", { class: "card-body" }, who, ticker.el);
+  // A live session's card opens its details; the ↗ still goes to its window.
+  const tickerBody = h("div", {
+    class: "card-body opens",
+    title: "Show the session",
+    onclick: () => actions.openSession(null),
+  }, who, ticker.el);
   const leftBody = h("div", { class: "left-body" });
   const jump = h(
     "button",
@@ -160,6 +174,7 @@ function buildOverview(actions: ViewActions): ViewHost {
       State.notify();
     },
     openSettings: () => actions.openSettingsWindow(),
+    openProject: (target, path) => actions.openProject(target, path),
   };
 
   return {
@@ -167,6 +182,7 @@ function buildOverview(actions: ViewActions): ViewHost {
     tick(nowMs: number) {
       if (mode === "ticker") ticker.tick(nowMs);
     },
+    animating: () => mode === "ticker" && ticker.animating,
     sync() {
       const task = State.focusTask;
       if (task?.id !== lastFocus) {
@@ -205,6 +221,7 @@ function buildOverview(actions: ViewActions): ViewHost {
         const info = State.integrations[task.id];
         const key = [
           task.id, detailOpen, task.state, task.steps.join("|"),
+          stillStarting(State.launching.editor, Date.now()),
           info?.loaded, info?.error, info?.configured,
           JSON.stringify(info?.data ?? {}),
         ].join("~");
@@ -270,6 +287,104 @@ function lighten(hex: string, amount: number): string {
     Math.min(255, Math.round(x + amount * 255)),
   );
   return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+// ── A session's details ───────────────────────────────────────────────────────
+
+function stepIcon(kind: StepKind): Node {
+  if (kind === "current") return h("i", { class: "spinner" });
+  if (kind === "waiting") return svg(ICONS.timer, 11);
+  if (kind === "error") return svg(ICONS.bang, 11);
+  return svg(ICONS.check, 11, { stroke: 2.4 });
+}
+
+/**
+ * One Claude Code session up close, as in docs/media/claude-code.png: Mochi,
+ * the project and where it runs, its last steps, and on the right its latest
+ * change, line by line. Tabs switch between sessions; ↗ goes to its window.
+ */
+function buildSession(actions: ViewActions): ViewHost {
+  const name = h("div", { class: "s-name" });
+  const where = h("div", { class: "s-where" });
+  const steps = h("ol", { class: "s-steps" });
+  const left = h("div", { class: "s-left" }, name, where, steps);
+  const tabs = h("div", { class: "s-tabs" });
+  const file = h("div", { class: "s-file" });
+  const right = h("div", { class: "s-right" }, tabs, file);
+  const jump = h("button", { class: "icon-btn jump" }, svg(ICONS.arrowUpRight, 8));
+  const el = h("div", { class: "view session-view" }, card(null, left, right, jump));
+
+  let leftKey = "";
+  let tabsKey = "";
+  let fileKey = "";
+
+  return {
+    el,
+    sync() {
+      const d = sessionDetail(State.sessions.list(), State.detailSessionId);
+      if (!d) {
+        const key = "none";
+        if (leftKey !== key) {
+          leftKey = tabsKey = fileKey = key;
+          name.textContent = "No Claude Code session";
+          where.textContent = "Start claude in a terminal and it shows up here.";
+          clear(steps);
+          clear(tabs);
+          clear(file);
+          jump.style.display = "none";
+        }
+        return;
+      }
+      const s = d.session;
+      jump.style.display = "";
+      jump.title = d.jumpLabel;
+      jump.onclick = () => actions.jumpTo(s.id);
+
+      const lk = JSON.stringify([s.id, s.project, d.where, s.permissionMode, d.steps]);
+      if (lk !== leftKey) {
+        leftKey = lk;
+        name.textContent = s.project;
+        // Narrow column: the host alone; all of it on hover.
+        where.textContent = [d.host ?? "Claude Code", s.permissionMode === "bypassPermissions" ? "bypass" : ""].filter(Boolean).join(" · ");
+        where.title = ["Claude Code", d.where].filter(Boolean).join(" · ");
+        clear(steps);
+        for (const step of d.steps) {
+          steps.append(h("li", { class: step.kind }, stepIcon(step.kind), h("span", { text: step.text })));
+        }
+      }
+
+      const tk = JSON.stringify(d.tabs);
+      if (tk !== tabsKey) {
+        tabsKey = tk;
+        clear(tabs);
+        for (const t of d.tabs) {
+          const tab = h("button", {
+            class: `s-tab${t.selected ? " on" : ""}${t.attention ? " attention" : ""}`,
+            title: t.project,
+            onclick: () => actions.openSession(t.id),
+          }, h("i", { class: `s-dot ${t.state}` }), h("span", { text: t.project }));
+          tabs.append(tab);
+        }
+      }
+
+      const waitingOnYou = s.state === "waiting" || s.state === "approval";
+      const fk = JSON.stringify([s.id, d.edit, d.editPath, waitingOnYou, s.waitingFor]);
+      if (fk !== fileKey) {
+        fileKey = fk;
+        clear(file);
+        if (d.edit) {
+          const notes = editNotes(d.edit, waitingOnYou);
+          file.append(h("div", { class: `s-code ${d.edit.status}` }, fileTab(d.edit, d.editPath), codeLines(d.edit)));
+          if (notes.length) file.append(h("div", { class: "s-note", text: notes.join(" ") }));
+        } else {
+          file.append(h("div", { class: "s-empty" },
+            h("div", { class: "s-empty-title", text: waitingOnYou && s.waitingFor ? s.waitingFor : "No file changed yet" }),
+            h("div", { class: "s-empty-sub", text: waitingOnYou ? `Answer in ${s.host?.label ?? "the terminal"}.` : "Edits and new files show here, line by line." }),
+          ));
+        }
+      }
+    },
+  };
 }
 
 // ── Empty ─────────────────────────────────────────────────────────────────────
@@ -536,6 +651,7 @@ export function buildViews(
 ): Map<IslandViewName, ViewHost> {
   const map = new Map<IslandViewName, ViewHost>();
   map.set("overview", buildOverview(actions));
+  map.set("session", buildSession(actions));
   map.set("empty", buildEmpty(actions));
   map.set("approval", buildApproval(actions));
   map.set("question", buildQuestion(actions));

@@ -140,6 +140,16 @@ directory; Windows Terminal reads `;` as a command separator, so a folder with
 one in its name opens in File Explorer instead. File Explorer is also what opens
 when the chosen program is missing or fails to start.
 
+An editor can take seconds to come up, and until it does it does not know a
+folder is on its way: a second request opens a second window. So the same
+launch (same target and folder) is not started again for 8 seconds; the island
+says *Opening Cursor…* and its button waits, and a request in that time is
+answered *Cursor is already starting…* instead.
+
+A program Coucou starts gets Coucou's own environment. Run with `APPDATA`
+pointing elsewhere (as the separate test instance below is), Cursor and VS Code
+start a separate copy of themselves with an empty profile.
+
 ## How this is tested
 
 Automated:

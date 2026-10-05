@@ -8,9 +8,10 @@
 
 import "./flyout.css";
 import { Bridge, onEvent, type ShellAction } from "../core/bridge";
-import type { LineKind } from "../core/edits";
+import { editNotes } from "../core/edits";
+import { codeLines, fileTab } from "../views/code";
 import type { ApprovalCard, ServiceRow, SessionRow, ShellSnapshot } from "../core/shell";
-import { jumpNote } from "../core/sessionView";
+import { jumpNote, stepRows, type StepKind } from "../core/sessionView";
 import type { AgentTask } from "../core/state";
 import { createMiniBot, syncMiniBotStates, tickMiniBots } from "../mochi/minibots";
 import { ICONS } from "../views/icons";
@@ -163,8 +164,6 @@ function makeRow(id: string): RowParts {
   return { el, row, project, chips, state, detail, jump: jumpBtn, editToggle, code, codeKey: "" };
 }
 
-const SIGN: Record<LineKind, string> = { ctx: " ", del: "−", add: "+", gap: "⋯" };
-
 /** The toggle's label: the file and how much changed. */
 function renderToggle(parts: RowParts, r: SessionRow) {
   const e = r.edit;
@@ -187,7 +186,7 @@ function renderToggle(parts: RowParts, r: SessionRow) {
   parts.editToggle.title = open ? "Hide the change" : "Show the change";
 }
 
-function stepIcon(kind: "done" | "current" | "waiting" | "error") {
+function stepIcon(kind: StepKind) {
   if (kind === "current") return h("i", { class: "spinner" });
   if (kind === "waiting") return svg(ICONS.timer, 12);
   if (kind === "error") return svg(ICONS.bang, 12);
@@ -205,41 +204,16 @@ function renderCode(parts: RowParts, r: SessionRow) {
   clear(parts.code);
   if (!open || !e) return;
 
-  const last = r.steps.length - 1;
-  const lastKind = r.state === "working" || r.state === "thinking" ? "current" : r.attention ? "waiting" : r.state === "error" ? "error" : "done";
   const steps = h("ol", { class: "steps" },
-    ...r.steps.map((s, i) => h("li", { class: i === last ? lastKind : "done" }, stepIcon(i === last ? lastKind : "done"), h("span", { text: s }))),
+    ...stepRows(r.steps, r.state).map((s) => h("li", { class: s.kind }, stepIcon(s.kind), h("span", { text: s.text }))),
   );
 
-  const tab = h("div", { class: "tab" },
-    h("span", { class: "badge", text: e.badge }),
-    h("span", { class: "fname", text: e.name }),
-    e.status === "pending" ? h("i", { class: "pending", title: "Not made yet" }) : null,
-    // The path only when it says more than the name.
-    r.editPath && r.editPath !== e.name ? h("span", { class: "fpath", text: r.editPath, title: e.path }) : null,
-  );
-
-  const lines = h("div", { class: "lines" },
-    ...e.lines.map((l) => h("div", { class: `l ${l.kind}` },
-      h("span", { class: "n", text: l.num == null ? "" : String(l.num) }),
-      h("span", { class: "s", text: SIGN[l.kind] }),
-      h("span", { class: "t", text: l.text }),
-    )),
-  );
-
-  const notes: string[] = [];
-  if (e.status === "pending") notes.push(r.attention ? "Waiting for your permission." : "About to change.");
-  if (e.status === "failed") notes.push("This change did not go through.");
-  if (e.created) notes.push("New file.");
-  if (e.wholeFile) notes.push("Writes the whole file.");
-  if (e.replaceAll) notes.push("Every occurrence in the file.");
-  if (!e.numbered) notes.push("Line numbers once the change is made.");
-  if (e.cut) notes.push("Only part of the change is shown.");
+  const notes = editNotes(e, r.attention);
 
   parts.code.append(
     ...present(
       r.steps.length ? steps : null,
-      h("div", { class: `file ${e.status}` }, tab, lines),
+      h("div", { class: `file ${e.status}` }, fileTab(e, r.editPath), codeLines(e)),
       notes.length ? h("div", { class: "code-note", text: notes.join(" ") }) : null,
     ),
   );

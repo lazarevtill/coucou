@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { SessionStore } from "../src/core/sessions.ts";
-import { botState, claudePill, reactTo, waitingSession, finishedSession, waitingLine, jumpLabel, jumpNote, staleCard } from "../src/core/sessionView.ts";
+import { botState, claudePill, reactTo, waitingSession, finishedSession, waitingLine, jumpLabel, jumpNote, staleCard, claudeIdleLine, stepRows, sessionDetail } from "../src/core/sessionView.ts";
 
 const T0 = 1_000_000;
 const CURSOR = { kind: "cursor", shell: "powershell", label: "Cursor", shellLabel: "PowerShell" };
@@ -223,4 +223,69 @@ test("a jump that worked says nothing; one that did not says why", () => {
     assert.ok(note.length > 10, outcome);
   }
   assert.match(jumpNote("flashed"), /taskbar/);
+});
+
+test("the idle Claude Code card says what is true: hooks in place, nothing running", () => {
+  // Claude Code has no poller: "Connected · loading…" never turned into anything.
+  assert.deepEqual(claudeIdleLine(true), { text: "Hooks installed · no session running", ok: true });
+  assert.deepEqual(claudeIdleLine(false), { text: "Hooks not installed", ok: false });
+});
+
+// ── The island's session view ─────────────────────────────────────────────────
+
+test("the last steps say which are done and what the newest is doing", () => {
+  const steps = ["a", "b", "c", "d", "e"];
+  const kinds = (state) => stepRows(steps, state).map((r) => `${r.text}:${r.kind}`);
+  assert.deepEqual(kinds("working"), ["b:done", "c:done", "d:done", "e:current"], "four at most, the newest last");
+  assert.deepEqual(kinds("thinking").at(-1), "e:current");
+  assert.deepEqual(kinds("waiting").at(-1), "e:waiting");
+  assert.deepEqual(kinds("approval").at(-1), "e:waiting");
+  assert.deepEqual(kinds("error").at(-1), "e:error");
+  assert.deepEqual(kinds("finished").at(-1), "e:done");
+  assert.deepEqual(stepRows([], "working"), []);
+});
+
+test("the session view shows the chosen session, or the one that matters most", () => {
+  const s = new SessionStore();
+  s.apply(ev("api", "PreToolUse", { ...BASH, coucou_host: WT }), T0);
+  s.apply(ev("web", "PreToolUse", { tool_name: "Edit", tool_input: { file_path: String.raw`C:\src\web\app\page.tsx`, old_string: "a", new_string: "b" }, coucou_host: CURSOR }), T0 + 1);
+  s.apply(ev("api", "PreToolUse", { ...ASK, coucou_host: WT }), T0 + 2);
+
+  const top = sessionDetail(s.list(), null);
+  assert.equal(top.session.id, "api", "the one asking comes first");
+  assert.equal(top.where, "Windows Terminal · PowerShell");
+  assert.equal(top.host, "Windows Terminal", "the short form, for a narrow column");
+  assert.equal(top.jumpLabel, "Go to Windows Terminal");
+  assert.equal(top.edit, null);
+
+  const web = sessionDetail(s.list(), "web");
+  assert.equal(web.session.id, "web");
+  assert.equal(web.edit.name, "page.tsx");
+  assert.equal(web.editPath, String.raw`app\page.tsx`);
+  assert.deepEqual(web.steps.map((r) => r.kind), ["current"]);
+  assert.deepEqual(web.tabs.map((t) => `${t.project}:${t.selected}:${t.attention}`), ["api:false:true", "web:true:false"]);
+
+  assert.equal(sessionDetail(s.list(), "gone").session.id, "api", "a session that ended falls back to the top one");
+  assert.equal(sessionDetail([], null), null);
+});
+
+test("one session needs no tabs; many keep the chosen one among them", () => {
+  const s = new SessionStore();
+  s.apply(ev("solo", "PreToolUse", BASH), T0);
+  assert.deepEqual(sessionDetail(s.list(), null).tabs, []);
+
+  for (let i = 0; i < 7; i++) s.apply(ev(`p${i}`, "PreToolUse", BASH), T0 + 10 + i);
+  const d = sessionDetail(s.list(), "solo");
+  assert.ok(d.tabs.length <= 5);
+  assert.ok(d.tabs.some((t) => t.id === "solo" && t.selected), "the chosen one is always reachable");
+});
+
+test("a session's details stay up for a finish or a failure, not for a question", () => {
+  const reading = { focused: true, view: "session" };
+  const done = changeFor(new SessionStore(), ev("a", "Stop"));
+  assert.deepEqual(reactTo(done, "Stop", reading), { sound: "finish", alert: null, reveal: false }, "the view shows it already");
+  const failed = changeFor(new SessionStore(), ev("a", "StopFailure", { error_message: "x" }));
+  assert.equal(reactTo(failed, "StopFailure", reading).alert, null);
+  const asked = changeFor(new SessionStore(), ev("b", "PreToolUse", ASK));
+  assert.equal(reactTo(asked, "PreToolUse", reading).alert, "question", "a question still needs the human now");
 });

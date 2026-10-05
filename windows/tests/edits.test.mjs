@@ -4,7 +4,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { diffLines, editFromPost, editFromPre, fileBadge, shownPath, SHOWN_LINES } from "../src/core/edits.ts";
+import { diffLines, editFromPost, editFromPre, editNotes, fileBadge, shownPath, SHOWN_LINES } from "../src/core/edits.ts";
 
 const FILE = "C:\\work\\shop\\src\\invoice.ts";
 const lines = (e) => e.lines.map((l) => `${l.num ?? "·"} ${{ ctx: " ", del: "-", add: "+", gap: "…" }[l.kind]} ${l.text}`.trimEnd());
@@ -145,4 +145,15 @@ test("a file inside the session's folder is shown by its path in it", () => {
   assert.equal(shownPath(String.raw`C:\work\shopfront\a.ts`, String.raw`C:\work\shop`), String.raw`C:\work\shopfront\a.ts`, "a neighbour is not inside");
   assert.equal(shownPath(String.raw`D:\other\a.ts`, ""), String.raw`D:\other\a.ts`);
   assert.equal(shownPath("C:/work/shop/src/a.ts", String.raw`C:\work\shop`), "src/a.ts", "Claude Code may use forward slashes");
+});
+
+test("the notes under a change say what is not obvious from its lines", () => {
+  const pending = editFromPre("Edit", { file_path: "C:/w/a.ts", old_string: "a", new_string: "b", replace_all: true });
+  assert.deepEqual(editNotes(pending, true), ["Waiting for your permission.", "Every occurrence in the file.", "Line numbers once the change is made."]);
+  assert.deepEqual(editNotes(pending, false)[0], "About to change.");
+  const write = editFromPre("Write", { file_path: "C:/w/n.md", content: "x" });
+  assert.deepEqual(editNotes(write, false), ["About to change.", "Writes the whole file."]);
+  const created = editFromPost("Write", { file_path: "C:/w/n.md", content: "x" }, { type: "create", structuredPatch: [] });
+  assert.deepEqual(editNotes(created, false), ["New file."]);
+  assert.deepEqual(editNotes({ ...created, status: "failed", created: false }, false), ["This change did not go through."]);
 });

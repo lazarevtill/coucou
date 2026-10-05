@@ -8,6 +8,8 @@ import { h, svg, clear, dot } from "./dom";
 import { ICONS } from "./icons";
 import { State, type AgentTask } from "../core/state";
 import { Bridge } from "../core/bridge";
+import { claudeIdleLine } from "../core/sessionView";
+import { launcherName, stillStarting } from "../core/launching";
 
 /** Same shape as the Swift `timeAgo` computed properties. */
 export function timeAgo(value: unknown): string {
@@ -53,26 +55,29 @@ const OPEN_URLS: Record<string, string> = {
   integration_calcom: "https://app.cal.com/bookings",
 };
 
-function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
+function idleCard(task: AgentTask, hooks: IntegrationCardHooks): HTMLElement {
   const info = State.integrations[task.id];
   const configured = info?.configured ?? false;
   const error = info?.error ?? null;
-  // The Claude Code pill is about hooks, not a key — the macOS wording would be
-  // misleading here.
-  const missing = task.id === "integration_claude" ? "Hooks not installed" : "Key not configured";
-  const label = error ?? (configured ? "Connected · loading…" : missing);
+  const isClaude = task.id === "integration_claude";
+  // The Claude Code pill is about hooks, not a key, and has nothing to load.
+  const claude = isClaude ? claudeIdleLine(configured) : null;
+  const label = error ?? claude?.text ?? (configured ? "Connected · loading…" : "Key not configured");
   const statusColor = error || !configured ? "#F4505E" : "#22C55E";
 
   const actions = h("div", { class: "int-actions" });
-  if (task.id === "integration_claude") {
-    const editor = { cursor: "Cursor", vscode: "VS Code", none: null }[State.settings.editor];
+  if (isClaude) {
+    const editor = launcherName("editor", State.settings);
     if (editor) {
+      // While it starts, say so — and do not offer to start another one.
+      const starting = stillStarting(State.launching.editor, Date.now());
       actions.append(
         h("button", {
           class: "link-btn",
           style: `color:${task.color}b3`,
-          text: `Open ${editor}`,
-          onclick: () => void Bridge.openProject("editor", task.sessionCwd ?? null),
+          text: starting ? `Opening ${editor}…` : `Open ${editor}`,
+          disabled: starting,
+          onclick: () => hooks.openProject("editor", task.sessionCwd ?? null),
         }),
       );
     }
@@ -95,7 +100,9 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
       }),
     );
   }
-  if (configured) {
+  if (isClaude && configured) {
+    // Nothing to refresh: sessions arrive on their own.
+  } else if (configured) {
     actions.append(
       h("button", {
         class: "link-btn",
@@ -106,14 +113,14 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
     );
   } else {
     actions.append(
-      h("button", { class: "link-btn", style: "color:#8e939c", text: "Settings…", onclick: openSettings }),
+      h("button", { class: "link-btn", style: "color:#8e939c", text: "Settings…", onclick: hooks.openSettings }),
     );
   }
 
   return h(
     "div",
     { class: "int-card" },
-    header(task.color, task.id === "integration_claude" ? "Claude Code" : task.name, "Integration"),
+    header(task.color, isClaude ? "Claude Code" : task.name, "Integration"),
     h("div", { class: "int-status" }, dot(statusColor, 5), h("span", { text: label })),
     actions,
   );
@@ -320,9 +327,9 @@ function calcomCard(): HTMLElement {
 
 // ── n8n ───────────────────────────────────────────────────────────────────────
 
-function n8nCard(task: AgentTask, onDetail: () => void, openSettings: () => void): HTMLElement {
+function n8nCard(task: AgentTask, onDetail: () => void, hooks: IntegrationCardHooks): HTMLElement {
   const hasActivity = task.steps.length > 0 && (task.state === "finished" || task.state === "error");
-  if (!hasActivity) return idleCard(task, openSettings);
+  if (!hasActivity) return idleCard(task, hooks);
   const success = task.state === "finished";
   const accent = success ? "#22C55E" : "#F4505E";
   return h(
@@ -382,6 +389,7 @@ export interface IntegrationCardHooks {
   openDetail(): void;
   closeDetail(): void;
   openSettings(): void;
+  openProject(target: "editor" | "terminal", path: string | null): void;
 }
 
 /** True when this integration has data worth showing instead of the idle card. */
@@ -411,12 +419,12 @@ export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHoo
     const hasActivity = task.steps.length > 0 && (task.state === "finished" || task.state === "error");
     return hooks.detailOpen && hasActivity
       ? n8nDetail(task, hooks.closeDetail)
-      : n8nCard(task, hooks.openDetail, hooks.openSettings);
+      : n8nCard(task, hooks.openDetail, hooks);
   }
   if (task.id === "integration_vercel" && hasIntegrationData(task.id)) {
     return hooks.detailOpen ? vercelDetail(hooks.closeDetail) : vercelCard(hooks.openDetail);
   }
-  if (!hasIntegrationData(task.id)) return idleCard(task, hooks.openSettings);
+  if (!hasIntegrationData(task.id)) return idleCard(task, hooks);
 
   switch (task.id) {
     case "integration_resend":
@@ -430,7 +438,7 @@ export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHoo
     case "integration_calcom":
       return calcomCard();
     default:
-      return idleCard(task, hooks.openSettings);
+      return idleCard(task, hooks);
   }
 }
 

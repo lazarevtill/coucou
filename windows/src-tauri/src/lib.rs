@@ -159,17 +159,18 @@ fn open_url(url: String) {
 /// arrives in a hook payload, so only an absolute, existing directory goes any
 /// further (see launch::validate_folder).
 #[tauri::command]
-fn open_project(shared: State<Shared>, target: String, path: Option<String>) -> open::OpenResult {
+fn open_project(shared: State<Shared>, launches: State<open::Launches>, target: String, path: Option<String>) -> open::Opened {
     let Some(target) = open::Target::parse(&target) else {
-        return open::OpenResult { via: "none".into(), fell_back: false, error: Some("unknown target".into()) };
+        let result = open::OpenResult { via: "none".into(), fell_back: false, error: Some("unknown target".into()) };
+        return open::Opened { result, starting_ms: None };
     };
     let (editor, terminal) = {
         let s = shared.settings.lock().unwrap();
         (launch::Editor::from_setting(&s.editor), launch::Terminal::from_setting(&s.terminal))
     };
-    let result = open::open_project(&open::RealHost, editor, terminal, target, path.as_deref());
-    log::line(format!("open {target:?} -> {} (fallback {})", result.via, result.fell_back));
-    result
+    let opened = launches.open(std::time::Instant::now(), &open::RealHost, editor, terminal, target, path.as_deref());
+    log::line(format!("open {target:?} -> {} (fallback {})", opened.result.via, opened.result.fell_back));
+    opened
 }
 
 /// What the settings window shows next to the editor and terminal choices.
@@ -742,6 +743,7 @@ pub fn run() {
         })
         .manage(Pending::default())
         .manage(Sessions::default())
+        .manage(open::Launches::default())
         .manage(ShellSnapshot::default())
         .manage(flyout::Flyout::default())
         .manage(plugins::runner::Supervisor::default())

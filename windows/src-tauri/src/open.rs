@@ -5,6 +5,8 @@
 // What happened is reported back so the island can say so.
 
 use std::path::Path;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
@@ -119,6 +121,61 @@ pub fn open_project(
     }
 }
 
+// ── One launch at a time ──────────────────────────────────────────────────────
+
+/// How long a launch counts as still starting. An editor that is not up yet does
+/// not know the folder is on its way, so a second click used to open a second
+/// window — and nothing on screen said the first one was coming.
+pub const STARTING: Duration = Duration::from_secs(8);
+
+/// What the island gets back: what happened, and for how long the button should
+/// say the launch is on its way.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Opened {
+    #[serde(flatten)]
+    pub result: OpenResult,
+    /// Milliseconds left until the same launch may start again; `None` when
+    /// nothing was started.
+    pub starting_ms: Option<u64>,
+}
+
+/// The last launch, so the same one is not started again while it starts.
+#[derive(Default)]
+pub struct Launches(Mutex<Option<(String, Instant)>>);
+
+impl Launches {
+    pub fn open(
+        &self,
+        now: Instant,
+        host: &dyn Host,
+        editor: Editor,
+        terminal: Terminal,
+        target: Target,
+        folder: Option<&str>,
+    ) -> Opened {
+        // Windows paths ignore case.
+        let key = format!("{target:?}|{}", folder.unwrap_or_default().to_lowercase());
+        let mut last = self.0.lock().unwrap();
+        if let Some((previous, at)) = last.as_ref() {
+            let since = now.saturating_duration_since(*at);
+            if *previous == key && since < STARTING {
+                return Opened {
+                    result: OpenResult { via: "starting".into(), fell_back: false, error: None },
+                    starting_ms: Some((STARTING - since).as_millis() as u64),
+                };
+            }
+        }
+        let result = open_project(host, editor, terminal, target, folder);
+        // Something is on its way only when something was started.
+        let started = result.via != "none";
+        if started {
+            *last = Some((key, now));
+        }
+        Opened { result, starting_ms: started.then(|| STARTING.as_millis() as u64) }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,6 +236,61 @@ mod tests {
 
     fn open(p: &FakePlatform, ed: Editor, term: Terminal, target: Target, folder: &std::path::Path) -> OpenResult {
         open_project(p, ed, term, target, folder.to_str())
+    }
+
+    #[test]
+    fn the_same_project_is_not_launched_again_while_it_is_starting() {
+        let dir = temp_dir("twice");
+        let p = FakePlatform::new(this_machine());
+        let launches = Launches::default();
+        let t0 = Instant::now();
+        let first = launches.open(t0, &p, Editor::Cursor, Terminal::WindowsTerminal, Target::Editor, dir.to_str());
+        assert_eq!(first.result.via, "cursor");
+        assert_eq!(first.starting_ms, Some(STARTING.as_millis() as u64));
+
+        // Clicked again while Cursor is still coming up: nothing new is started.
+        let again = launches.open(t0 + Duration::from_secs(2), &p, Editor::Cursor, Terminal::WindowsTerminal, Target::Editor, dir.to_str());
+        assert_eq!(again.result, OpenResult { via: "starting".into(), fell_back: false, error: None });
+        assert_eq!(again.starting_ms, Some((STARTING - Duration::from_secs(2)).as_millis() as u64));
+        let upper = dir.to_str().unwrap().to_uppercase();
+        let same_folder = launches.open(t0 + Duration::from_secs(3), &p, Editor::Cursor, Terminal::WindowsTerminal, Target::Editor, Some(&upper));
+        assert_eq!(same_folder.result.via, "starting", "Windows paths ignore case");
+        assert_eq!(p.started().len(), 1);
+
+        // Once it had time to start, a click opens it again (the editor brings the window forward).
+        let later = launches.open(t0 + STARTING, &p, Editor::Cursor, Terminal::WindowsTerminal, Target::Editor, dir.to_str());
+        assert_eq!(later.result.via, "cursor");
+        assert_eq!(p.started().len(), 2);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn another_folder_or_the_terminal_is_its_own_launch() {
+        let (a, b) = (temp_dir("one"), temp_dir("two"));
+        let p = FakePlatform::new(this_machine());
+        let launches = Launches::default();
+        let t0 = Instant::now();
+        launches.open(t0, &p, Editor::Cursor, Terminal::WindowsTerminal, Target::Editor, a.to_str());
+        launches.open(t0, &p, Editor::Cursor, Terminal::WindowsTerminal, Target::Editor, b.to_str());
+        launches.open(t0, &p, Editor::Cursor, Terminal::WindowsTerminal, Target::Terminal, a.to_str());
+        assert_eq!(p.started().len(), 3);
+        let _ = (std::fs::remove_dir_all(&a), std::fs::remove_dir_all(&b));
+    }
+
+    #[test]
+    fn nothing_started_does_not_hold_up_the_next_try() {
+        let p = FakePlatform::new(this_machine());
+        let launches = Launches::default();
+        let t0 = Instant::now();
+        let bad = launches.open(t0, &p, Editor::Cursor, Terminal::WindowsTerminal, Target::Editor, Some(r"C:\no\such\folder\anywhere"));
+        assert_eq!(bad.result.via, "none");
+        assert_eq!(bad.starting_ms, None);
+        let off = launches.open(t0, &p, Editor::None, Terminal::WindowsTerminal, Target::Editor, None);
+        assert_eq!(off.starting_ms, None, "switched off: nothing is on its way");
+        let dir = temp_dir("after");
+        let ok = launches.open(t0, &p, Editor::Cursor, Terminal::WindowsTerminal, Target::Editor, dir.to_str());
+        assert_eq!(ok.result.via, "cursor");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

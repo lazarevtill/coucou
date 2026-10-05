@@ -171,6 +171,10 @@ class AppState {
   promptContext: PromptContext | null = null;
   droppedFile: { name: string; path: string } | null = null;
   noteMessage: string | null = null;
+  /** The session the island's session view shows; null = the one that matters most. */
+  detailSessionId: string | null = null;
+  /** Until when an Open… counts as on its way (Date.now() ms), per target. */
+  launching: { editor: number | null; terminal: number | null } = { editor: null, terminal: null };
   searchResult: SearchResult | null = null;
   chatHistory: ChatMessage[] = [];
   pendingApproval: ApprovalInfo | null = null;

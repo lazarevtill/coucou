@@ -140,11 +140,16 @@ export const Bridge = {
 };
 
 export interface OpenResult {
-  /** `cursor`, `vscode`, `windowsTerminal`, `shell`, `explorer` or `none`. */
+  /**
+   * `cursor`, `vscode`, `windowsTerminal`, `shell`, `explorer`, `none`, or
+   * `starting`: the same launch is already on its way and was not started again.
+   */
   via: string;
   /** Explorer was used instead of what the settings asked for. */
   fellBack: boolean;
   error: string | null;
+  /** How long, in ms, the launch counts as still starting; null when nothing was started. */
+  startingMs: number | null;
 }
 
 export interface PluginInfo {

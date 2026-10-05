@@ -3,6 +3,8 @@
 
 import { Tracked, Spring, clamp } from "../core/anim";
 import { Bridge, IS_TAURI, onDragDrop } from "../core/bridge";
+import { keepRunning } from "../core/frameloop";
+import { launcherName, openNote, startedUntil } from "../core/launching";
 import {
   EXPANDED_CORNER, EXPANDED_W, NOTCH_W, PANEL_H, PANEL_W,
   ROUNDED_CORNER, VIEW_LAYOUTS, botGlowColor, botGlowOpacity, botPosition, chatPromptHeight,
@@ -116,9 +118,15 @@ export class Island {
       },
       openTerminal: () => {
         const cwd = State.focusTask?.sessionCwd ?? null;
-        void Bridge.openProject("terminal", cwd);
+        void this.open("terminal", cwd);
       },
+      openProject: (target, path) => void this.open(target, path),
       jumpTo: (sessionId) => void this.jump(sessionId),
+      openSession: (sessionId) => {
+        State.detailSessionId = sessionId ?? State.sessions.list()[0]?.id ?? null;
+        Sound.play("blip");
+        this.setView("session");
+      },
       // The ↗ button — same targets as openAgentTarget() on macOS, except that
       // Claude Code goes to the window the session runs in.
       openTarget: () => {
@@ -135,7 +143,7 @@ export class Island {
         if (task.id === CLAUDE_ID) {
           const top = State.sessions.list()[0];
           if (top) void this.jump(top.id, task.sessionCwd ?? null);
-          else void Bridge.openProject("editor", null);
+          else void this.open("editor", null);
         } else if (task.id === "integration_n8n") void Bridge.openN8n();
         else if (urls[task.id]) void Bridge.openUrl(urls[task.id]);
       },
@@ -394,13 +402,31 @@ export class Island {
     State.sessions.markSeen(sessionId);
     State.syncClaude();
     if (outcome === "unknownSession" && editorFallback !== undefined) {
-      void Bridge.openProject("editor", editorFallback);
+      void this.open("editor", editorFallback);
     } else if (outcome === "focused" || outcome === "focusedUnsure") {
       this.collapse();
     } else {
       const note = jumpNote(outcome);
       if (note) this.showNote(note);
     }
+    State.notify();
+  }
+
+  /**
+   * Opens the project in the editor or the terminal and says it is on its way:
+   * an editor can take seconds, and a click that seemed to do nothing used to be
+   * followed by another one — and another window. The app refuses the same
+   * launch while it starts; the button says "Opening…" for that long.
+   */
+  private async open(target: "editor" | "terminal", path: string | null) {
+    const what = launcherName(target, State.settings) ?? (target === "editor" ? "the editor" : "the terminal");
+    const result = await Bridge.openProject(target, path);
+    const until = startedUntil(result, Date.now());
+    State.launching[target] = until;
+    // Let the button come back once the launch has had its time.
+    if (until != null) window.setTimeout(() => State.notify(), until - Date.now() + 50);
+    const note = openNote(result, what);
+    if (note) this.showNote(note);
     State.notify();
   }
 
@@ -799,19 +825,17 @@ export class Island {
     if (UploadSeq.isActive) this.stepSequence();
     this.updateCountdown(nowMs);
 
-    // Nothing is drawn while the island is hidden, so nothing may keep the loop
-    // alive either. This used to read `... || this.engine.busy || State.mode !==
-    // "hidden"`, and engine.busy is permanently true for any state with a
-    // looping animation — breathing, ratelimit sweat, sleeping z's, the search
-    // sweep — so a hidden island went on burning frames in exactly the states it
-    // spends most of its life in. Geometry still has to finish retracting.
-    const settling =
-      this.width.animating || this.height.animating || this.radius.animating;
-    const busy = State.mode === "hidden"
-      ? settling
-      : settling ||
-        !this.botCx.settled || !this.botCy.settled || !this.botSize.settled ||
-        greetingActive || this.engine.busy || UploadSeq.isActive;
+    // See core/frameloop.ts: a hidden island only finishes retracting; an open
+    // one runs while anything on it moves, the ticker included.
+    const busy = keepRunning({
+      mode: State.mode,
+      geometrySettling: this.width.animating || this.height.animating || this.radius.animating,
+      botSettled: this.botCx.settled && this.botCy.settled && this.botSize.settled,
+      greeting: greetingActive,
+      engineBusy: this.engine.busy,
+      uploadActive: UploadSeq.isActive,
+      viewAnimating: this.views.get(State.view)?.animating?.() ?? false,
+    });
 
     if (busy) {
       requestAnimationFrame(this.frame);
