@@ -15,7 +15,7 @@ The Windows app uses native Windows services where the Mac uses Apple APIs. The 
 | Spotify | Windows system media controls | Installed Spotify playback |
 | Wardrobe, desktop Mochi, sounds, shortcuts, displays, recap | Existing Windows frontend and native integration | Native visual and interaction checks |
 | Phone approval and chat | Android phone link with device authentication | Live Android pairing and remote flow |
-| Apple Music | No Windows player integration yet | Implementation and app validation |
+| Apple Music | Native Windows media sessions, independent playback controls, artwork, volume, pill and voice actions | Installed Apple Music playback and supported-control validation |
 | Portfolio and crypto | No Windows port yet | Implementation and read-only account validation |
 | Chat microphone and window context | Local dictation fills the editable prompt; user-selected Windows app name and window title accompany a new chat | Native microphone and window picker click-through; browser URL capture is not implemented |
 | Traditional Chinese and Thai | Not registered in Windows language picker | Complete translations and language registration |

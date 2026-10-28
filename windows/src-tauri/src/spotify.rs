@@ -430,7 +430,7 @@ pub async fn spotify_refresh(app: AppHandle) -> Option<PlayerState> {
     }
     #[cfg(windows)]
     {
-        tauri::async_runtime::spawn_blocking(move || win::refresh(&app)).await.ok().flatten()
+        tauri::async_runtime::spawn_blocking(move || win::refresh(&app, win::Player::Spotify)).await.ok().flatten()
     }
     #[cfg(not(any(target_os = "linux", windows)))]
     {
@@ -449,7 +449,7 @@ pub async fn spotify_control(app: AppHandle, action: String, value: Option<f64>)
     }
     #[cfg(windows)]
     {
-        tauri::async_runtime::spawn_blocking(move || win::control(&app, &action, value)).await.unwrap_or(false)
+        tauri::async_runtime::spawn_blocking(move || win::control(&app, &action, value, win::Player::Spotify)).await.unwrap_or(false)
     }
     #[cfg(not(any(target_os = "linux", windows)))]
     {
@@ -468,7 +468,7 @@ pub async fn spotify_open() -> bool {
     }
     #[cfg(windows)]
     {
-        tauri::async_runtime::spawn_blocking(win::open).await.unwrap_or(false)
+        tauri::async_runtime::spawn_blocking(|| win::open(win::Player::Spotify)).await.unwrap_or(false)
     }
     #[cfg(not(any(target_os = "linux", windows)))]
     {
@@ -485,7 +485,7 @@ pub fn spotify_installed() -> bool {
     }
     #[cfg(windows)]
     {
-        win::installed()
+        win::installed(win::Player::Spotify)
     }
     #[cfg(not(any(target_os = "linux", windows)))]
     {
@@ -500,7 +500,10 @@ pub fn sync(app: &AppHandle, active_integrations: &[String]) {
     #[cfg(target_os = "linux")]
     linux::sync(app, on);
     #[cfg(windows)]
-    win::sync(app, on);
+    {
+        win::sync(app, on, win::Player::Spotify);
+        win::sync(app, active_integrations.iter().any(|id| id == "integration_music"), win::Player::AppleMusic);
+    }
     #[cfg(not(any(target_os = "linux", windows)))]
     let _ = (app, on);
 }
@@ -1352,7 +1355,38 @@ mod linux {
 /// The media session ids Spotify registers: "Spotify.exe" (the installer from
 /// spotify.com) or "SpotifyAB.SpotifyMusic_…!Spotify" (the Microsoft Store).
 pub fn is_spotify_app(app_id: &str) -> bool {
-    app_id.to_ascii_lowercase().contains("spotify")
+    let id = app_id.to_ascii_lowercase();
+    id == "spotify.exe" || id.starts_with("spotifyab.spotifymusic_")
+}
+
+/// The native Apple Music app, never a browser or another media player.
+pub fn is_music_app(app_id: &str) -> bool {
+    let id = app_id.to_ascii_lowercase();
+    id == "applemusic.exe" || id.starts_with("appleinc.applemusicwin_")
+}
+
+#[tauri::command]
+pub async fn music_refresh(app: AppHandle) -> Option<PlayerState> {
+    #[cfg(windows)]
+    { tauri::async_runtime::spawn_blocking(move || win::refresh(&app, win::Player::AppleMusic)).await.ok().flatten() }
+    #[cfg(not(windows))]
+    { let _ = app; None }
+}
+
+#[tauri::command]
+pub async fn music_control(app: AppHandle, action: String, value: Option<f64>) -> bool {
+    #[cfg(windows)]
+    { tauri::async_runtime::spawn_blocking(move || win::control(&app, &action, value, win::Player::AppleMusic)).await.unwrap_or(false) }
+    #[cfg(not(windows))]
+    { let _ = (app, action, value); false }
+}
+
+#[tauri::command]
+pub async fn music_open() -> bool {
+    #[cfg(windows)]
+    { tauri::async_runtime::spawn_blocking(|| win::open(win::Player::AppleMusic)).await.unwrap_or(false) }
+    #[cfg(not(windows))]
+    { false }
 }
 
 /// Windows durations and timeline positions: 100 ns ticks → seconds.
@@ -1421,7 +1455,7 @@ mod win {
         eMultimedia, eRender, IAudioSessionControl2, IAudioSessionManager2, IMMDeviceEnumerator, ISimpleAudioVolume,
         MMDeviceEnumerator,
     };
-    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED};
+    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_MULTITHREADED};
     use windows::Win32::System::Threading::{
         OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
     };
@@ -1443,37 +1477,67 @@ mod win {
         state: PlayerState,
     }
 
-    static SHARED: LazyLock<Mutex<Shared>> =
+    static SPOTIFY: LazyLock<Mutex<Shared>> =
         LazyLock::new(|| Mutex::new(Shared { generation: 0, active: false, wake: None, state: PlayerState::default() }));
+
+    static APPLE: LazyLock<Mutex<Shared>> =
+        LazyLock::new(|| Mutex::new(Shared { generation: 0, active: false, wake: None, state: PlayerState::default() }));
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub enum Player { Spotify, AppleMusic }
+
+    impl Player {
+        fn shared(self) -> &'static Mutex<Shared> { match self { Self::Spotify => &SPOTIFY, Self::AppleMusic => &APPLE } }
+        fn matches(self, id: &str) -> bool { match self { Self::Spotify => is_spotify_app(id), Self::AppleMusic => is_music_app(id) } }
+        fn executable(self) -> &'static str { match self { Self::Spotify => "spotify.exe", Self::AppleMusic => "AppleMusic.exe" } }
+        fn artwork_event(self) -> &'static str { match self { Self::Spotify => ARTWORK_EVENT, Self::AppleMusic => "apple-music-artwork" } }
+        fn emit(self, app: &AppHandle, state: &PlayerState) {
+            use tauri::Emitter;
+            let event = match self { Self::Spotify => STATE_EVENT, Self::AppleMusic => "apple-music" };
+            let _ = app.emit_to(crate::island::WINDOW_LABEL, event, state);
+        }
+    }
+
+    fn apple_entry() -> Option<windows::ApplicationModel::Core::AppListEntry> {
+        let manager = windows::Management::Deployment::PackageManager::new().ok()?;
+        let packages = manager.FindPackagesByUserSecurityId(&windows::core::HSTRING::new()).ok()?;
+        for package in packages {
+            let name = package.Id().ok()?.Name().ok()?.to_string_lossy();
+            if !name.eq_ignore_ascii_case("AppleInc.AppleMusicWin") { continue; }
+            let entries = package.GetAppListEntriesAsync().ok()?.get().ok()?;
+            for entry in entries {
+                if entry.AppUserModelId().is_ok_and(|id| is_music_app(&id.to_string_lossy())) { return Some(entry); }
+            }
+        }
+        None
+    }
 
     /// Covers already read, by the track's art key; the newest last.
     static ART: LazyLock<Mutex<VecDeque<(String, String)>>> = LazyLock::new(|| Mutex::new(VecDeque::new()));
 
     /// WinRT and Core Audio need COM on the calling thread. A thread that has it
     /// already, in either model, keeps it.
-    fn com() {
-        unsafe {
-            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-        }
-    }
+    struct ComGuard(bool);
+    impl Drop for ComGuard { fn drop(&mut self) { if self.0 { unsafe { CoUninitialize(); } } } }
+    fn com() -> ComGuard { ComGuard(unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).is_ok() }) }
 
-    fn current(generation: u64) -> bool {
-        let s = SHARED.lock().unwrap();
+    fn current(player: Player, generation: u64) -> bool {
+        let s = player.shared().lock().unwrap();
         s.active && s.generation == generation
     }
 
     // ── Start / stop ──────────────────────────────────────────────────────────
 
-    pub fn sync(app: &AppHandle, on: bool) {
+    pub fn sync(app: &AppHandle, on: bool, player: Player) {
         let (tx, rx) = mpsc::channel();
         let (old, generation, state) = {
-            let mut s = SHARED.lock().unwrap();
+            let mut s = player.shared().lock().unwrap();
             if s.active == on {
                 return;
             }
             s.active = on;
             s.generation += 1;
-            s.state = PlayerState { installed: installed(), ..PlayerState::default() };
+            s.state = PlayerState { installed: installed(player), ..PlayerState::default() };
             let old = s.wake.take();
             if on {
                 s.wake = Some(tx.clone());
@@ -1487,19 +1551,19 @@ mod win {
             let app = app.clone();
             let spawned = std::thread::Builder::new()
                 .name("coucou-spotify".into())
-                .spawn(move || listen(app, generation, tx, rx));
+                .spawn(move || listen(app, generation, tx, rx, player));
             if let Err(err) = spawned {
                 crate::log::line(format!("spotify: no listener thread: {err}"));
             }
         } else {
-            emit_state(app, &state);
+            player.emit(app, &state);
         }
     }
 
     /// Waits on the session's events and tells the island what changed. Nothing
     /// runs between events.
-    fn listen(app: AppHandle, generation: u64, tx: Sender<Wake>, rx: Receiver<Wake>) {
-        com();
+    fn listen(app: AppHandle, generation: u64, tx: Sender<Wake>, rx: Receiver<Wake>, player: Player) {
+        let _com = com();
         let manager = match Manager::RequestAsync().and_then(|op| op.get()) {
             Ok(m) => m,
             Err(err) => {
@@ -1519,15 +1583,15 @@ mod win {
 
         let mut bound: Option<Bound> = None;
         let mut rebind = true;
-        while current(generation) {
+        while current(player, generation) {
             if rebind {
                 if let Some(b) = bound.take() {
                     b.unbind();
                 }
-                bound = find_session(&manager).and_then(|s| Bound::bind(s, &tx));
+                bound = find_session(&manager, player).and_then(|s| Bound::bind(s, &tx));
                 rebind = false;
             }
-            read_and_emit(&app, generation, bound.as_ref().map(|b| &b.session));
+            read_and_emit(&app, generation, bound.as_ref().map(|b| &b.session), player);
 
             // Events come in bursts (a new track moves everything): one read each.
             let mut stop = false;
@@ -1595,11 +1659,11 @@ mod win {
         })
     }
 
-    fn find_session(manager: &Manager) -> Option<Session> {
+    fn find_session(manager: &Manager, player: Player) -> Option<Session> {
         let sessions = manager.GetSessions().ok()?;
         (0..sessions.Size().ok()?)
             .filter_map(|i| sessions.GetAt(i).ok())
-            .find(|s| s.SourceAppUserModelId().is_ok_and(|id| is_spotify_app(&id.to_string_lossy())))
+            .find(|s| s.SourceAppUserModelId().is_ok_and(|id| player.matches(&id.to_string_lossy())))
     }
 
     // ── Reading ───────────────────────────────────────────────────────────────
@@ -1615,7 +1679,7 @@ mod win {
         repeat: bool,
     }
 
-    fn snapshot(session: &Session) -> windows::core::Result<(Snapshot, MediaProperties)> {
+    fn snapshot(session: &Session, player: Player) -> windows::core::Result<(Snapshot, MediaProperties)> {
         let props = session.TryGetMediaPropertiesAsync()?.get()?;
         let timeline = session.GetTimelineProperties()?;
         let start = timeline.StartTime()?.Duration;
@@ -1626,6 +1690,13 @@ mod win {
             &props.AlbumTitle()?.to_string_lossy(),
             duration,
         );
+        let track = track.map(|mut track| {
+            if player == Player::AppleMusic {
+                track.id = track.id.replacen("spotify:", "apple-music:", 1);
+                track.art_url = track.art_url.map(|url| format!("apple-music:{url}"));
+            }
+            track
+        });
         let info = session.GetPlaybackInfo()?;
         let snapshot = Snapshot {
             playing: info.PlaybackStatus()? == Status::Playing && track.is_some(),
@@ -1641,12 +1712,12 @@ mod win {
         Ok((snapshot, props))
     }
 
-    fn read_and_emit(app: &AppHandle, generation: u64, session: Option<&Session>) {
-        let read = session.and_then(|s| snapshot(s).ok());
-        let volume = read.as_ref().and_then(|_| spotify_volume());
+    fn read_and_emit(app: &AppHandle, generation: u64, session: Option<&Session>, player: Player) {
+        let read = session.and_then(|s| snapshot(s, player).ok());
+        let volume = read.as_ref().and_then(|_| spotify_volume(player));
         let now = now_ms();
         let (state, props) = {
-            let mut s = SHARED.lock().unwrap();
+            let mut s = player.shared().lock().unwrap();
             if !(s.active && s.generation == generation) {
                 return;
             }
@@ -1669,16 +1740,16 @@ mod win {
                 }
                 None => {
                     s.state.running = false;
-                    s.state.installed = installed();
+                    s.state.installed = installed(player);
                     s.state.clear(now);
                     None
                 }
             };
             (s.state.clone(), props)
         };
-        emit_state(app, &state);
+        player.emit(app, &state);
         if let (Some(props), Some(track)) = (props, state.track.as_ref()) {
-            artwork(app, track, &props);
+            artwork(app, track, &props, player);
         }
     }
 
@@ -1687,7 +1758,7 @@ mod win {
     /// The track's cover, as a data URL (the page may not load anything
     /// remote). Read once per track; Spotify sometimes adds the thumbnail a
     /// moment after the title, and the next event brings it then.
-    fn artwork(app: &AppHandle, track: &Track, props: &MediaProperties) {
+    fn artwork(app: &AppHandle, track: &Track, props: &MediaProperties, player: Player) {
         use tauri::Emitter;
         let Some(key) = track.art_url.clone() else { return };
         let cached = ART.lock().unwrap().iter().find(|(k, _)| *k == key).map(|(_, d)| d.clone());
@@ -1703,7 +1774,7 @@ mod win {
                 data
             }
         };
-        let _ = app.emit_to(crate::island::WINDOW_LABEL, ARTWORK_EVENT, Artwork { art_url: key, data_url: data });
+        let _ = app.emit_to(crate::island::WINDOW_LABEL, player.artwork_event(), Artwork { art_url: key, data_url: data });
     }
 
     fn thumbnail(props: &MediaProperties) -> Option<Vec<u8>> {
@@ -1722,8 +1793,8 @@ mod win {
     // ── Volume: Spotify in the Windows mixer ──────────────────────────────────
 
     /// Spotify's audio sessions on the default output.
-    fn spotify_audio() -> Vec<ISimpleAudioVolume> {
-        com();
+    fn spotify_audio(player: Player) -> Vec<ISimpleAudioVolume> {
+        let _com = com();
         let mut out = Vec::new();
         unsafe {
             let Ok(devices) = CoCreateInstance::<_, IMMDeviceEnumerator>(&MMDeviceEnumerator, None, CLSCTX_ALL) else {
@@ -1736,7 +1807,7 @@ mod win {
                 let Ok(control) = sessions.GetSession(i) else { continue };
                 let Ok(control) = control.cast::<IAudioSessionControl2>() else { continue };
                 let pid = control.GetProcessId().unwrap_or(0);
-                if pid != 0 && is_spotify_process(pid) {
+                if pid != 0 && is_spotify_process(pid, player) {
                     if let Ok(volume) = control.cast::<ISimpleAudioVolume>() {
                         out.push(volume);
                     }
@@ -1746,7 +1817,7 @@ mod win {
         out
     }
 
-    fn is_spotify_process(pid: u32) -> bool {
+    fn is_spotify_process(pid: u32, player: Player) -> bool {
         unsafe {
             let Ok(process) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else { return false };
             let mut buf = [0u16; 1024];
@@ -1757,19 +1828,19 @@ mod win {
                 return false;
             }
             let path = String::from_utf16_lossy(&buf[..len as usize]);
-            path.rsplit(['\\', '/']).next().is_some_and(|name| name.eq_ignore_ascii_case("spotify.exe"))
+            path.rsplit(['\\', '/']).next().is_some_and(|name| name.eq_ignore_ascii_case(player.executable()))
         }
     }
 
     /// 0…100, or None while Spotify has no audio session (nothing played yet).
-    fn spotify_volume() -> Option<i32> {
-        let level = unsafe { spotify_audio().first()?.GetMasterVolume().ok()? };
+    fn spotify_volume(player: Player) -> Option<i32> {
+        let level = unsafe { spotify_audio(player).first()?.GetMasterVolume().ok()? };
         Some((level * 100.0).round().clamp(0.0, 100.0) as i32)
     }
 
-    fn set_spotify_volume(percent: f64) -> bool {
+    fn set_spotify_volume(percent: f64, player: Player) -> bool {
         let level = (percent / 100.0).clamp(0.0, 1.0) as f32;
-        let sessions = spotify_audio();
+        let sessions = spotify_audio(player);
         let mut done = false;
         for volume in &sessions {
             done |= unsafe { volume.SetMasterVolume(level, std::ptr::null()).is_ok() };
@@ -1779,32 +1850,32 @@ mod win {
 
     // ── Commands ──────────────────────────────────────────────────────────────
 
-    pub fn refresh(app: &AppHandle) -> Option<PlayerState> {
+    pub fn refresh(app: &AppHandle, player: Player) -> Option<PlayerState> {
         let generation = {
-            let s = SHARED.lock().unwrap();
+            let s = player.shared().lock().unwrap();
             if !s.active {
                 return None;
             }
             s.generation
         };
-        com();
+        let _com = com();
         let manager = Manager::RequestAsync().and_then(|op| op.get()).ok();
-        let session = manager.as_ref().and_then(find_session);
-        read_and_emit(app, generation, session.as_ref());
-        let s = SHARED.lock().unwrap();
+        let session = manager.as_ref().and_then(|m| find_session(m, player));
+        read_and_emit(app, generation, session.as_ref(), player);
+        let s = player.shared().lock().unwrap();
         (s.active && s.generation == generation).then(|| s.state.clone())
     }
 
-    pub fn control(app: &AppHandle, action: &str, value: Option<f64>) -> bool {
+    pub fn control(app: &AppHandle, action: &str, value: Option<f64>, player: Player) -> bool {
         let state = {
-            let s = SHARED.lock().unwrap();
+            let s = player.shared().lock().unwrap();
             if !(s.active && s.state.running) {
                 return false;
             }
             s.state.clone()
         };
-        com();
-        let Some(session) = Manager::RequestAsync().and_then(|op| op.get()).ok().and_then(|m| find_session(&m)) else {
+        let _com = com();
+        let Some(session) = Manager::RequestAsync().and_then(|op| op.get()).ok().and_then(|m| find_session(&m, player)) else {
             return false;
         };
         let v = value.unwrap_or(0.0);
@@ -1831,7 +1902,7 @@ mod win {
             } else {
                 MediaPlaybackAutoRepeatMode::None
             })),
-            "volume" => set_spotify_volume(v),
+            "volume" => set_spotify_volume(v, player),
             _ => false,
         };
         if !done {
@@ -1841,7 +1912,7 @@ mod win {
         let optimistic = matches!(action, "seek" | "shuffle" | "repeat" | "volume");
         if optimistic {
             let state = {
-                let mut s = SHARED.lock().unwrap();
+                let mut s = player.shared().lock().unwrap();
                 match action {
                     "seek" => {
                         if let Some(target) = seek_to {
@@ -1854,7 +1925,7 @@ mod win {
                 }
                 s.state.clone()
             };
-            emit_state(app, &state);
+            player.emit(app, &state);
         }
         true
     }
@@ -1862,7 +1933,12 @@ mod win {
     // ── Launching ─────────────────────────────────────────────────────────────
 
     /// The installer's copy, or the Microsoft Store's (its app alias).
-    pub fn installed() -> bool {
+    pub fn installed(player: Player) -> bool {
+        if player == Player::AppleMusic {
+            let _com = com();
+            static INSTALLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+            return *INSTALLED.get_or_init(|| apple_entry().is_some());
+        }
         let under = |var: &str, rest: &str| std::env::var_os(var).map(|base| PathBuf::from(base).join(rest));
         let desktop = under("APPDATA", r"Spotify\Spotify.exe").is_some_and(|p| p.is_file());
         // An app execution alias is a reparse point that is_file() can't open.
@@ -1873,14 +1949,30 @@ mod win {
 
     /// Spotify's URI scheme brings it forward, or starts it. Without Spotify,
     /// its download page.
-    pub fn open() -> bool {
-        let running = SHARED.lock().unwrap().state.running;
-        if running || installed() {
+    pub fn open(player: Player) -> bool {
+        if player == Player::AppleMusic {
+            let _com = com();
+            if let Some(entry) = apple_entry() { return entry.LaunchAsync().and_then(|op| op.get()).unwrap_or(false); }
+            crate::platform::open_url("https://support.apple.com/guide/music-windows/mus19e7bc658/windows");
+            return false;
+        }
+        let running = player.shared().lock().unwrap().state.running;
+        if running || installed(player) {
             crate::platform::open_url("spotify:");
             return true;
         }
         crate::platform::open_url(DOWNLOAD_URL);
         false
+    }
+
+    #[cfg(test)]
+    pub fn probe_apple_music() -> Result<bool, String> {
+        let _com = com();
+        let entry = apple_entry().ok_or("Apple Music is not installed")?;
+        let id = entry.AppUserModelId().map_err(|e| e.to_string())?;
+        if !is_music_app(&id.to_string_lossy()) { return Err("Unexpected music application".into()); }
+        let manager = Manager::RequestAsync().and_then(|op| op.get()).map_err(|e| e.to_string())?;
+        Ok(find_session(&manager, Player::AppleMusic).is_some())
     }
 }
 
@@ -2075,6 +2167,19 @@ mod tests {
         assert!(is_spotify_app("SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"));
         assert!(!is_spotify_app("Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic"));
         assert!(!is_spotify_app("chrome.exe"));
+        assert!(!is_spotify_app("not-spotify.exe"));
+        assert!(is_music_app("AppleMusic.exe"));
+        assert!(is_music_app("AppleInc.AppleMusicWin_example!App"));
+        assert!(!is_music_app("chrome.exe"));
+        assert!(!is_music_app("Spotify.exe"));
+        assert!(!is_spotify_app("AppleMusic.exe"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires the installed Apple Music app; reads native registration and sessions only"]
+    fn live_apple_music_registration() {
+        println!("Apple Music installed; active media session: {}", win::probe_apple_music().expect("native discovery"));
     }
 
     #[test]

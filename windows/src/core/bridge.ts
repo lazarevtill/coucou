@@ -412,6 +412,9 @@ export const Bridge = {
   chatSend: (query: string, context: ChatContext | null) =>
     callOrThrow<{ text: string }>("chat_send", { query, context }),
   chatReset: () => call<void>("chat_reset"),
+  musicRefresh: () => call<SpotifyState>("music_refresh"),
+  musicControl: (action: string, value?: number) => call<boolean>("music_control", { action, value: value ?? null }),
+  musicOpen: () => call<boolean>("music_open"),
   chatDictationStart: () => callOrThrow<void>("chat_dictation_start"),
   chatDictationStop: (cancel: boolean) => callOrThrow<void>("chat_dictation_stop", { cancel }),
   chatWindows: () => callOrThrow<{ appName: string; title: string }[]>("chat_windows"),

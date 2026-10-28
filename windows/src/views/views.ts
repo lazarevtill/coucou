@@ -30,6 +30,7 @@ import { buildUpdate } from "./update";
 import { buildWhatsNew } from "./whatsnew";
 import { buildSpotifyCard, buildSpotifyPill, type SpotifyPillHost } from "./spotify";
 import { SPOTIFY_ID } from "../core/spotify";
+import { MUSIC_ID, appleMusicPlayer, spotifyPlayer } from "../core/media";
 import { buildWhatsAppCard } from "./whatsapp";
 import { WHATSAPP_ID } from "../core/whatsapp";
 import type { Outfit, OutfitSelection } from "../mochi/wardrobe";
@@ -223,7 +224,8 @@ function buildOverview(actions: ViewActions): ViewHost {
   // Spotify's card and pill are kept and updated in place: the progress bar
   // runs on, and a slider being dragged must not be rebuilt under the pointer.
   const spotifyCard = buildSpotifyCard();
-  let spotifyPill: SpotifyPillHost | null = null;
+  const musicCard = buildSpotifyCard(appleMusicPlayer);
+  let mediaPills: SpotifyPillHost[] = [];
   // WhatsApp's card too: its reply field keeps the draft and the keyboard while messages arrive.
   const whatsappCard = buildWhatsAppCard({
     openSettings: () => actions.openSettingsWindow(),
@@ -239,7 +241,7 @@ function buildOverview(actions: ViewActions): ViewHost {
   let pillIds = "";
   let detailOpen = false;
   let lastFocus: string | null = null;
-  let mode: "ticker" | "card" | "plan" | "diff" | "spotify" | "whatsapp" | null = null;
+  let mode: "ticker" | "card" | "plan" | "diff" | "spotify" | "music" | "whatsapp" | null = null;
   let cardKey = "";
   /** The list row highlighted at the last sync, to scroll only when it moves. */
   let shownSelection: number | null = null;
@@ -389,15 +391,17 @@ function buildOverview(actions: ViewActions): ViewHost {
           }));
         }
         ticker.sync(task);
-      } else if (task && task.id === SPOTIFY_ID) {
+      } else if (task && (task.id === SPOTIFY_ID || task.id === MUSIC_ID)) {
+        const card = task.id === MUSIC_ID ? musicCard : spotifyCard;
+        const selectedMode = task.id === MUSIC_ID ? "music" : "spotify";
         // Its own card for every state: playing, idle, not installed.
-        if (mode !== "spotify") {
+        if (mode !== selectedMode) {
           clear(leftBody);
-          leftBody.append(spotifyCard.el);
-          mode = "spotify";
+          leftBody.append(card.el);
+          mode = selectedMode;
           cardKey = "";
         }
-        spotifyCard.sync();
+        card.sync();
       } else if (task && task.id === WHATSAPP_ID) {
         // Its own card in every state: not linked, no message, conversations, one open.
         if (mode !== "whatsapp") {
@@ -437,18 +441,19 @@ function buildOverview(actions: ViewActions): ViewHost {
       if (pillKey !== pillIds) {
         pillIds = pillKey;
         clear(pills);
-        spotifyPill = null;
+        mediaPills = [];
         for (const t of others) {
-          if (t.id === SPOTIFY_ID) {
-            spotifyPill = buildSpotifyPill(t, () => actions.setFocus(t.id));
-            pills.append(spotifyPill.el);
+          if (t.id === SPOTIFY_ID || t.id === MUSIC_ID) {
+            const playerPill = buildSpotifyPill(t, () => actions.setFocus(t.id), t.id === MUSIC_ID ? appleMusicPlayer : spotifyPlayer);
+            mediaPills.push(playerPill);
+            pills.append(playerPill.el);
           } else {
             pills.append(buildPill(t, actions));
           }
         }
         pruneMiniBots();
       }
-      spotifyPill?.sync();
+      for (const pill of mediaPills) pill.sync();
     },
   };
 }

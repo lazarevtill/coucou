@@ -12,6 +12,8 @@ import { setPaused, startShellLink } from "./island/shellLink";
 import { registerShortcutHandlers } from "./island/shortcuts";
 import { registerVoiceHandlers } from "./island/voice";
 import { applySpotify, registerSpotifyHandlers } from "./island/spotify";
+import { applyMusic, registerMusicHandlers } from "./island/music";
+import { MUSIC_ID } from "./core/media";
 import { registerWhatsAppHandlers } from "./island/whatsapp";
 import { SPOTIFY_ID } from "./core/spotify";
 import { Recap } from "./recap/recap";
@@ -152,12 +154,16 @@ async function main() {
   registerShortcutHandlers(island, () => setPaused(island, false));
   registerVoiceHandlers();
   registerSpotifyHandlers(island);
+  registerMusicHandlers(island);
   registerWhatsAppHandlers(island);
   // New versions: Rust offers the card, the island opens it when nothing else waits.
   await Updates.register(island);
   // Rust may have read Spotify before this page listened: ask once.
   if (State.settings.activeIntegrations.includes(SPOTIFY_ID)) {
     void Bridge.spotifyRefresh().then((s) => s && applySpotify(island, s));
+  }
+  if (State.settings.activeIntegrations.includes(MUSIC_ID)) {
+    void Bridge.musicRefresh().then(s => s && applyMusic(island, s));
   }
 
   // Monday recap: app start (greeting over), an agent starting work, waking up.
