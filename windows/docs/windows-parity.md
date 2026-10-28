@@ -17,7 +17,7 @@ The Windows app uses native Windows services where the Mac uses Apple APIs. The 
 | Phone approval and chat | Android phone link with device authentication | Live Android pairing and remote flow |
 | Apple Music | Native Windows media sessions, independent playback controls, artwork, volume, pill and voice actions | Installed Apple Music playback and supported-control validation |
 | Crypto prices | Coinbase and OKX public quotes, 24-hour charts, currency selection and opt-in movement alerts | Native settings and pill interaction |
-| Portfolio | No Windows port yet | Implementation and read-only account validation |
+| Portfolio | Read-only exchange balances, 16 native wallet networks, USD valuation and partial-data indicators | Real exchange accounts and each public wallet service |
 | Chat microphone and window context | Local dictation fills the editable prompt; user-selected Windows app name and window title accompany a new chat | Native microphone and window picker click-through; browser URL capture is not implemented |
 | Traditional Chinese and Thai | Not registered in Windows language picker | Complete translations and language registration |
 | Apple iPhone/iCloud features | Windows has Android pairing; no iPhone transport equivalent yet | Cross-platform phone protocol and iPhone implementation |
@@ -37,3 +37,11 @@ A synthetic speech fixture on the development laptop completed transcription and
 ## Public crypto prices
 
 Enable Crypto under Settings → Integrations, choose Coinbase or OKX, and save up to eight symbols. Requests run once per minute only while the pill is enabled and Coucou is not paused; history is cached for ten minutes. No account is required. OKX dollar pairs are labelled USDT. Missing prices remain unknown, and each failed source shows its error. Alerts are off by default and measure movement since the last alert or first successful quote. Service endpoints and request limits are in `src-tauri/src/markets/defaults.json`; preferences are stored separately in `markets.json`.
+
+## Portfolio
+
+Enable Portfolio under Settings → Integrations. Binance, OKX, Bybit, Kraken and Coinbase Advanced Trade use read-only keys, tested before saving to the OS credential store. Coinbase uses an ECDSA private key. The settings page never reads a saved key back. Disconnect removes that exchange's credentials.
+
+Public wallet addresses support Bitcoin, Dogecoin, Litecoin, Ethereum, Polygon, BNB Chain, Avalanche, Arbitrum, Optimism, Base, Solana, TRON, XRP, Cardano, Cosmos and NEAR. These show native coin balances only; token, staking and derivative positions are not included. Public services receive the address being checked. Addresses and labels live in `portfolio.json`; account balances remain in memory.
+
+Refresh runs only while the pill is enabled and Coucou is not paused. Each account reports its own failures. Missing prices stay unknown, and a partial total is labelled accordingly. USD prices and seven-day charts use public Coinbase endpoints. Service origins and request limits are in `src-tauri/src/markets/portfolio/defaults.json`.

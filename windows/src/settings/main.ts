@@ -31,6 +31,7 @@ import {
 import { h, clear } from "../views/dom";
 import { startHub, type PageId } from "../hub/shell";
 import { FLOW_PAGE_RENDERERS } from "../hub/pages";
+import { portfolioSection } from "./portfolio";
 import { marketsSection } from "./markets";
 import { connectionsSection } from "./connections";
 import { agentsSection } from "./agents";
@@ -814,6 +815,7 @@ const INTEGRATIONS: IntegrationDef[] = [
   { id: "integration_spotify", name: "Spotify", color: "#1DB954", fields: [] },
   { id: "integration_music", name: "Apple Music", color: "#FA2D48", fields: [] },
   { id: "integration_crypto", name: "Crypto", color: "#F7931A", fields: [] },
+  { id: "integration_portfolio", name: "Portfolio", color: "#FFD700", fields: [] },
 ];
 
 const MAX_ACTIVE = MAX_DECLARED;
@@ -1418,7 +1420,7 @@ async function render() {
     pills: () => [activePillsSection(connected)],
     agents: () => [connectionsSection(() => settings.chatProvider, async (id) => { const next = { ...settings, chatProvider: id }; await Bridge.saveSettings(next); settings = next; }), claudeSection(status), agentsSection(agents), planSection(status)],
     chat: () => [connectionsSection(() => settings.chatProvider, async (id) => { const next = { ...settings, chatProvider: id }; await Bridge.saveSettings(next); settings = next; }), apiSection(hasKey), chatProvidersSection(chatKeys, keyChanged), localSection(customKey)],
-    integrations: () => [integrationsSection(present), marketsSection(), ...whatsappSections(), pluginsSection()],
+    integrations: () => [integrationsSection(present), marketsSection(), portfolioSection(), ...whatsappSections(), pluginsSection()],
     phone: () => [phoneSection(settings.phoneLink ?? false, toggle, settings)],
     shortcuts: () => [shortcutsSection(shortcutReport)],
   };

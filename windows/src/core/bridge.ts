@@ -8,6 +8,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { Settings } from "./state";
 import type { ShellSnapshot, ToastSpec } from "./shell";
 import type { RecapHistory, RecapPrefs } from "../recap/summary";
+import type { PortfolioWallet, PortfolioSettings, PortfolioCredentials } from "./portfolio";
 import type { MarketPrefs } from "./markets";
 import type { SpotifyState } from "./spotify";
 import type { UpdateStatus } from "./update";
@@ -413,6 +414,10 @@ export const Bridge = {
   chatSend: (query: string, context: ChatContext | null) =>
     callOrThrow<{ text: string }>("chat_send", { query, context }),
   chatReset: () => call<void>("chat_reset"),
+  portfolioSettings: () => call<PortfolioSettings>("portfolio_settings"),
+  portfolioSaveWallets: (wallets: PortfolioWallet[]) => invoke<void>("portfolio_save_wallets", { wallets }),
+  portfolioConnect: (exchange: string, credentials: PortfolioCredentials) => invoke<void>("portfolio_connect", { exchange, credentials }),
+  portfolioDisconnect: (exchange: string) => invoke<void>("portfolio_disconnect", { exchange }),
   marketPrefs: () => call<MarketPrefs>("markets_prefs"),
   marketSave: (prefs: MarketPrefs) => invoke<MarketPrefs>("markets_save", { prefs }),
   musicRefresh: () => call<SpotifyState>("music_refresh"),
