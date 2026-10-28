@@ -6,8 +6,8 @@ import { t } from "../../i18n/i18n";
 import { Bridge } from "../../core/bridge";
 import type { VoiceOutput } from "../../core/flow";
 import type { HubContext } from "../shell";
-import { button, card, divider, label, row, segmented, toggle } from "../ui";
-import { modelsControl } from "./flowsettings";
+import { button, card, divider, label, row, segmented, select, toggle } from "../ui";
+import { modelsControl, textEngines } from "./flowsettings";
 
 const ELEVEN = "elevenlabs-api-key";
 /** Where secrets.rs keeps the keys on this OS (same words as Notch → Chat). */
@@ -53,7 +53,8 @@ export async function voicePage(page: HTMLElement, ctx: HubContext) {
     divider(),
     row(t("Parakeet, on your computer"), t("Hears « OK Coucou » here, without the internet."), modelsControl(ctx, () => ctx.navigate("voice"))),
   );
-  if (prefs.voice && !status.hasClaudeKey) {
+  main.append(row(t("Text provider"), null, select(textEngines().filter(([id]) => id !== "off"), prefs.voiceEngine, engine => void ctx.setPrefs(p => (p.voiceEngine = engine)).then(() => ctx.navigate("voice")))));
+  if (prefs.voice && prefs.voiceEngine === "claude" && !status.hasClaudeKey) {
     main.append(h("div", { class: "hub-warn", text: t("Coucou answers with Claude: add your Claude key in Notch → Chat.") }));
   } else if (prefs.voice && !ready) {
     main.append(h("div", { class: "hub-warn", text: t("Download the voice model so Coucou can hear you.") }));
@@ -77,7 +78,7 @@ export async function voicePage(page: HTMLElement, ctx: HubContext) {
 
   page.append(label(t("Privacy")));
   page.append(card(
-    h("div", { class: "hub-note", text: t("Your voice never leaves this computer: Parakeet turns it into text here. Only the words after « OK Coucou » go to Anthropic with your Claude key, and to ElevenLabs if you picked it for the answers.") }),
+    h("div", { class: "hub-note", text: t("Parakeet recognizes speech on this computer. Only words after « OK Coucou » and the data needed to answer go to your selected provider. ElevenLabs receives the answer text if selected. Web search requires the Claude API provider.") }),
     divider(),
     h("div", { class: "hub-note", text: t("An email is never sent by Coucou: your mail app opens with it written, and you send it.") }),
   ));

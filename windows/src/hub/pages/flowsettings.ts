@@ -5,9 +5,15 @@
 import { h, clear } from "../../views/dom";
 import { t } from "../../i18n/i18n";
 import { onEvent } from "../../core/bridge";
-import { FlowBridge, type Edge, type FlowKey, type ModelsStatus } from "../../core/flow";
+import { FlowBridge, type Edge, type FlowKey, type ModelsStatus, type FlowPrefs, type AudioSourceStatus } from "../../core/flow";
+import { audioMeters } from "../audio";
 import type { HubContext } from "../shell";
 import { button, card, divider, keyKeycap, keycap, label, number, row, segmented, select, toggle } from "../ui";
+
+export function textEngines(): [FlowPrefs["summaryEngine"], string][] {
+  return [["claude-code", "Claude Code"], ["codex", "Codex"], ["claude", t("Claude (your key)")],
+    ["ollama", "Ollama"], ["lmstudio", "LM Studio"], ["custom", t("OpenAI-compatible server")], ["off", t("No summary")]];
+}
 
 /** Download / progress / installed, for the voice model. Redraws itself. */
 export function modelsControl(ctx: HubContext, onReady?: () => void): HTMLElement {
@@ -28,7 +34,10 @@ export function modelsControl(ctx: HubContext, onReady?: () => void): HTMLElemen
       el.append(
         button(t("Remove the models"), () => {
           confirming = false;
-          void FlowBridge.removeModels();
+          void FlowBridge.removeModels().catch(error => {
+            draw(ctx.status.models);
+            el.append(h("span", { class: "hub-warn", role: "alert", text: String(error) }));
+          });
         }, "danger", true),
         button(t("Cancel"), () => {
           confirming = false;
@@ -97,9 +106,34 @@ export async function flowSettingsPage(page: HTMLElement, ctx: HubContext) {
 
   // ── Microphone ──
   page.append(label(t("Microphone")));
-  const mics: [string, string][] = [["", t("System default")], ...status.mics.map((m): [string, string] => [m.name, m.name])];
+  const mics: [string, string][] = [["", status.platform === "windows" ? t("Automatic — Windows call device") : t("System default")], ...status.mics.map((m): [string, string] => [m.id, m.name])];
   if (prefs.mic && !mics.some(([id]) => id === prefs.mic)) mics.push([prefs.mic, prefs.mic]);
   page.append(card(row(t("Microphone"), t("The one Coucou listens to for dictation and calls."), select(mics, prefs.mic, (mic) => void ctx.setPrefs((p) => (p.mic = mic))))));
+
+  const speakers: [string, string][] = [["", t("Automatic — Windows call device")], ...status.speakers.map((d): [string, string] => [d.id, d.name])];
+  if (prefs.speakers && !speakers.some(([id]) => id === prefs.speakers)) speakers.push([prefs.speakers, t("Selected device (disconnected)")]);
+  const meters = audioMeters();
+  let testing = false;
+  const testMessage = h("div", { class: "hub-note" });
+  const testButton = button(t("Test audio"), () => {
+    if (testing) { void FlowBridge.stopAudioTest(); return; }
+    testing = true;
+    testButton.textContent = t("Stop");
+    testMessage.textContent = t("Speak and play call audio. This ten-second check saves no recording.");
+    void FlowBridge.testAudio().catch(error => { testMessage.textContent = String(error); }).finally(() => {
+      testing = false;
+      testButton.textContent = t("Test audio");
+    });
+  });
+  const stopMeters = await onEvent<AudioSourceStatus[]>("audio-test-levels", levels => { if (page.isConnected) meters.update(levels); });
+  ctx.onLeave = () => { stopMeters(); void FlowBridge.stopAudioTest(); };
+  page.append(card(
+    row(t("Call playback"), t("Choose the same headphones or speakers used by your call app. Automatic follows the Windows communications device."),
+      select(speakers, prefs.speakers, device => void ctx.setPrefs(p => (p.speakers = device)))),
+    h("div", { class: "hub-note", text: t("Bluetooth headset microphones can reduce playback quality. A laptop or USB microphone with Bluetooth headphones can keep playback clearer. Wired and USB headsets also work.") }),
+    h("div", { class: "hub-note", text: t("Playback is captured digitally, including other apps using the selected output. Automatic devices reconnect during a call; manual choices stay fixed.") }),
+    testButton, testMessage, meters.element,
+  ));
 
   // ── Recognition ──
   page.append(label(t("Recognition")));
@@ -108,11 +142,34 @@ export async function flowSettingsPage(page: HTMLElement, ctx: HubContext) {
     h("div", { class: "hub-note", text: t("Your voice never leaves this computer: Parakeet turns it into text here, and the recording is dropped as soon as it is pasted.") }),
   ));
 
+  const performance = status.performance;
+  const choices: [string, string][] = [["0", t("Automatic (measured on this computer)")]];
+  for (let n = 1; n <= performance.availableThreads; n++) choices.push([String(n), t("CPU · {0} threads", { 0: n })]);
+  const performanceText = h("div", { class: "hub-note" });
+  const updatePerformance = (p: typeof performance) => {
+    performanceText.textContent = p.error ?? (!p.automatic ? t("CPU · {0} threads", { 0: p.threads }) : p.tuning ? t("Measuring speech performance…")
+      : p.measured ? t("Measured choice: CPU · {0} threads", { 0: p.threads })
+      : t("Automatic tuning starts after a dictation of at least three seconds. Audio stays in memory and is never saved for tuning."));
+  };
+  updatePerformance(performance);
+  page.append(card(
+    row(t("Speech performance"), t("This build uses the CPU. Automatic mode measures supported thread counts and remembers the fastest result."),
+      select(choices, String(prefs.speechThreads), value => void ctx.setPrefs(p => (p.speechThreads = Number(value))))),
+    performanceText,
+    button(t("Measure again"), () => void FlowBridge.retuneSpeech().then(() => ctx.refresh()).then(s => updatePerformance(s.performance)), "", true),
+  ));
+  const performanceTimer = window.setInterval(() => {
+    if (page.isConnected && !testing) void FlowBridge.audioStatus().then(sources => { if (sources?.length) meters.update(sources); });
+    if (page.isConnected) void FlowBridge.status().then(s => { if (s) updatePerformance(s.performance); });
+  }, 2000);
+  const previousLeave = ctx.onLeave;
+  ctx.onLeave = () => { window.clearInterval(performanceTimer); previousLeave?.(); };
+
   // ── Notetaker ──
   page.append(label(t("Notetaker")));
   page.append(card(
-    row(t("Summaries"), null, select([["claude", t("Claude (your key)")], ["off", t("No summary")]], prefs.summaryEngine, (engine) => void ctx.setPrefs((p) => (p.summaryEngine = engine)))),
-    h("div", { class: "hub-note", text: t("With Claude, the transcript (never the audio) goes to Anthropic with your key from Notch → Chat.") }),
+    row(t("Summaries"), null, select(textEngines(), prefs.summaryEngine, (engine) => void ctx.setPrefs((p) => (p.summaryEngine = engine)))),
+    h("div", { class: "hub-note", text: t("Only the transcript goes to the provider you choose. Claude Code and Codex use your existing sign-in. Model servers use the address and model configured in Settings → Chat.") }),
     divider(),
     h("div", { class: "hub-note", text: t("Everything stays on this computer. Tell the people in the call that you are recording.") }),
   ));

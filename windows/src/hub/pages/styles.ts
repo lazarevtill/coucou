@@ -6,6 +6,7 @@ import { h, clear } from "../../views/dom";
 import { t } from "../../i18n/i18n";
 import { FlowBridge, type AppStyle, type Style } from "../../core/flow";
 import type { HubContext } from "../shell";
+import { textEngines } from "./flowsettings";
 import { card, divider, iconButton, label, row, select, toggle } from "../ui";
 
 export function styleOptions(): [Style, string][] {
@@ -16,7 +17,7 @@ export async function stylesPage(page: HTMLElement, ctx: HubContext) {
   const status = await ctx.refresh();
   let styles: AppStyle[] = (await FlowBridge.styles()) ?? [];
   const save = () => void FlowBridge.setStyles(styles);
-  page.append(ctx.hero("styles", t("Styles"), t("Claude cleans up what you say, in the style of the app you write in.")));
+  page.append(ctx.hero("styles", t("Styles"), t("Clean up what you say, in the style of the app you write in.")));
 
   const perApp = h("div", {});
   const drawApps = () => {
@@ -38,19 +39,17 @@ export async function stylesPage(page: HTMLElement, ctx: HubContext) {
     });
   };
 
-  const keyNote = h("div", { class: "hub-warn", text: t("The clean-up uses your Claude key. Add it in Notch → Chat.") });
-  keyNote.style.display = status.hasClaudeKey ? "none" : "";
   const defaultRow = row(t("Other apps"), null, select(styleOptions(), status.prefs.defaultStyle, (style) => void ctx.setPrefs((p) => (p.defaultStyle = style))));
   page.append(card(
-    row(t("Clean up with Claude"), t("Removes the “um”, the repeats and the corrections you made while speaking, and fixes the punctuation."),
+    row(t("Clean up dictation"), t("Removes the “um”, the repeats and the corrections you made while speaking, and fixes the punctuation."),
       toggle(status.prefs.cleanup, (on) => {
         void ctx.setPrefs((p) => (p.cleanup = on));
         perApp.classList.toggle("dimmed", !on);
       })),
-    keyNote,
+    row(t("Text provider"), null, select(textEngines().filter(([id]) => id !== "off"), status.prefs.cleanupEngine, engine => void ctx.setPrefs(p => (p.cleanupEngine = engine)))),
     divider(),
     defaultRow,
-    h("div", { class: "hub-note", text: t("With the clean-up on, the text (never your voice) goes to Anthropic with your Claude key. Off, everything stays on this computer.") }),
+    h("div", { class: "hub-note", text: t("Only the text goes to your selected provider. If it takes too long, your original words are pasted. Claude Code and Codex use your existing sign-in.") }),
   ));
 
   // "Add an app": the apps with a window right now.

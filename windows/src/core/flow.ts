@@ -29,13 +29,17 @@ export interface FlowPrefs {
   key: FlowKey;
   edge: Edge;
   mic: string;
+  speakers: string;
   keepDays: number;
   cleanup: boolean;
+  cleanupEngine: FlowPrefs["summaryEngine"];
   defaultStyle: Style;
-  summaryEngine: "claude" | "off";
+  summaryEngine: "claude" | "claude-code" | "codex" | "ollama" | "lmstudio" | "custom" | "off";
+  speechThreads: number;
   openAtLaunch: boolean;
   /** « OK Coucou »: listen for it and answer with Claude. */
   voice: boolean;
+  voiceEngine: FlowPrefs["summaryEngine"];
   voiceOutput: VoiceOutput;
   voiceGender: "female" | "male";
 }
@@ -51,13 +55,26 @@ export interface ModelsStatus {
   downloadMb: number;
 }
 
+export interface SpeechPerformance {
+  provider: "cpu";
+  automatic: boolean;
+  threads: number;
+  availableThreads: number;
+  tuning: boolean;
+  measured: boolean;
+  measurements: { threads: number; milliseconds: number }[];
+  error: string | null;
+}
+
 export interface FlowStatus {
   prefs: FlowPrefs;
   models: ModelsStatus;
+  performance: SpeechPerformance;
   /** "ok", or why the key can't be watched ("wayland", "no-display"). */
   keys: string;
   hasClaudeKey: boolean;
-  mics: { name: string; default: boolean }[];
+  mics: { id: string; name: string; default: boolean }[];
+  speakers: { id: string; name: string; default: boolean }[];
   platform: "windows" | "linux";
   autostarted: boolean;
   userName?: string | null;
@@ -145,12 +162,29 @@ export interface Note {
   todos: Todo[];
   error?: string | null;
   startLocal: string;
+  captureWarning?: string | null;
+}
+
+export interface AudioSourceStatus {
+  source: "microphone" | "playback";
+  device: string;
+  automatic: boolean;
+  connected: boolean;
+  level: number;
+  peak: number;
+  clipping: boolean;
+  received: boolean;
+  error: string | null;
+  warnings?: string[];
+  sampleRate: number;
+  channels: number;
 }
 
 export interface NotesState {
   notes: Note[];
   recording: string | null;
   working: string[];
+  audio: AudioSourceStatus[];
 }
 
 export interface Announcement {
@@ -186,7 +220,7 @@ export const FlowBridge = {
   status: () => call<FlowStatus>("flow_status"),
   /** The Coucou window is on screen (shown, not minimised); `hub-visible` tells when it changes. */
   hubShown: () => call<boolean>("hub_shown"),
-  setPrefs: (prefs: FlowPrefs) => call<void>("flow_set_prefs", { prefs }),
+  setPrefs: (prefs: FlowPrefs) => callOrThrow<void>("flow_set_prefs", { prefs }),
   history: () => call<FlowEntry[]>("flow_history"),
   deleteEntry: (id: string) => call<void>("flow_delete", { id }),
   clear: (everything: boolean) => call<void>("flow_clear", { everything }),
@@ -201,7 +235,11 @@ export const FlowBridge = {
   copy: (text: string) => call<boolean>("flow_copy", { text }),
   pasteAgain: () => call<void>("flow_paste_again"),
   download: () => call<void>("flow_models_download"),
-  removeModels: () => call<void>("flow_models_remove"),
+  removeModels: () => callOrThrow<void>("flow_models_remove"),
+  retuneSpeech: () => call<void>("flow_retune_speech"),
+  testAudio: () => callOrThrow<void>("flow_test_audio"),
+  stopAudioTest: () => call<void>("flow_stop_audio_test"),
+  audioStatus: () => call<AudioSourceStatus[]>("notes_audio_status"),
 
   notes: () => call<NotesState>("notes_state"),
   startNote: () => callOrThrow<string>("notes_start"),

@@ -5,6 +5,7 @@ import { h, clear } from "../../views/dom";
 import { t } from "../../i18n/i18n";
 import { onEvent } from "../../core/bridge";
 import { FlowBridge, clock, speakerColor, type Note, type NotesState } from "../../core/flow";
+import { audioMeters } from "../audio";
 import type { HubContext } from "../shell";
 import { emptyState, glowCard } from "../hero";
 import { button, iconButton, segmented } from "../ui";
@@ -18,7 +19,7 @@ function minutes(note: Note): number {
 }
 
 export async function notesPage(page: HTMLElement, ctx: HubContext) {
-  let state: NotesState = (await FlowBridge.notes()) ?? { notes: [], recording: null, working: [] };
+  let state: NotesState = (await FlowBridge.notes()) ?? { notes: [], recording: null, working: [], audio: [] };
   let selected: string | null = state.recording ?? state.notes[0]?.id ?? null;
   let tab: "summary" | "transcript" = "summary";
   let startError = "";
@@ -33,12 +34,16 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
     ));
   }
 
+  const meters = audioMeters();
+  page.append(meters.element);
+  meters.update(state.audio);
   const listEl = h("div", { class: "hub-notes-list" });
   const detail = h("div", { class: "hub-note-detail" });
   page.append(h("div", { class: "hub-notes" }, listEl, detail));
 
   const reload = async () => {
     state = (await FlowBridge.notes()) ?? state;
+    meters.update(state.audio);
     if (selected && !state.notes.some((n) => n.id === selected)) selected = state.notes[0]?.id ?? null;
     drawList();
     drawDetail();
@@ -97,7 +102,7 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
       if (n.status === "recording") item.querySelector(".m")!.prepend(h("span", { class: "hub-rec", style: "margin-inline-end:6px" }));
       listEl.append(item);
     }
-    listEl.append(h("div", { style: "flex:1" }), h("div", { class: "hub-note", style: "padding:10px;border-radius:10px;background:rgba(255,255,255,0.04)", text: t("Everything stays on this computer. Tell the people in the call that you are recording.") }));
+    listEl.append(h("div", { style: "flex:1" }), h("div", { class: "hub-note", style: "padding:10px;border-radius:10px;background:rgba(255,255,255,0.04)", text: t("Audio and transcripts are stored on this computer. Summaries send text to the provider selected in Flow Settings. Tell the people in the call that you are recording.") }));
   }
 
   function drawDetail() {
@@ -152,6 +157,9 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
       tools,
       confirm,
     );
+
+    if (note.captureWarning) detail.append(h("div", { class: "hub-warn", text: note.captureWarning }));
+    if (note.error && note.status !== "failed") detail.append(h("div", { class: "hub-warn", text: note.error }));
 
     // The people, renamed with a click.
     if (note.speakers.length) {
@@ -251,6 +259,7 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
   // The recording's clock in the list.
   const timer = window.setInterval(() => {
     if (!state.recording) return;
+    void FlowBridge.audioStatus().then(sources => { if (sources && page.isConnected) meters.update(sources); });
     const b = listEl.querySelector<HTMLElement>("[data-ticking]");
     if (!b) return;
     const next = recordButton();
