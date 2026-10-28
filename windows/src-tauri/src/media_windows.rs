@@ -543,6 +543,15 @@ pub fn probe_apple_music() -> Result<bool, String> {
     let id = entry.AppUserModelId().map_err(|e| e.to_string())?;
     if !crate::apple_music::matches(&id.to_string_lossy()) { return Err("Unexpected music application".into()); }
     let manager = Manager::RequestAsync().and_then(|op| op.get()).map_err(|e| e.to_string())?;
+    let sessions = manager.GetSessions().map_err(|e| e.to_string())?;
+    for index in 0..sessions.Size().unwrap_or(0) {
+        let session = sessions.GetAt(index).map_err(|e| e.to_string())?;
+        let id = session.SourceAppUserModelId().map_err(|e| e.to_string())?.to_string_lossy();
+        if !Player::AppleMusic.matches(&id) { continue; }
+        let info = session.GetPlaybackInfo().map_err(|e| e.to_string())?;
+        let props = session.TryGetMediaPropertiesAsync().and_then(|op| op.get()).map_err(|e| e.to_string())?;
+        println!("Apple Music session {index}: status={} title_chars={}", info.PlaybackStatus().map_err(|e| e.to_string())?.0, props.Title().map_err(|e| e.to_string())?.len());
+    }
     if let Some(session) = find_session(&manager, Player::AppleMusic) {
         let (state, _) = snapshot(&session, Player::AppleMusic).map_err(|e| e.to_string())?;
         println!("Apple Music native state: track={} playing={} position={:.1}s volume={:?}", state.track.is_some(), state.playing, state.position, player_volume(Player::AppleMusic));
@@ -601,7 +610,8 @@ fn live_apple_music_controls_quiet() {
             let _ = set_player_volume(5.0, Player::AppleMusic);
         }
     }
-    let _restore = Restore { session: session.clone(), playing: original.playing, position: original.track.as_ref().map(|_| original.position) };
+    let was_playing = session.GetPlaybackInfo().and_then(|info| info.PlaybackStatus()).is_ok_and(|status| status == Status::Playing);
+    let _restore = Restore { session: session.clone(), playing: was_playing, position: original.track.as_ref().map(|_| original.position) };
     let (original, properties) = if original.track.is_none() {
         // The user authorized playback testing. A dormant native session may publish
         // its track only after playback starts; the guard restores its initial state.
