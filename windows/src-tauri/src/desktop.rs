@@ -598,6 +598,13 @@ async fn finish_drop(app: &AppHandle, d: &Desktop, pos: (f64, f64), from: Source
     let home = island_anchor(app, d)
         .map(|(cx, top, scale)| logic::home_zone(cx, top, scale).contains(center))
         .unwrap_or(false);
+    // Match the Mac: dragging out of the island onto an app attaches that
+    // window. Moving an already installed desktop Mochi only changes his spot.
+    #[cfg(windows)]
+    let attaching = !home && from == Source::Island && crate::chat_input::offer_dropped_window(center.0, center.1);
+    #[cfg(not(windows))]
+    let attaching = false;
+    let home = home || attaching;
     {
         let mut i = d.inner.lock().unwrap();
         i.carry = None;
@@ -620,6 +627,7 @@ async fn finish_drop(app: &AppHandle, d: &Desktop, pos: (f64, f64), from: Source
         remember_spot(app, d, spot, true);
     }
     let _ = app.emit_to(island::WINDOW_LABEL, "desktop-mochi-dropped", Dropped { from, home });
+    if attaching { let _ = app.emit_to(island::WINDOW_LABEL, "shortcut", "attachFrontWindow"); }
 }
 
 // ── Poll (Windows) ────────────────────────────────────────────────────────────

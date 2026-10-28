@@ -452,6 +452,36 @@ pub fn front_context_window() -> Option<(isize, u32)> {
         .map(|(handle, pid, _, _)| (handle, pid))
 }
 
+/// The first other window under a dropped Mochi. An unreadable top window
+/// blocks attachment instead of exposing another application's window behind it.
+pub fn context_window_at_point(x: f64, y: f64) -> Option<(isize, u32)> {
+    use ::windows::Win32::{Foundation::RECT, Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED},
+        UI::WindowsAndMessaging::{GetTopWindow, GetWindowRect, GW_HWNDNEXT}};
+    if !x.is_finite() || !y.is_finite() { return None; }
+    unsafe {
+        let mut window = GetTopWindow(None).ok()?;
+        for _ in 0..512 {
+            let mut pid = 0;
+            GetWindowThreadProcessId(window, Some(&mut pid));
+            let mut rect = RECT::default();
+            let mut cloaked = 0u32;
+            let _ = DwmGetWindowAttribute(window, DWMWA_CLOAKED, (&mut cloaked as *mut u32).cast(), std::mem::size_of::<u32>() as u32);
+            if pid != std::process::id() && IsWindowVisible(window).as_bool() && !IsIconic(window).as_bool()
+                && cloaked == 0 && GetWindowRect(window, &mut rect).is_ok()
+                && x >= f64::from(rect.left) && x < f64::from(rect.right) && y >= f64::from(rect.top) && y < f64::from(rect.bottom) {
+                let mut class = [0u16; 128];
+                let len = GetClassNameW(window, &mut class);
+                if matches!(String::from_utf16_lossy(&class[..len as usize]).as_str(), "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd") { return None; }
+                let target = window.0 as isize;
+                return context_windows().into_iter().find(|(handle, owner, _, _)| *handle == target && *owner == pid)
+                    .map(|(handle, pid, _, _)| (handle, pid));
+            }
+            window = GetWindow(window, GW_HWNDNEXT).ok()?;
+        }
+    }
+    None
+}
+
 pub fn selected_window_context(handle: isize, expected_pid: u32) -> Result<(String, String, Option<String>), String> {
     // Re-enumerating verifies that the handle still belongs to the offered
     // process and returns the current title after a possible tab change.

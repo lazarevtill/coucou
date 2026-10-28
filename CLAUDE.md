@@ -35,6 +35,8 @@ Chat window attachments use short-lived, single-use selections in `chat_input.rs
 
 The Windows Attach front window shortcut records its target before the island opens. Its separate single-use offer expires after ten seconds. Keep Windows/Linux shortcut availability and native/frontend contract assertions aligned.
 
+On Windows, dragging Mochi from the island onto an app uses the same single-use context offer. `context_window_at_point` respects window stacking and refuses to select behind an unreadable top window. Moving Mochi after placing him on the desktop only changes his position.
+
 `cli_agents/attachments.rs` shares image and PDF handling between Claude Code and Codex. Windows renders PDFs locally with bounded page counts, size and time. Keep native attachment history separate from provider-neutral text history. Codex temporary files are private and scoped to the supervised request; Claude images travel over stdin.
 
 `chat_images.rs` and `views/chat-images.ts` provide explicit screenshot pasting with bounded PNG storage and preview. The capture button launches the verified Microsoft Snipping Tool package. Capture and annotation stay in that native app; Coucou never polls the clipboard or sends an attachment without Send.

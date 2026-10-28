@@ -73,7 +73,9 @@ After dropping a file, choose Send by email, then Share. Windows opens its nativ
 
 Chat's window button lists visible app titles. Selecting one authorizes a single bounded read of that window's browser navigation bar through Windows accessibility APIs. It never focuses the browser, uses the clipboard or traverses page documents. HTTP(S) addresses are attached only when unambiguous; embedded username/password fields are removed. Unsupported browsers, hidden address bars and unavailable accessibility providers attach the app and title alone. The context chip previews the address before Send, and leaving chat discards a late attachment result.
 
-Ctrl+Alt+F attaches the front window directly on Windows. The native shortcut records the window before opening the island; the selection is single-use and expires after ten seconds. It starts a fresh chat and previews the same context without sending. The shortcut can be changed or disabled in Settings and remains unavailable on Linux. Dragging desktop Mochi onto a window is not implemented.
+Ctrl+Alt+F attaches the front window directly on Windows. The native shortcut records the window before opening the island; the selection is single-use and expires after ten seconds. It starts a fresh chat and previews the same context without sending. The shortcut can be changed or disabled in Settings and remains unavailable on Linux.
+
+Dragging Mochi from the island onto an application window selects that window for the same context preview. An unreadable top window blocks attachment instead of selecting one behind it. Dropping on the desktop places Mochi there; moving him once he is on the desktop only changes his position. Native drag targeting and shortcut activation still require GUI verification.
 
 ## Screenshots
 

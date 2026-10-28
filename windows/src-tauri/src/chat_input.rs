@@ -144,6 +144,13 @@ pub fn offer_front_window() {
 }
 
 #[cfg(windows)]
+pub fn offer_dropped_window(x: f64, y: f64) -> bool {
+    let Some((handle, pid)) = crate::platform::context_window_at_point(x, y) else { return false };
+    *FRONT.lock().unwrap() = Some(WindowOffer { id: crate::flow::text::new_id(), handle, pid, at: Instant::now() });
+    true
+}
+
+#[cfg(windows)]
 fn take_front_window() -> Result<WindowOffer, String> {
     FRONT.lock().unwrap().take().filter(|offer| offer.at.elapsed() < Duration::from_secs(10))
         .ok_or_else(|| "Use Attach front window while the window you want is in front.".into())
