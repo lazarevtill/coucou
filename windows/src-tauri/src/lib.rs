@@ -3,6 +3,7 @@
 mod agent_hooks;
 mod agents;
 mod chat;
+mod chat_input;
 mod claude;
 mod cli_agents;
 mod text_ai;
@@ -1156,6 +1157,7 @@ pub fn run() {
         .manage(flyout::Flyout::default())
         .manage(plugins::runner::Supervisor::default())
         .manage(Chat::default())
+        .manage(Arc::new(chat_input::ChatInput::default()))
         .manage(cli_agents::CliChat::default())
         .manage(shortcuts::Registry::default())
         .manage(recap::load())
@@ -1296,6 +1298,9 @@ pub fn run() {
             whatsapp::whatsapp_test,
             whatsapp::whatsapp_install,
             flow::flow_status,
+            chat_input::chat_dictation_start,
+            chat_input::chat_dictation_stop,
+            chat_input::chat_windows,
             flow::flow_set_prefs,
             flow::flow_retune_speech,
             flow::flow_test_audio,
@@ -1410,6 +1415,7 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 phone_link::stop_on_exit(app);
                 notes::shutdown(app);
+                app.state::<Arc<chat_input::ChatInput>>().shutdown();
                 speech::performance::shutdown();
                 // GOWA started by Coucou stops with it; the conversations were only in memory.
                 whatsapp::shutdown();

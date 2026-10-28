@@ -418,6 +418,17 @@ fn top_windows() -> Vec<(isize, u32, String)> {
     list
 }
 
+/// Titles only, enumerated on an explicit chat attachment click.
+pub fn context_windows() -> Vec<(String, String)> {
+    let processes = process_table();
+    top_windows().into_iter().filter(|(_, pid, _)| *pid != std::process::id())
+        .filter_map(|(_, pid, title)| {
+            let process = processes.get(&pid)?;
+            let name = process.exe.trim_end_matches(".exe").to_string();
+            Some((name, title.chars().take(512).collect()))
+        }).take(100).collect()
+}
+
 /// The first of `pids` that owns a window.
 pub fn first_with_window(pids: &[u32]) -> Option<u32> {
     let windows = top_windows();

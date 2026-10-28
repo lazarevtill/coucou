@@ -412,6 +412,9 @@ export const Bridge = {
   chatSend: (query: string, context: ChatContext | null) =>
     callOrThrow<{ text: string }>("chat_send", { query, context }),
   chatReset: () => call<void>("chat_reset"),
+  chatDictationStart: () => callOrThrow<void>("chat_dictation_start"),
+  chatDictationStop: (cancel: boolean) => callOrThrow<void>("chat_dictation_stop", { cancel }),
+  chatWindows: () => callOrThrow<{ appName: string; title: string }[]>("chat_windows"),
   /**
    * The models a provider offers, for the picker in the chat view. Rust asks
    * the provider only when it has a key (or a server address).

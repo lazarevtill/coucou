@@ -17,7 +17,7 @@ The Windows app uses native Windows services where the Mac uses Apple APIs. The 
 | Phone approval and chat | Android phone link with device authentication | Live Android pairing and remote flow |
 | Apple Music | No Windows player integration yet | Implementation and app validation |
 | Portfolio and crypto | No Windows port yet | Implementation and read-only account validation |
-| Chat microphone and window context | No complete Windows interaction yet | Implementation and native validation |
+| Chat microphone and window context | Local dictation fills the editable prompt; user-selected Windows app name and window title accompany a new chat | Native microphone and window picker click-through; browser URL capture is not implemented |
 | Traditional Chinese and Thai | Not registered in Windows language picker | Complete translations and language registration |
 | Apple iPhone/iCloud features | Windows has Android pairing; no iPhone transport equivalent yet | Cross-platform phone protocol and iPhone implementation |
 

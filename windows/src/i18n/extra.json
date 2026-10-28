@@ -6442,6 +6442,32 @@
       "id": "Chat menggunakan akun dan penyedia di komputer ini. Kredensial tetap di sini. Batas penggunaan dan biaya penyedia berlaku.",
       "de": "Der Chat nutzt die Anmeldungen und Anbieter auf diesem Computer. Die Zugangsdaten bleiben hier. Es gelten die Nutzungslimits und Gebühren deines Anbieters.",
       "tr": "Sohbet bu bilgisayardaki oturumları ve sağlayıcıları kullanır. Kimlik bilgileri burada kalır. Sağlayıcınızın kullanım sınırları ve ücretleri geçerlidir."
+    },
+    "Attach a window title": {
+      "zh-Hans": "附加窗口标题",
+      "hi": "विंडो शीर्षक जोड़ें",
+      "es": "Adjuntar un título de ventana",
+      "ar": "إرفاق عنوان نافذة",
+      "fr": "Joindre le titre d’une fenêtre",
+      "bn": "উইন্ডোর শিরোনাম সংযুক্ত করুন",
+      "pt-BR": "Anexar um título de janela",
+      "ru": "Прикрепить заголовок окна",
+      "id": "Lampirkan judul jendela",
+      "de": "Fenstertitel anhängen",
+      "tr": "Pencere başlığı ekle"
+    },
+    "Transcribing…": {
+      "zh-Hans": "正在转写…",
+      "hi": "लिप्यंतरण हो रहा है…",
+      "es": "Transcribiendo…",
+      "ar": "جارٍ التفريغ النصي…",
+      "fr": "Transcription…",
+      "bn": "লিপ্যন্তর করা হচ্ছে…",
+      "pt-BR": "Transcrevendo…",
+      "ru": "Распознавание речи…",
+      "id": "Mentranskripsikan…",
+      "de": "Wird transkribiert…",
+      "tr": "Yazıya dökülüyor…"
     }
   }
 }

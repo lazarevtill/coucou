@@ -2,6 +2,8 @@
 // Drawn on a 24×24 grid so they read at the same optical size.
 
 export const ICONS = {
+  microphone: "M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM5 10v2a7 7 0 0 0 6 6.93V22h2v-3.07A7 7 0 0 0 19 12v-2h-2v2a5 5 0 0 1-10 0v-2H5z",
+  window: "M3 3h18v18H3V3zm2 2v3h14V5H5zm0 5v9h14v-9H5z",
   // house.fill
   house: "M12 3.2 2.8 10.6V21h6.6v-5.4h5.2V21h6.6V10.6L12 3.2z",
   // bubble.left.fill

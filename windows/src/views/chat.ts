@@ -9,6 +9,7 @@
 import { h, svg, clear } from "./dom";
 import { ICONS } from "./icons";
 import { renderMarkdown } from "./markdown";
+import { chatInputTools } from "./chat-input";
 import { Bridge, onEvent, type ChatContext, type ModelInfo } from "../core/bridge";
 import {
   activeModel, pickModel, providerDef, visibleProviders, withModel, type ProviderDef,
@@ -211,7 +212,20 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     spellcheck: "false",
   }) as HTMLInputElement;
   const send = h("button", { class: "send-btn", title: tl(STRINGS.send) }, svg(ICONS.arrowUp, 11));
-  const bar = h("div", { class: "chat-bar" }, input, send);
+  const tools = chatInputTools(text => {
+    input.value = [input.value.trim(), text.trim()].filter(Boolean).join(" ");
+    input.disabled = false;
+    input.focus();
+  }, async context => {
+    await Bridge.chatReset();
+    State.droppedFile = null;
+    State.promptContext = { kind: "window", ...context };
+    State.chatHistory = [];
+    renderedCount = -1;
+    State.notify();
+    onHeightChange();
+  }, onHeightChange);
+  const bar = h("div", { class: "chat-bar" }, input, tools.controls, send);
 
   const modelDot = h("i", { class: "model-dot" });
   const modelName = h("span", { class: "model-name" });
@@ -229,7 +243,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     body.classList.toggle("picking", picker.isOpen);
     drawModelButton();
   });
-  body.append(chipRow, log, picker.el, modelRow, bar);
+  body.append(chipRow, log, picker.el, modelRow, bar, tools.details);
 
   const el = h("div", { class: "view" }, h("div", { class: "card wash chat-card" }, body));
   (el.querySelector(".card") as HTMLElement).style.setProperty("--wash", "rgba(99,102,241,0.5)");
@@ -274,7 +288,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
 
   async function submit() {
     const query = input.value.trim();
-    if (!query || sending) return;
+    if (!query || sending || tools.active) return;
     if (picker.isOpen) picker.close();
     input.value = "";
     sending = true;
@@ -289,8 +303,9 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     onHeightChange();
 
     const file = State.droppedFile;
-    const context: ChatContext | null =
-      State.chatHistory.length === 1 && file ? { kind: "file", name: file.name, path: file.path } : null;
+    const attached = State.promptContext?.kind === "window" ? State.promptContext : null;
+    const context: ChatContext | null = State.chatHistory.length === 1
+      ? file ? { kind: "file", name: file.name, path: file.path } : attached : null;
 
     try {
       const reply = await Bridge.chatSend(query, context);
@@ -341,7 +356,8 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     el,
     sync() {
       const file = State.droppedFile;
-      const wantChip = file?.name ?? "";
+      const context = State.promptContext?.kind === "window" ? State.promptContext : null;
+      const wantChip = file?.name ?? (context ? `${context.appName} · ${context.title}` : "");
       if (chipRow.dataset.label !== wantChip) {
         chipRow.dataset.label = wantChip;
         clear(chipRow);
@@ -360,10 +376,11 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
 
       // Leaving the chat folds the picker away.
       if (State.view !== "prompt" && picker.isOpen) picker.close();
+      tools.sync(State.view === "prompt", sending);
       drawModelButton();
 
       input.placeholder = t(State.chatHistory.length === 0 ? STRINGS.placeholderFirst : STRINGS.placeholderNext);
-      input.disabled = sending;
+      input.disabled = sending || tools.active;
     },
     focus() {
       input.focus();

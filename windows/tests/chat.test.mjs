@@ -31,6 +31,7 @@ beforeEach(() => {
   State.stateOverride = null;
   State.view = "prompt";
   State.droppedFile = null;
+  State.promptContext = null;
   view = buildPrompt(() => {});
   view.sync();
 });
@@ -150,3 +151,49 @@ for (const [id, name] of [["claude-code", "Claude Code"], ["codex", "Codex"]]) {
     assert.equal($(".model-btn").disabled, false);
   });
 }
+
+test("microphone input is editable and never sends itself", async () => {
+  $(".chat-input").value = "Please summarize";
+  $(".chat-mic").fire("click");
+  await flush();
+  assert.equal(sent("chat_dictation_start").length, 1);
+  $(".send-btn").fire("click");
+  assert.equal(sent("chat_send").length, 0);
+  emit("chat-dictation", { phase: "recording", level: 0.3, device: "USB microphone", text: null, error: null });
+  assert.equal($(".chat-mic-level").value, 0.3);
+  $(".chat-mic").fire("click");
+  await flush();
+  assert.deepEqual(sent("chat_dictation_stop").at(-1), { cancel: false });
+  emit("chat-dictation", { phase: "idle", level: 0, device: "USB microphone", text: "the meeting", error: null });
+  assert.equal($(".chat-input").value, "Please summarize the meeting");
+  assert.equal(sent("chat_send").length, 0);
+});
+
+test("leaving chat cancels microphone capture and ignores a late transcript", async () => {
+  $(".chat-input").value = "draft";
+  $(".chat-mic").fire("click");
+  await flush();
+  State.view = "overview";
+  view.sync();
+  await flush();
+  assert.deepEqual(sent("chat_dictation_stop").at(-1), { cancel: true });
+  emit("chat-dictation", { phase: "idle", level: 0, device: "Mic", text: "late", error: null });
+  assert.equal($(".chat-input").value, "draft");
+});
+
+test("a selected window title starts a fresh context and waits for Send", async () => {
+  answers.chat_windows = [{ appName: "Code", title: "notes.md" }];
+  $(".chat-window").fire("click");
+  await flush();
+  const list = $(".chat-window-list");
+  list.value = "0";
+  list.onchange();
+  await flush();
+  assert.deepEqual(State.promptContext, { kind: "window", appName: "Code", title: "notes.md" });
+  assert.equal(sent("chat_send").length, 0);
+  answers.chat_send = { text: "OK" };
+  $(".chat-input").value = "Help with this";
+  $(".send-btn").fire("click");
+  await flush();
+  assert.deepEqual(sent("chat_send")[0].context, State.promptContext);
+});
