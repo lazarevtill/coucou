@@ -13,7 +13,11 @@ API credentials are optional separate chat providers. A CLI signed in only with 
 
 ## Chat and project work
 
-Chat answers questions and accepts UTF-8 text attachments up to 200 KB. It retains conversation context and offers a Stop control. The displayed provider identifies which account is answering. The native CLI chooses its default model; Coucou does not pin a model ID. Chat has no shell, project-editing, MCP or web-search tools. Images and PDFs need an appropriate API provider.
+Chat answers questions and accepts UTF-8 text attachments up to 200 KB, PNG/JPEG/GIF/WebP images up to 5 MiB, and PDFs up to 20 MiB and twenty pages on Windows. It retains conversation context and offers a Stop control. The displayed provider identifies which account is answering. The native CLI chooses its default model; Coucou does not pin a model ID. Chat has no shell, project-editing, MCP or web-search tools.
+
+Both CLI providers receive the same image content. Windows renders every PDF page locally, in order, at a maximum long edge of 1,600 pixels. A document exceeding the page, image or rendering limits is rejected as a whole. Dense text can be less legible after rendering; use a text attachment for exact text analysis. Limits live in `src-tauri/src/cli_agents/attachment-limits.json`.
+
+Claude Code receives image blocks over stdin. Codex receives private temporary image files through its official image option; those files are removed when the request completes, fails or is stopped. Abrupt process termination can leave temporary files in Coucou's private data directory. Attachments remain available for follow-up questions with the same provider. Switching providers retains the plain conversation without transferring attachment bytes; start a new chat to attach the file to the other provider.
 
 For coding, enter an existing absolute **Project folder** and choose **Open project** beside either agent. The full official agent opens in its own terminal, in that folder. Its own project instructions, skills, MCP configuration, model picker and session controls remain available. Claude Code uses manual permission mode; Codex uses on-request approval and a workspace-write sandbox. Coucou never selects bypass mode or approves a tool on its own.
 
@@ -55,6 +59,6 @@ The explicit live checks use installed, signed-in accounts and consume a small a
 cargo test --lib cli_agents::tests::live_ -- --ignored --nocapture
 ```
 
-Automated coverage includes subscription detection, completed versus partial/error output, timeouts, attachment history, no-key provider selection, cancellation controls, independent agent sessions and approval handback. [Integration review](integration-review.md) records observed verification and remaining gates.
+Automated coverage includes subscription detection, completed versus partial/error output, timeouts, attachment history and provider boundaries, native PDF rendering, temporary-file cleanup, no-key provider selection, cancellation controls, independent agent sessions and approval handback. Live visual checks ask each CLI to identify a synthetic image and read distinct project names on both pages of a synthetic PDF. [Integration review](integration-review.md) records observed verification and remaining gates.
 
-Project launch from Settings is implemented on Windows. Linux returns an instruction to open the agent in a terminal; native Linux and macOS behavior are not validated by the Windows checks. CLI subscription chat is not exposed to the phone-link chat service. The proactive assistant in [agent-design.md](agent-design.md) is a design document, not an implemented feature.
+Project launch from Settings is implemented on Windows. Linux returns an instruction to open the agent in a terminal; native Linux and macOS behavior are not validated by the Windows checks. Phone-link CLI chat requires a separate opt-in. The proactive assistant in [agent-design.md](agent-design.md) is a design document, not an implemented feature.

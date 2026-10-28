@@ -722,6 +722,7 @@ name = "coucou"
 version = "0.5.3"
 dependencies = [
  "arboard",
+ "base64 0.23.1",
  "cpal",
  "dbus",
  "futures-util",

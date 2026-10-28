@@ -33,6 +33,8 @@ Speech and call recording use `windows/src-tauri/src/speech/` and `notes/`. Flow
 
 Chat window attachments use short-lived, single-use selections in `chat_input.rs`. `platform/window_context.rs` reads only the chosen browser's navigation chrome, excludes document/password controls, and returns only an unambiguous web address. Preview context before Send; do not add background browser collection.
 
+`cli_agents/attachments.rs` shares image and PDF handling between Claude Code and Codex. Windows renders PDFs locally with bounded page counts, size and time. Keep native attachment history separate from provider-neutral text history. Codex temporary files are private and scoped to the supervised request; Claude images travel over stdin.
+
 ## Rules
 - Keep commits small, cohesive and readable, with clear plain messages. Once commit and push are authorized, push all task commits to the intended branch and verify the remote SHA. Keep upstream merges separate from subsequent feature and fix commits.
 - Swift 6, SwiftUI + AppKit. No third-party dependencies unless truly unavoidable. The character is drawn in code (`Canvas` + `TimelineView`), no Rive/Lottie/images.

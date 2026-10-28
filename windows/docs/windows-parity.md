@@ -5,6 +5,7 @@ The Windows app uses native Windows services where the Mac uses Apple APIs. The 
 | Workflow | Windows implementation | Verification still needed |
 | --- | --- | --- |
 | Claude Code and Codex sign-in, chat, projects | Official installed CLIs and existing sign-ins; equal connection controls | Native click-through and hook approval round trip |
+| CLI image and PDF chat | Same visual content for both agents; Windows renders complete PDFs locally with limits | Native file drop and chat click-through; signed-in image/PDF checks use synthetic fixtures |
 | Agent activity, diffs, permissions, questions, terminal focus | Hooks, tray, island and native Windows focus | End-to-end session approval on installed build |
 | Cloud and local model chat | API providers, Ollama, LM Studio, configured model servers | Real accounts and local servers beyond CLI checks |
 | Flow dictation, dictionary, snippets, styles and statistics | Parakeet, Windows keyboard handling, local history and selectable cleanup provider | Native microphone and paste in third-party apps |

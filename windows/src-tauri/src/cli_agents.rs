@@ -14,6 +14,7 @@ use tauri::State;
 
 use crate::{chat, platform};
 use chat::{Chat, ChatContext, ChatReply, ModelInfo};
+mod attachments;
 
 const MAX_OUTPUT: usize = 8 * 1024 * 1024;
 const MAX_PROMPT: usize = 1024 * 1024;
@@ -247,12 +248,17 @@ fn answer(agent: Agent, output: Captured) -> Result<String, String> {
     if !output.success { return Err(format!("{} could not complete the reply. Check its sign-in and usage limit in Settings → Agents.", agent.name())); }
     let text = match agent {
         Agent::Claude => {
-            let value: Value = serde_json::from_slice(&output.stdout).map_err(|_| "Claude Code returned an unreadable reply.")?;
+            // Both JSON and stream-JSON are official output modes. Parse the
+            // whole stream, rejecting malformed/truncated events, then require
+            // a successful terminal result in either envelope.
+            let events = serde_json::Deserializer::from_slice(&output.stdout).into_iter::<Value>()
+                .collect::<Result<Vec<_>, _>>().map_err(|_| "Claude Code returned an unreadable reply.")?;
+            let value = events.last().ok_or("Claude Code returned no result.")?;
             // JSON output can contain the complete event array. Only its final
             // result is an answer; an assistant event alone is not completion.
             let result = match value.as_array() {
                 Some(events) => events.last().ok_or("Claude Code returned no result.")?,
-                None => &value,
+                None => value,
             };
             if result.get("type").and_then(Value::as_str) != Some("result")
                 || result.get("subtype").and_then(Value::as_str) != Some("success")
@@ -288,7 +294,7 @@ fn user_message(query: &str, context: Option<&ChatContext>) -> Result<String, St
         match context {
             ChatContext::File { name, path } => {
                 let bytes = read_file(Path::new(path))?;
-                let body = String::from_utf8(bytes).map_err(|_| "CLI chat accepts text files. Use an API provider for images or PDFs.")?;
+                let body = String::from_utf8(bytes).map_err(|_| "Attach UTF-8 text, a PNG, JPEG, GIF, WebP image or a PDF document.")?;
                 text.push_str(&format!("\nAttached file {name}:\n{body}\n"));
             }
             ChatContext::Window { app_name, title, url } => text.push_str(&chat::window_line(app_name, title, url.as_deref())),
@@ -324,22 +330,56 @@ pub async fn send(runtime: &CliChat, chat: &Chat, agent: Agent, query: String, c
     let _finished = Finished(runtime);
     let turn = chat.begin(agent.id());
     let context = context.filter(|_| turn.first);
-    let message = user_message(&query, context.as_ref())?;
-    let input = prompt(&turn.history, &message)?;
-    let text = tauri::async_runtime::spawn_blocking(move || {
+    let plain = chat::plain_question(turn.first, context.as_ref(), &query);
+    let history = turn.history.clone();
+    let (text, message, images) = tauri::async_runtime::spawn_blocking(move || {
         let connected = status_with_cancel(agent, &cancel).signed_in;
         if cancel.load(Ordering::Acquire) { return Err("Reply stopped.".into()); }
         if !connected { return Err(format!("Connect {} in Settings → Agents first.", agent.name())); }
-        // An empty directory keeps project instructions and tools out of casual chat.
-        let folder = crate::settings::local_dir().join("cli-chat");
-        platform::ensure_private_dir(&folder).map_err(|_| "Could not prepare the chat folder.")?;
-        let mut cmd=agent.command()?;
-        cmd.args(chat_args(agent)).current_dir(folder);
-        answer(agent, capture(cmd, Some(input), CHAT_TIMEOUT, &cancel)?)
+        let visual = match context.as_ref() {
+            Some(ChatContext::File { path, .. }) => attachments::read(Path::new(path), &cancel)?,
+            _ => None,
+        };
+        let message = if let (Some(images), Some(ChatContext::File { name, .. })) = (&visual, &context) {
+            format!("Attached file {name}: {} image(s), in page order.\n{query}", images.len())
+        } else { user_message(&query, context.as_ref())? };
+        let images = visual.unwrap_or_default();
+        let all_images = attachments::conversation(&history, &images)?;
+        let input = prompt(&history, &message)?;
+        let text = reply(agent, input, &all_images, &cancel)?;
+        Ok::<_, String>((text, message, images))
     }).await.map_err(|_| "The agent chat process failed.".to_string())??;
-    let plain = chat::plain_question(turn.first, context.as_ref(), &query);
-    chat.commit(&turn, json!({"role":"user","content":message}), json!({"role":"assistant","content":text}), &plain, &text);
+    chat.commit(&turn, json!({"role":"user","content":message,"images":images}), json!({"role":"assistant","content":text}), &plain, &text);
     Ok(ChatReply { text })
+}
+
+fn reply(agent: Agent, input: String, images: &[attachments::Image], cancel: &AtomicBool) -> Result<String, String> {
+    if cancel.load(Ordering::Acquire) { return Err("Reply stopped.".into()); }
+    // An empty directory keeps project instructions and tools out of casual chat.
+    let folder = crate::settings::local_dir().join("cli-chat");
+    platform::ensure_private_dir(&folder).map_err(|_| "Could not prepare the chat folder.")?;
+    let mut cmd = agent.command()?;
+    let mut args = chat_args(agent);
+    let files;
+    let input = if images.is_empty() { input } else {
+        match agent {
+            Agent::Claude => {
+                let index = args.iter().position(|arg| *arg == "--output-format").unwrap();
+                args[index + 1] = "stream-json";
+                args.extend(["--input-format", "stream-json", "--verbose"]);
+                let mut content = vec![json!({"type":"text","text":input})];
+                content.extend(images.iter().map(attachments::Image::block));
+                format!("{}\n", json!({"type":"user","message":{"role":"user","content":content},"parent_tool_use_id":null}))
+            }
+            Agent::Codex => input,
+        }
+    };
+    cmd.args(args).current_dir(folder);
+    if agent == Agent::Codex && !images.is_empty() {
+        files = attachments::Files::create(images, &crate::settings::local_dir().join("cli-attachments"))?;
+        files.add_args(&mut cmd);
+    }
+    answer(agent, capture(cmd, Some(input), CHAT_TIMEOUT, cancel)?)
 }
 
 pub fn models(agent: Agent) -> Vec<ModelInfo> {
@@ -402,6 +442,15 @@ mod tests {
             json!({"type":"result","subtype":"success","is_error":false,"result":""})] {
             assert!(answer(Agent::Claude, captured(v)).is_err());
         }
+    }
+
+    #[test]
+    fn claude_visual_stream_requires_a_complete_terminal_result() {
+        let captured = |s: &str| Captured { success: true, stdout: s.as_bytes().to_vec(), stderr: vec![] };
+        let complete = "{\"type\":\"assistant\"}\n{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Blue\"}\n";
+        assert_eq!(answer(Agent::Claude, captured(complete)).unwrap(), "Blue");
+        assert!(answer(Agent::Claude, captured(&format!("{complete}{{truncated"))).is_err());
+        assert!(answer(Agent::Claude, captured("{\"type\":\"assistant\",\"text\":\"partial\"}\n")).is_err());
     }
 
     #[test]
@@ -477,4 +526,31 @@ mod tests {
     #[test]
     #[ignore = "explicit live check using an installed ChatGPT subscription"]
     fn live_codex_sign_in_and_reply() { live_smoke(Agent::Codex); }
+
+    #[cfg(windows)]
+    fn live_visual(agent: Agent) {
+        assert!(status(agent).signed_in, "subscription sign-in is required");
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cli_agents/fixtures");
+        let cancel = AtomicBool::new(false);
+        let cases = [
+            ("blue.png", "What is the color of this image? Reply with only its English name in uppercase.", "BLUE"),
+            ("projects.pdf", "Read the project names printed on both pages, in page order. Reply with only the two uppercase names separated by a comma and space.", "SKYLARK, ORCHID"),
+        ];
+        for (file, question, expected) in cases {
+            let images = attachments::read(&fixtures.join(file), &cancel).unwrap().unwrap();
+            let result = reply(agent, question.into(), &images, &cancel).unwrap();
+            assert_eq!(result.trim(), expected, "{} {file}", agent.name());
+            println!("{}: {file} visual content verified", agent.name());
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "Explicit image and PDF check using the signed-in Claude subscription"]
+    fn live_claude_image_and_pdf() { live_visual(Agent::Claude); }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "Explicit image and PDF check using the signed-in ChatGPT subscription"]
+    fn live_codex_image_and_pdf() { live_visual(Agent::Codex); }
 }

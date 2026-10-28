@@ -4,3 +4,6 @@ design/** linguist-documentation
 android/gradlew text eol=lf
 android/**/*.sh text eol=lf
 android/**/*.mjs text eol=lf
+
+# PDF cross-reference offsets require the fixture's original bytes.
+windows/src-tauri/src/cli_agents/fixtures/*.pdf binary

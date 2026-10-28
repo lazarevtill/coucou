@@ -20,6 +20,8 @@ tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+# Already in the dependency tree; bounded CLI image messages use the same codec.
+base64 = { version = "=0.23.1", default-features = false, features = ["std"] }
 tokio = { version = "1", features = ["net", "io-util", "sync", "time", "rt", "macros"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 # Phone link (phone_link/): a TLS server for the Android app, off unless the user
@@ -64,6 +66,7 @@ webview2-com = "0.39"
 wv2_core = { package = "windows-core", version = "0.62" }
 windows = { version = "0.61", features = [
   "Data_Xml_Dom",
+  "Data_Pdf",
   "UI_Notifications",
   "Win32_Foundation",
   "Win32_Graphics_Dwm",
