@@ -133,6 +133,36 @@ pub struct WindowContext { app_name: String, title: String, url: Option<String> 
 struct WindowOffer { id: String, handle: isize, pid: u32, at: Instant }
 #[cfg(windows)]
 static WINDOWS: Mutex<Vec<WindowOffer>> = Mutex::new(Vec::new());
+#[cfg(windows)]
+static FRONT: Mutex<Option<WindowOffer>> = Mutex::new(None);
+
+#[cfg(windows)]
+pub fn offer_front_window() {
+    *FRONT.lock().unwrap() = crate::platform::front_context_window().map(|(handle, pid)| WindowOffer {
+        id: crate::flow::text::new_id(), handle, pid, at: Instant::now(),
+    });
+}
+
+#[cfg(windows)]
+fn take_front_window() -> Result<WindowOffer, String> {
+    FRONT.lock().unwrap().take().filter(|offer| offer.at.elapsed() < Duration::from_secs(10))
+        .ok_or_else(|| "Use Attach front window while the window you want is in front.".into())
+}
+
+#[tauri::command]
+pub async fn chat_front_window_context(window: WebviewWindow) -> Result<WindowContext, String> {
+    from_chat(&window)?;
+    #[cfg(windows)]
+    {
+        let offer = take_front_window()?;
+        tauri::async_runtime::spawn_blocking(move || {
+            let (app_name, title, url) = crate::platform::selected_window_context(offer.handle, offer.pid)?;
+            Ok(WindowContext { app_name, title, url })
+        }).await.map_err(|e| e.to_string())?
+    }
+    #[cfg(not(windows))]
+    Err("Window context is available on Windows.".into())
+}
 
 #[tauri::command]
 pub fn chat_windows(window: WebviewWindow) -> Result<Vec<WindowChoice>, String> {
@@ -174,6 +204,17 @@ pub async fn chat_window_context(window: WebviewWindow, id: String) -> Result<Wi
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    fn a_front_window_offer_is_single_use_and_expires() {
+        let offer = |at| WindowOffer { id: "chosen".into(), handle: 123, pid: 456, at };
+        *FRONT.lock().unwrap() = Some(offer(Instant::now()));
+        assert_eq!(take_front_window().unwrap().handle, 123);
+        assert!(take_front_window().is_err());
+        *FRONT.lock().unwrap() = Some(offer(Instant::now() - Duration::from_secs(11)));
+        assert!(take_front_window().is_err());
+        assert!(FRONT.lock().unwrap().is_none());
+    }
     #[test]
     fn dictation_never_keeps_more_than_two_minutes_of_audio() {
         let mut samples = vec![0.1; speech::SAMPLE_RATE as usize * MAX_SECONDS - 2];

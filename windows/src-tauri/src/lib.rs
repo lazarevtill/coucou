@@ -1322,6 +1322,7 @@ pub fn run() {
             chat_input::chat_dictation_stop,
             chat_input::chat_windows,
             chat_input::chat_window_context,
+            chat_input::chat_front_window_context,
             chat_images::chat_image_attach,
             chat_images::chat_capture_open,
             flow::flow_set_prefs,

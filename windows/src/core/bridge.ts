@@ -427,6 +427,7 @@ export const Bridge = {
   chatDictationStop: (cancel: boolean) => callOrThrow<void>("chat_dictation_stop", { cancel }),
   chatWindows: () => callOrThrow<{ id: string; appName: string; title: string }[]>("chat_windows"),
   chatWindowContext: (id: string) => callOrThrow<{ appName: string; title: string; url: string | null }>("chat_window_context", { id }),
+  chatFrontWindowContext: () => callOrThrow<{ appName: string; title: string; url: string | null }>("chat_front_window_context"),
   chatImageAttach: (data: string) => callOrThrow<{ name: string; path: string; size: number }>("chat_image_attach", { data }),
   chatCaptureOpen: () => callOrThrow<void>("chat_capture_open"),
   /**

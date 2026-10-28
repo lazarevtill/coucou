@@ -33,6 +33,8 @@ Speech and call recording use `windows/src-tauri/src/speech/` and `notes/`. Flow
 
 Chat window attachments use short-lived, single-use selections in `chat_input.rs`. `platform/window_context.rs` reads only the chosen browser's navigation chrome, excludes document/password controls, and returns only an unambiguous web address. Preview context before Send; do not add background browser collection.
 
+The Windows Attach front window shortcut records its target before the island opens. Its separate single-use offer expires after ten seconds. Keep Windows/Linux shortcut availability and native/frontend contract assertions aligned.
+
 `cli_agents/attachments.rs` shares image and PDF handling between Claude Code and Codex. Windows renders PDFs locally with bounded page counts, size and time. Keep native attachment history separate from provider-neutral text history. Codex temporary files are private and scoped to the supervised request; Claude images travel over stdin.
 
 `chat_images.rs` and `views/chat-images.ts` provide explicit screenshot pasting with bounded PNG storage and preview. The capture button launches the verified Microsoft Snipping Tool package. Capture and annotation stay in that native app; Coucou never polls the clipboard or sends an attachment without Send.

@@ -62,8 +62,7 @@ pub const ACTIONS: &[ActionDef] = &[
     action("openChat", "Ctrl+Alt+Space", true, true),
     action("goToAlert", "Ctrl+Alt+A", true, true),
     action("jumpToTerminal", "Ctrl+Alt+T", true, true),
-    // Dragging Mochi onto a window is not in this version.
-    action("attachFrontWindow", "Ctrl+Alt+F", true, false),
+    action("attachFrontWindow", "Ctrl+Alt+F", true, cfg!(windows)),
     action("nextPill", "Ctrl+Alt+Right", true, true),
     action("prevPill", "Ctrl+Alt+Left", true, true),
     action("muteToggle", "Ctrl+Alt+S", true, true),
@@ -322,6 +321,8 @@ pub fn plugin<R: Runtime>() -> tauri::plugin::TauriPlugin<R> {
 /// Hands an action to the island.
 pub fn dispatch<R: Runtime>(app: &AppHandle<R>, action: &str) {
     crate::log::line(format!("shortcut {action}"));
+    #[cfg(windows)]
+    if action == "attachFrontWindow" { crate::chat_input::offer_front_window(); }
     if action == "wardrobeToggle" {
         let _ = app.emit_to(WINDOW_LABEL, "open-wardrobe", ());
     } else {
@@ -732,10 +733,10 @@ mod tests {
     }
 
     #[test]
-    fn the_action_not_ported_yet_is_reserved_not_registered() {
+    fn supported_actions_register_and_other_platform_actions_remain_reserved() {
         let plan = plan(&Bindings::new(), never);
         for (def, outcome) in plan {
-            let reserved = def.id == "attachFrontWindow";
+            let reserved = def.id == "attachFrontWindow" && !cfg!(windows);
             assert_eq!(def.ported, !reserved);
             match outcome {
                 Ok(_) => assert!(def.ported && def.enabled_by_default, "{}", def.id),
@@ -855,7 +856,7 @@ mod tests {
         assert_eq!(from_args(&args(&["coucou", "--shortcut"])), None);
         assert_eq!(from_args(&args(&["coucou", "--shortcut", "rm -rf"])), None);
         assert_eq!(from_args(&args(&["coucou", "--shortcut", "desktopToggle"])), Some("desktopToggle"));
-        assert_eq!(from_args(&args(&["coucou", "--shortcut", "attachFrontWindow"])), None);
+        assert_eq!(from_args(&args(&["coucou", "--shortcut", "attachFrontWindow"])), cfg!(windows).then_some("attachFrontWindow"));
         assert_eq!(from_args(&args(&["coucou"])), None);
     }
 }

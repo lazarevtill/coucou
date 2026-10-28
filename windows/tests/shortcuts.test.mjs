@@ -13,6 +13,8 @@ import {
 } from "../src/core/shortcuts.ts";
 import { registerShortcutHandlers, runGlobalShortcut, runIslandKey } from "../src/island/shortcuts.ts";
 import { DEFAULT_SETTINGS, State } from "../src/core/state.ts";
+import { HOST_OS } from "../src/core/pills.ts";
+import { Bridge } from "../src/core/bridge.ts";
 
 const MAC_IDS = [
   "toggleIsland", "openChat", "goToAlert", "jumpToTerminal", "attachFrontWindow",
@@ -56,8 +58,8 @@ test("no default types a character with AltGr on the checked European layouts", 
 
 test("the defaults are the same on both sides of the bridge", () => {
   const rust = readFileSync(new URL("../src-tauri/src/shortcuts.rs", import.meta.url), "utf8");
-  const rows = [...rust.matchAll(/^\s*action\("(\w+)", "([^"]+)", (true|false), (true|false)\),/gm)]
-    .map(([, id, keys, on, ported]) => ({ id, keys, on: on === "true", ported: ported === "true" }));
+  const rows = [...rust.matchAll(/^\s*action\("(\w+)", "([^"]+)", (true|false), (true|false|cfg!\(windows\))\),/gm)]
+    .map(([, id, keys, on, ported]) => ({ id, keys, on: on === "true", ported: ported === "true" || (ported === "cfg!(windows)" && HOST_OS === "windows") }));
   assert.deepEqual(
     rows,
     SHORTCUTS.map((d) => ({ id: d.id, keys: d.defaultKeys, on: d.enabledByDefault, ported: d.ported })),
@@ -73,13 +75,13 @@ test("the descriptions the Wayland portal shows are the labels Settings shows", 
 });
 
 // testEnabledByDefault
-test("only the island toggle is off by default; the one not ported yet is reserved", () => {
+test("only the island toggle is off by default; front-window attachment is Windows only", () => {
   for (const d of SHORTCUTS) {
     assert.equal(d.enabledByDefault, d.id !== "toggleIsland", d.id);
-    assert.equal(d.ported, d.id !== "attachFrontWindow", d.id);
+    assert.equal(d.ported, d.id !== "attachFrontWindow" || HOST_OS === "windows", d.id);
   }
   assert.deepEqual(activeKeys({}).map(([id]) => id), [
-    "openChat", "goToAlert", "jumpToTerminal", "nextPill", "prevPill", "muteToggle", "desktopToggle",
+    "openChat", "goToAlert", "jumpToTerminal", ...(HOST_OS === "windows" ? ["attachFrontWindow"] : []), "nextPill", "prevPill", "muteToggle", "desktopToggle",
     "wardrobeToggle",
   ]);
   // The Mac's ⌃⌥D, on the same letter.
@@ -322,6 +324,35 @@ test("a global shortcut arrives as an event and opens the chat", () => {
   assert.deepEqual(did, ["resume", "alert:prompt"]);
 });
 
+test("attaching the front window previews its context and never sends a message", async () => {
+  const previous = Bridge.chatFrontWindowContext;
+  Bridge.chatFrontWindowContext = async () => ({ appName: "Edge", title: "Docs", url: "https://example.com/docs" });
+  try {
+    runGlobalShortcut(host, "attachFrontWindow", resume);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(State.promptContext, { kind: "window", appName: "Edge", title: "Docs", url: "https://example.com/docs" });
+    assert.deepEqual(did, ["resume", "alert:prompt", "keyboard"]);
+    assert.equal(sent("chat_send").length, 0);
+    assert.equal(sent("chat_reset").length, 1);
+  } finally { Bridge.chatFrontWindowContext = previous; }
+});
+
+test("another shortcut cancels a pending front-window attachment", async () => {
+  const previous = Bridge.chatFrontWindowContext;
+  let finish;
+  Bridge.chatFrontWindowContext = () => new Promise(resolve => { finish = resolve; });
+  State.promptContext = null;
+  try {
+    runGlobalShortcut(host, "attachFrontWindow", resume);
+    runGlobalShortcut(host, "openChat", resume);
+    finish({ appName: "Edge", title: "Late", url: null });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(State.promptContext, null);
+    assert.equal(sent("chat_reset").length, 0);
+    assert.deepEqual(did, ["resume", "alert:prompt"]);
+  } finally { Bridge.chatFrontWindowContext = previous; }
+});
+
 test("island keys are read before the chat field sees them, and only while open", () => {
   const keydown = listeners.find((l) => l.type === "keydown");
   assert.equal(keydown.capture, true);
@@ -470,7 +501,7 @@ test("the desktop shortcut arrives like the others, and runs from the command li
 });
 
 test("actions that aren't the island's do nothing here", () => {
-  for (const id of ["wardrobeToggle", "attachFrontWindow", "nonsense"]) {
+  for (const id of ["wardrobeToggle", "nonsense"]) {
     runGlobalShortcut(host, id, resume);
   }
   assert.deepEqual(did, []);

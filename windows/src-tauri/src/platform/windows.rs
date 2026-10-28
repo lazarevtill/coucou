@@ -445,6 +445,13 @@ pub fn context_windows() -> Vec<(isize, u32, String, String)> {
         }).take(100).collect()
 }
 
+/// Read only when the user invokes Attach front window, before the island opens.
+pub fn front_context_window() -> Option<(isize, u32)> {
+    let foreground = unsafe { ::windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow() }.0 as isize;
+    context_windows().into_iter().find(|(handle, _, _, _)| *handle == foreground)
+        .map(|(handle, pid, _, _)| (handle, pid))
+}
+
 pub fn selected_window_context(handle: isize, expected_pid: u32) -> Result<(String, String, Option<String>), String> {
     // Re-enumerating verifies that the handle still belongs to the offered
     // process and returns the current title after a possible tab change.

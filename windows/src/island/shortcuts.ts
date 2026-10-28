@@ -14,6 +14,7 @@ import { Sound } from "../core/sound";
 import { State } from "../core/state";
 
 const CLAUDE_DESKTOP_ID = "agent_claude-desktop";
+let shortcutRequest = 0;
 
 /** What the shortcuts need from the island. */
 export interface ShortcutHost {
@@ -48,6 +49,8 @@ function focusPill(host: ShortcutHost, id: string | null, open: boolean) {
 
 /** A global shortcut was pressed. `resume` lifts Pause, as the tray's Open does. */
 export function runGlobalShortcut(host: ShortcutHost, action: string, resume: () => void) {
+  const request = ++shortcutRequest;
+  const replying = () => State.stateOverride === "thinking";
   switch (action) {
     case "toggleIsland":
       if (State.mode === "expanded") {
@@ -63,6 +66,28 @@ export function runGlobalShortcut(host: ShortcutHost, action: string, resume: ()
     case "openChat":
       resume();
       host.alert("prompt");
+      break;
+
+    case "attachFrontWindow":
+      if (replying()) { host.emote("annoyed"); break; }
+      void Bridge.chatFrontWindowContext().then(async context => {
+        if (request !== shortcutRequest || replying()) return;
+        await Bridge.chatReset();
+        if (request !== shortcutRequest || replying()) return;
+        State.droppedFile = null;
+        State.promptContext = { kind: "window", appName: context.appName, title: context.title,
+          ...(context.url ? { url: context.url } : {}) };
+        State.chatHistory = [];
+        resume();
+        host.alert("prompt");
+        host.takeKeyboard();
+        State.notify();
+      }).catch(error => {
+        if (request !== shortcutRequest) return;
+        State.noteMessage = String(error).replace(/^Error:\s*/, "");
+        resume();
+        host.alert("note");
+      });
       break;
 
     case "goToAlert": {
@@ -132,8 +157,7 @@ export function runGlobalShortcut(host: ShortcutHost, action: string, resume: ()
       host.flyOutOrHome();
       break;
 
-    // wardrobeToggle never comes this way (Rust sends `open-wardrobe`), and
-    // attachFrontWindow isn't in this version.
+    // wardrobeToggle never comes this way (Rust sends `open-wardrobe`).
     default:
       break;
   }

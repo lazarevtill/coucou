@@ -17,6 +17,7 @@
 // (Ctrl, Alt, Space…) are never translated.
 
 import { N_ } from "../i18n/i18n";
+import { HOST_OS } from "./pills";
 
 export const SHORTCUT_TEXT = {
   toggleIsland: N_("Open or close the island"),
@@ -75,7 +76,7 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
   def("openChat", "Ctrl+Alt+Space", true, true),
   def("goToAlert", "Ctrl+Alt+A", true, true),
   def("jumpToTerminal", "Ctrl+Alt+T", true, true),
-  def("attachFrontWindow", "Ctrl+Alt+F", true, false),
+  def("attachFrontWindow", "Ctrl+Alt+F", true, HOST_OS === "windows"),
   def("nextPill", "Ctrl+Alt+Right", true, true),
   def("prevPill", "Ctrl+Alt+Left", true, true),
   def("muteToggle", "Ctrl+Alt+S", true, true),

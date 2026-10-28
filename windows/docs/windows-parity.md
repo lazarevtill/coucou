@@ -73,6 +73,8 @@ After dropping a file, choose Send by email, then Share. Windows opens its nativ
 
 Chat's window button lists visible app titles. Selecting one authorizes a single bounded read of that window's browser navigation bar through Windows accessibility APIs. It never focuses the browser, uses the clipboard or traverses page documents. HTTP(S) addresses are attached only when unambiguous; embedded username/password fields are removed. Unsupported browsers, hidden address bars and unavailable accessibility providers attach the app and title alone. The context chip previews the address before Send, and leaving chat discards a late attachment result.
 
+Ctrl+Alt+F attaches the front window directly on Windows. The native shortcut records the window before opening the island; the selection is single-use and expires after ten seconds. It starts a fresh chat and previews the same context without sending. The shortcut can be changed or disabled in Settings and remains unavailable on Linux. Dragging desktop Mochi onto a window is not implemented.
+
 ## Screenshots
 
 Chat's screenshot button opens the installed Microsoft Snipping Tool. Capture a region or window, annotate it there if needed, copy it and paste into Coucou's chat field. Win+Shift+S also starts Windows capture. Coucou receives pixels only from the explicit paste event; it does not watch the clipboard or capture the screen in the background.
