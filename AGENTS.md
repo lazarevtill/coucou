@@ -8,5 +8,6 @@ Read [CLAUDE.md](CLAUDE.md) for the repository structure and product rules. macO
 - Preserve Windows preferences, folder-plugin trust and native session focus when integrating upstream changes. Keep provider/schema contracts and behavior assertions together.
 - Run the frontend and Rust workspace checks listed in `windows/README.md`. Explicit live CLI smoke tests require installed signed-in accounts; report actual results and platform limits.
 - Do not commit, push, merge a PR/MR, publish or deploy without explicit authorization in the current session. No force push without separate permission. No co-author trailers or generated footers.
+- Make small, cohesive commits with clear plain messages. After commit and push are authorized, push all task commits to the intended branch and verify the remote SHA.
 - Fix causes, do not suppress checks. Keep secrets out of code, commands, logs and documentation. Keep docs current, with detailed instructions under `docs/`.
 - Long runs keep local state in ignored `_prive/` files. Do not add personal infrastructure details to project documentation.
