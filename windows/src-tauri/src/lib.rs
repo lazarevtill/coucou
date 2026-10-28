@@ -22,6 +22,7 @@ mod hooks;
 mod i18n;
 mod identity;
 mod integrations;
+mod calcom;
 mod markets;
 mod island;
 mod local_chat;

@@ -11,7 +11,7 @@ The Windows app uses native Windows services where the Mac uses Apple APIs. The 
 | Parakeet performance | Measured CPU thread selection and manual override; bundled runtime is CPU-only | GPU/NPU runtime support is not implemented |
 | Notetaker Record a call | Separate microphone and WASAPI playback sources; device selection, live meters, timestamp alignment, speaker separation, summaries and export | Real-call and Bluetooth/wired/USB device matrix |
 | Voice assistant | Local recognition and system speech; Claude API, Claude Code, Codex or model-server brain; explicit mail drafts | Microphone, playback and spoken action round trip |
-| Service pills | Stripe, n8n, GitHub, GitLab, Gitea, Vercel, Resend, Notion, Cal.com and WhatsApp | Configured service accounts |
+| Service pills | Stripe, n8n, GitHub, GitLab, Gitea, Vercel, Resend, Notion, Cal.com and WhatsApp; Cal.com month/day/booking details | Configured service accounts |
 | Spotify | Windows system media controls | Installed Spotify playback |
 | Wardrobe, desktop Mochi, sounds, shortcuts, displays, recap | Existing Windows frontend and native integration | Native visual and interaction checks |
 | Phone approval and chat | Android phone link with device authentication | Live Android pairing and remote flow |
@@ -51,3 +51,7 @@ Refresh runs only while the pill is enabled and Coucou is not paused. Each accou
 Apple Music and Spotify have separate pills, commands, event streams and player state. Each talks directly to its own native application and keeps sign-in in that application. Shared code handles only Windows media APIs and the common player layout.
 
 Apple Music volume targets its own Core Audio sessions, including its packaged library agent, across active speaker and headphone outputs. Other players and the system volume are not changed. Playback actions use the selected song or queue in Apple Music. If the application has no playable selection, open Apple Music and choose a song.
+
+## Calendar
+
+Cal.com shows upcoming calls in the overview. Details opens a month calendar, then a day and the booking's time, attendee and notes. The date range is bounded to the next sixty days. Cursor pagination follows Cal.com's documented `2026-05-01` API contract, with response and refresh limits in `src-tauri/src/calcom/defaults.json`. Failed or incomplete pages produce an error instead of an apparently complete schedule. The integration is read-only; edits open Cal.com.
