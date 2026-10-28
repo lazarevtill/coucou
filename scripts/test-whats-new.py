@@ -4,7 +4,7 @@
 Coucou shows, once after it updated itself, what the new version brings (an icon, a title and a
 line per item, in every language the app speaks). The entries live in
   NotchBuddy/Resources/whats-new.json   (Mac, the 14 languages of Localizable.xcstrings)
-  windows/src/whats-new/whats-new.json  (Windows and Linux, the 12 languages of strings.json)
+  windows/src/whats-new/whats-new.json  (Windows and Linux, the 14 languages of strings.json)
 This test fails when the version the app is about to ship has no entry, or an entry is
 incomplete. release.sh runs it too, so a release can't go out without its "What's new".
 

@@ -19,7 +19,7 @@ The Windows app uses native Windows services where the Mac uses Apple APIs. The 
 | Crypto prices | Coinbase and OKX public quotes, 24-hour charts, currency selection and opt-in movement alerts | Native settings and pill interaction |
 | Portfolio | Read-only exchange balances, 16 native wallet networks, USD valuation and partial-data indicators | Real exchange accounts and each public wallet service |
 | Chat microphone and window context | Local dictation fills the editable prompt; user-selected Windows app name and window title accompany a new chat | Native microphone and window picker click-through; browser URL capture is not implemented |
-| Traditional Chinese and Thai | Not registered in Windows language picker | Complete translations and language registration |
+| Traditional Chinese and Thai | Complete Windows catalogs and fourteen-language picker; native locale and plural rules | Native linguistic and layout review |
 | Apple iPhone/iCloud features | Windows has Android pairing; no iPhone transport equivalent yet | Cross-platform phone protocol and iPhone implementation |
 
 ## Call audio

@@ -1,5 +1,5 @@
 {
-  "about": "What's new, shown once in the island after Coucou updates itself (src/whats-new/). Every Windows and Linux release adds its entry here, in the 12 languages: 1 to 4 items, a short title and one line each, an icon from scripts/test-whats-new.py. python3 scripts/test-whats-new.py checks it.",
+  "about": "What's new, shown once in the island after Coucou updates itself (src/whats-new/). Every Windows and Linux release adds its entry here, in the 14 languages: 1 to 4 items, a short title and one line each, an icon from scripts/test-whats-new.py. python3 scripts/test-whats-new.py checks it.",
   "releases": [
     {
       "version": "0.5.3",
@@ -18,7 +18,9 @@
             "ru": "WhatsApp на острове",
             "id": "WhatsApp di pulau",
             "de": "WhatsApp in der Insel",
-            "tr": "Adada WhatsApp"
+            "tr": "Adada WhatsApp",
+            "th": "WhatsApp ในไอส์แลนด์",
+            "zh-Hant": "島中的 WhatsApp"
           },
           "detail": {
             "en": "Your chats in the island, and replies without opening WhatsApp. Experimental.",
@@ -32,7 +34,9 @@
             "ru": "Чаты на острове и ответы без открытия WhatsApp. Экспериментально.",
             "id": "Obrolanmu di pulau, dan balas tanpa membuka WhatsApp. Eksperimental.",
             "de": "Deine Chats in der Insel und Antworten, ohne WhatsApp zu öffnen. Experimentell.",
-            "tr": "Sohbetlerin adada; WhatsApp’ı açmadan yanıtla. Deneysel."
+            "tr": "Sohbetlerin adada; WhatsApp’ı açmadan yanıtla. Deneysel.",
+            "th": "ดูแชทและตอบกลับจากไอส์แลนด์โดยไม่เปิด WhatsApp ฟีเจอร์ทดลอง",
+            "zh-Hant": "在島中查看聊天，不打開 WhatsApp 也能回復。實驗性功能。"
           }
         },
         {
@@ -49,7 +53,9 @@
             "ru": "Настройка в один клик",
             "id": "Siap dalam sekali klik",
             "de": "Eingerichtet mit einem Klick",
-            "tr": "Tek tıkla kurulum"
+            "tr": "Tek tıkla kurulum",
+            "th": "ตั้งค่าในคลิกเดียว",
+            "zh-Hant": "一鍵設置"
           },
           "detail": {
             "en": "Coucou installs the gateway, checks it and shows the QR code to scan.",
@@ -63,7 +69,9 @@
             "ru": "Coucou ставит шлюз, проверяет его и показывает QR-код.",
             "id": "Coucou memasang gateway, memeriksanya, dan menampilkan kode QR.",
             "de": "Coucou installiert das Gateway, prüft es und zeigt den QR-Code.",
-            "tr": "Coucou ağ geçidini kurar, doğrular ve taranacak QR kodunu gösterir."
+            "tr": "Coucou ağ geçidini kurar, doğrular ve taranacak QR kodunu gösterir.",
+            "th": "Coucou ติดตั้งและตรวจสอบเกตเวย์ แล้วแสดงรหัส QR ให้สแกน",
+            "zh-Hant": "Coucou 安裝網關、進行校驗，并顯示要掃描的二維碼。"
           }
         },
         {
@@ -80,7 +88,9 @@
             "ru": "Ничего не покидает компьютер",
             "id": "Tak ada yang keluar dari komputermu",
             "de": "Nichts verlässt deinen Computer",
-            "tr": "Hiçbir şey bilgisayarından çıkmaz"
+            "tr": "Hiçbir şey bilgisayarından çıkmaz",
+            "th": "ข้อมูลอยู่บนคอมพิวเตอร์ของคุณ",
+            "zh-Hant": "數據不離開你的電腦"
           },
           "detail": {
             "en": "Messages stay in memory and are gone when Coucou quits.",
@@ -94,7 +104,9 @@
             "ru": "Сообщения хранятся только в памяти и исчезают при выходе из Coucou.",
             "id": "Pesan hanya di memori dan hilang saat Coucou ditutup.",
             "de": "Nachrichten bleiben im Speicher und sind weg, wenn Coucou beendet wird.",
-            "tr": "Mesajlar bellekte kalır, Coucou kapanınca silinir."
+            "tr": "Mesajlar bellekte kalır, Coucou kapanınca silinir.",
+            "th": "ข้อความอยู่ในหน่วยความจำและหายไปเมื่อปิด Coucou",
+            "zh-Hant": "消息只保存在記憶體中，退出 Coucou 后即消失。"
           }
         }
       ]
@@ -116,7 +128,9 @@
             "bn": "আপডেটে Mochi নীল",
             "id": "Mochi biru saat ada pembaruan",
             "de": "Mochi wird blau bei Updates",
-            "tr": "Güncellemede Mochi maviye döner"
+            "tr": "Güncellemede Mochi maviye döner",
+            "th": "Mochi เปลี่ยนเป็นสีฟ้าเมื่อมีอัปเดต",
+            "zh-Hant": "有更新時 Mochi 變藍"
           },
           "detail": {
             "en": "A new version turns him blue, in the island and the tray. On Windows, one click installs it.",
@@ -130,7 +144,9 @@
             "ru": "Новая версия делает его синим — на острове и в области уведомлений. В Windows — в один клик.",
             "id": "Versi baru membuatnya biru, di pulau dan baki sistem. Di Windows, sekali klik untuk memasang.",
             "de": "Eine neue Version macht ihn blau, in der Insel und im Infobereich. Unter Windows reicht ein Klick.",
-            "tr": "Yeni sürüm onu adada ve sistem tepsisinde maviye çevirir. Windows’ta tek tıkla kurulur."
+            "tr": "Yeni sürüm onu adada ve sistem tepsisinde maviye çevirir. Windows’ta tek tıkla kurulur.",
+            "th": "รุ่นใหม่ทำให้ Mochi เป็นสีฟ้าในไอส์แลนด์และถาดระบบ บน Windows คลิกเดียวเพื่อติดตั้ง",
+            "zh-Hant": "有新版本時，島和系統托盤中的它會變藍。在 Windows 上一鍵安裝。"
           }
         },
         {
@@ -147,7 +163,9 @@
             "bn": "নতুন কী, এখানেই",
             "id": "Yang baru, langsung di sini",
             "de": "Neuigkeiten, direkt hier",
-            "tr": "Yenilikler, tam burada"
+            "tr": "Yenilikler, tam burada",
+            "th": "มีอะไรใหม่ ดูได้ที่นี่",
+            "zh-Hant": "更新內容，就在這里"
           },
           "detail": {
             "en": "After each update: what it brings, then your Coucou so far.",
@@ -161,7 +179,9 @@
             "bn": "প্রতিটি আপডেটের পর: কী নতুন, তারপর এ পর্যন্ত আপনার Coucou।",
             "id": "Setelah tiap pembaruan: isinya, lalu Coucou-mu sejauh ini.",
             "de": "Nach jedem Update: was es bringt, dann dein Coucou bisher.",
-            "tr": "Her güncellemeden sonra: getirdikleri, ardından şimdiye kadar Coucou’n."
+            "tr": "Her güncellemeden sonra: getirdikleri, ardından şimdiye kadar Coucou’n.",
+            "th": "หลังอัปเดต: ดูสิ่งที่เพิ่มเข้ามาและสรุปการใช้ Coucou ของคุณ",
+            "zh-Hant": "每次更新后：先看新內容，再看你的 Coucou 至今。"
           }
         },
         {
@@ -178,7 +198,9 @@
             "ru": "GitLab и Gitea",
             "id": "GitLab dan Gitea",
             "de": "GitLab und Gitea",
-            "tr": "GitLab ve Gitea"
+            "tr": "GitLab ve Gitea",
+            "th": "GitLab และ Gitea",
+            "zh-Hant": "GitLab 和 Gitea"
           },
           "detail": {
             "en": "Two new pills with your projects’ activity, like GitHub’s.",
@@ -192,7 +214,9 @@
             "ru": "Две новые пилюли с активностью ваших проектов, как у GitHub.",
             "id": "Dua pil baru berisi aktivitas proyekmu, seperti pil GitHub.",
             "de": "Zwei neue Pills mit der Aktivität deiner Projekte, wie bei GitHub.",
-            "tr": "Projelerinin etkinliğini gösteren iki yeni araç, GitHub’ınki gibi."
+            "tr": "Projelerinin etkinliğini gösteren iki yeni araç, GitHub’ınki gibi.",
+            "th": "สองพิลใหม่แสดงกิจกรรมโปรเจกต์ของคุณ เหมือน GitHub",
+            "zh-Hant": "兩個新膠囊，顯示你項目的動態，和 GitHub 的一樣。"
           }
         },
         {
@@ -209,7 +233,9 @@
             "ru": "Итоги недели на Android",
             "id": "Rekap mingguan di Android",
             "de": "Wochenrückblick auf Android",
-            "tr": "Android’de haftalık özet"
+            "tr": "Android’de haftalık özet",
+            "th": "สรุปรายสัปดาห์บน Android",
+            "zh-Hant": "Android 上的每周回顧"
           },
           "detail": {
             "en": "Last week’s numbers on your Android phone, if you turn it on.",
@@ -223,7 +249,9 @@
             "ru": "Цифры прошлой недели на вашем Android, если включите.",
             "id": "Angka minggu lalu di ponsel Android-mu, kalau kamu nyalakan.",
             "de": "Die Zahlen der letzten Woche auf deinem Android-Handy, wenn du es einschaltest.",
-            "tr": "Geçen haftanın sayıları Android telefonunda, açarsan."
+            "tr": "Geçen haftanın sayıları Android telefonunda, açarsan.",
+            "th": "ดูตัวเลขสัปดาห์ก่อนบนโทรศัพท์ Android เมื่อเปิดใช้งาน",
+            "zh-Hant": "上周的數據顯示在你的 Android 手機上（需開啟）。"
           }
         }
       ]
@@ -245,7 +273,9 @@
             "ru": "Новая версия на острове",
             "id": "Versi baru di pulau",
             "de": "Neue Version in der Insel",
-            "tr": "Adada yeni sürüm"
+            "tr": "Adada yeni sürüm",
+            "th": "เวอร์ชันใหม่ในไอส์แลนด์",
+            "zh-Hant": "島中的新版本"
           },
           "detail": {
             "en": "Coucou tells you when a new version is out. On Windows, one click installs it.",
@@ -259,7 +289,9 @@
             "ru": "Coucou сообщит о новой версии. В Windows она ставится одним кликом.",
             "id": "Coucou memberi tahu saat versi baru keluar. Di Windows, sekali klik untuk memasang.",
             "de": "Coucou sagt dir, wenn eine neue Version da ist. Unter Windows installiert sie ein Klick.",
-            "tr": "Yeni sürüm çıkınca Coucou haber verir. Windows'ta tek tıkla kurulur."
+            "tr": "Yeni sürüm çıkınca Coucou haber verir. Windows'ta tek tıkla kurulur.",
+            "th": "Coucou แจ้งเมื่อมีเวอร์ชันใหม่ บน Windows คลิกเดียวเพื่อติดตั้ง",
+            "zh-Hant": "有新版本時 Coucou 會告訴你。在 Windows 上一鍵即可安裝。"
           }
         },
         {
@@ -276,7 +308,9 @@
             "ru": "Немецкий и турецкий",
             "id": "Jerman dan Turki",
             "de": "Deutsch und Türkisch",
-            "tr": "Almanca ve Türkçe"
+            "tr": "Almanca ve Türkçe",
+            "th": "ภาษาเยอรมันและตุรกี",
+            "zh-Hant": "德語和土耳其語"
           },
           "detail": {
             "en": "Coucou now speaks 12 languages.",
@@ -290,7 +324,9 @@
             "ru": "Теперь Coucou говорит на 12 языках.",
             "id": "Coucou kini berbicara 12 bahasa.",
             "de": "Coucou spricht jetzt 12 Sprachen.",
-            "tr": "Coucou artık 12 dil konuşuyor."
+            "tr": "Coucou artık 12 dil konuşuyor.",
+            "th": "Coucou รองรับ 12 ภาษาแล้ว",
+            "zh-Hant": "Coucou 現在支持 12 種語言。"
           }
         },
         {
@@ -307,7 +343,9 @@
             "ru": "Часы на острове",
             "id": "Jam di pulau",
             "de": "Eine Uhr in der Insel",
-            "tr": "Adada saat"
+            "tr": "Adada saat",
+            "th": "นาฬิกาในไอส์แลนด์",
+            "zh-Hant": "島中的時鐘"
           },
           "detail": {
             "en": "Optional, in the middle of the compact island.",
@@ -321,7 +359,9 @@
             "ru": "По желанию, в центре компактного острова.",
             "id": "Opsional, di tengah pulau ringkas.",
             "de": "Optional, in der Mitte der kompakten Insel.",
-            "tr": "İsteğe bağlı, kompakt adanın ortasında."
+            "tr": "İsteğe bağlı, kompakt adanın ortasında.",
+            "th": "เลือกแสดงตรงกลางไอส์แลนด์แบบกะทัดรัดได้",
+            "zh-Hant": "可選，顯示在緊湊島的中間。"
           }
         },
         {
@@ -338,7 +378,9 @@
             "ru": "Легче на Linux",
             "id": "Lebih ringan di Linux",
             "de": "Leichter unter Linux",
-            "tr": "Linux'ta daha hafif"
+            "tr": "Linux'ta daha hafif",
+            "th": "เบาขึ้นบน Linux",
+            "zh-Hant": "Linux 上更輕快"
           },
           "detail": {
             "en": "The closed window no longer keeps a processor core busy on KDE.",
@@ -352,7 +394,9 @@
             "ru": "Закрытое окно больше не занимает ядро процессора в KDE.",
             "id": "Jendela yang ditutup tak lagi menyibukkan satu inti prosesor di KDE.",
             "de": "Das geschlossene Fenster hält unter KDE keinen Prozessorkern mehr beschäftigt.",
-            "tr": "Kapalı pencere KDE'de artık bir işlemci çekirdeğini meşgul etmiyor."
+            "tr": "Kapalı pencere KDE'de artık bir işlemci çekirdeğini meşgul etmiyor.",
+            "th": "หน้าต่างที่ปิดแล้วจะไม่ใช้คอร์ประมวลผลค้างไว้บน KDE",
+            "zh-Hant": "在 KDE 上，關閉的窗口不再占用一個處理器核心。"
           }
         }
       ]
