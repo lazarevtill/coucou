@@ -182,7 +182,8 @@ test("leaving chat cancels microphone capture and ignores a late transcript", as
 });
 
 test("a selected window title starts a fresh context and waits for Send", async () => {
-  answers.chat_windows = [{ appName: "Code", title: "notes.md" }];
+  answers.chat_windows = [{ id: "chosen-window", appName: "Code", title: "notes.md" }];
+  answers.chat_window_context = { appName: "Code", title: "notes.md" };
   $(".chat-window").fire("click");
   await flush();
   const list = $(".chat-window-list");
@@ -196,4 +197,42 @@ test("a selected window title starts a fresh context and waits for Send", async 
   $(".send-btn").fire("click");
   await flush();
   assert.deepEqual(sent("chat_send")[0].context, State.promptContext);
+});
+
+test("browser addresses are requested only for the chosen window and previewed before Send", async () => {
+  answers.chat_windows = [{ id: "browser-choice", appName: "Edge", title: "Docs" }];
+  answers.chat_window_context = { appName: "Edge", title: "Docs", url: "https://example.com/docs" };
+  $(".chat-window").fire("click");
+  await flush();
+  assert.equal(sent("chat_window_context").length, 0);
+  const list = $(".chat-window-list");
+  list.value = "0";
+  list.onchange();
+  await flush();
+  view.sync();
+  assert.deepEqual(sent("chat_window_context"), [{ id: "browser-choice" }]);
+  assert.match(view.el.textContent, /https:\/\/example.com\/docs/);
+  assert.equal(sent("chat_send").length, 0);
+  $(".chat-input").value = "Explain this page";
+  $(".send-btn").fire("click");
+  await flush();
+  assert.equal(sent("chat_send")[0].context.url, "https://example.com/docs");
+});
+
+test("leaving chat ignores a delayed browser attachment", async () => {
+  let reply;
+  answers.chat_windows = [{ id: "browser-choice", appName: "Edge", title: "Docs" }];
+  answers.chat_window_context = () => new Promise(resolve => { reply = resolve; });
+  $(".chat-window").fire("click");
+  await flush();
+  const list = $(".chat-window-list");
+  list.value = "0";
+  list.onchange();
+  await flush();
+  State.view = "overview";
+  view.sync();
+  reply({ appName: "Edge", title: "Docs", url: "https://example.com/docs" });
+  await flush();
+  assert.equal(State.promptContext, null);
+  assert.equal(sent("chat_send").length, 0);
 });

@@ -8,6 +8,8 @@ use std::path::PathBuf;
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
+mod window_context;
+#[cfg(windows)]
 pub use self::windows::*;
 
 #[cfg(target_os = "linux")]

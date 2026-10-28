@@ -435,14 +435,23 @@ fn top_windows() -> Vec<(isize, u32, String)> {
 }
 
 /// Titles only, enumerated on an explicit chat attachment click.
-pub fn context_windows() -> Vec<(String, String)> {
+pub fn context_windows() -> Vec<(isize, u32, String, String)> {
     let processes = process_table();
     top_windows().into_iter().filter(|(_, pid, _)| *pid != std::process::id())
-        .filter_map(|(_, pid, title)| {
+        .filter_map(|(handle, pid, title)| {
             let process = processes.get(&pid)?;
             let name = process.exe.trim_end_matches(".exe").to_string();
-            Some((name, title.chars().take(512).collect()))
+            Some((handle, pid, name, title.chars().take(512).collect()))
         }).take(100).collect()
+}
+
+pub fn selected_window_context(handle: isize, expected_pid: u32) -> Result<(String, String, Option<String>), String> {
+    // Re-enumerating verifies that the handle still belongs to the offered
+    // process and returns the current title after a possible tab change.
+    let (_, _, app, title) = context_windows().into_iter().find(|(hwnd, pid, _, _)| *hwnd == handle && *pid == expected_pid)
+        .ok_or("The selected window is no longer available.")?;
+    let url = super::window_context::browser_url(HWND(handle as *mut _), &app);
+    Ok((app, title, url))
 }
 
 /// The first of `pids` that owns a window.

@@ -219,7 +219,8 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
   }, async context => {
     await Bridge.chatReset();
     State.droppedFile = null;
-    State.promptContext = { kind: "window", ...context };
+    State.promptContext = { kind: "window", appName: context.appName, title: context.title,
+      ...(context.url ? { url: context.url } : {}) };
     State.chatHistory = [];
     renderedCount = -1;
     State.notify();
@@ -357,7 +358,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     sync() {
       const file = State.droppedFile;
       const context = State.promptContext?.kind === "window" ? State.promptContext : null;
-      const wantChip = file?.name ?? (context ? `${context.appName} · ${context.title}` : "");
+      const wantChip = file?.name ?? (context ? [context.appName, context.title, context.url].filter(Boolean).join(" · ") : "");
       if (chipRow.dataset.label !== wantChip) {
         chipRow.dataset.label = wantChip;
         clear(chipRow);

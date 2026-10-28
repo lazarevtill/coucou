@@ -1320,6 +1320,7 @@ pub fn run() {
             chat_input::chat_dictation_start,
             chat_input::chat_dictation_stop,
             chat_input::chat_windows,
+            chat_input::chat_window_context,
             flow::flow_set_prefs,
             flow::flow_retune_speech,
             flow::flow_test_audio,

@@ -7384,21 +7384,6 @@
       "th": "แชทใช้การลงชื่อเข้าใช้และผู้ให้บริการบนคอมพิวเตอร์นี้ ข้อมูลรับรองอยู่ที่นี่ ใช้ขีดจำกัดและค่าบริการของผู้ให้บริการของคุณ",
       "zh-Hant": "聊天使用此電腦上的登入和提供商。憑據保留在此處。適用提供商的用量限制和費用。"
     },
-    "Attach a window title": {
-      "zh-Hans": "附加窗口标题",
-      "hi": "विंडो शीर्षक जोड़ें",
-      "es": "Adjuntar un título de ventana",
-      "ar": "إرفاق عنوان نافذة",
-      "fr": "Joindre le titre d’une fenêtre",
-      "bn": "উইন্ডোর শিরোনাম সংযুক্ত করুন",
-      "pt-BR": "Anexar um título de janela",
-      "ru": "Прикрепить заголовок окна",
-      "id": "Lampirkan judul jendela",
-      "de": "Fenstertitel anhängen",
-      "tr": "Pencere başlığı ekle",
-      "th": "แนบชื่อหน้าต่าง",
-      "zh-Hant": "附加窗口標題"
-    },
     "Transcribing…": {
       "zh-Hans": "正在转写…",
       "hi": "लिप्यंतरण हो रहा है…",
@@ -7728,6 +7713,21 @@
       "bn": "Windows শেয়ারে আপনার মেইল অ্যাপ বেছে নিন, তারপর সেখানে দেখে পাঠান।",
       "th": "เลือกแอปอีเมลในหน้าต่างแชร์ของ Windows จากนั้นตรวจสอบและส่งในแอปนั้น",
       "tr": "Windows Paylaş içinde e-posta uygulamanızı seçin, ardından orada gözden geçirip gönderin."
+    },
+    "Attach a window": {
+      "zh-Hans": "附加窗口",
+      "zh-Hant": "附加視窗",
+      "fr": "Joindre une fenêtre",
+      "ru": "Прикрепить окно",
+      "es": "Adjuntar una ventana",
+      "de": "Fenster anhängen",
+      "pt-BR": "Anexar uma janela",
+      "id": "Lampirkan jendela",
+      "tr": "Pencere ekle",
+      "ar": "إرفاق نافذة",
+      "hi": "विंडो संलग्न करें",
+      "bn": "উইন্ডো সংযুক্ত করুন",
+      "th": "แนบหน้าต่าง"
     }
   }
 }

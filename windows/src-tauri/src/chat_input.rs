@@ -123,15 +123,52 @@ pub fn chat_dictation_stop(window: WebviewWindow, input: State<Arc<ChatInput>>, 
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WindowContext { app_name: String, title: String }
+pub struct WindowChoice { id: String, app_name: String, title: String }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowContext { app_name: String, title: String, url: Option<String> }
+
+#[cfg(windows)]
+struct WindowOffer { id: String, handle: isize, pid: u32, at: Instant }
+#[cfg(windows)]
+static WINDOWS: Mutex<Vec<WindowOffer>> = Mutex::new(Vec::new());
 
 #[tauri::command]
-pub fn chat_windows(window: WebviewWindow) -> Result<Vec<WindowContext>, String> {
+pub fn chat_windows(window: WebviewWindow) -> Result<Vec<WindowChoice>, String> {
     from_chat(&window)?;
     #[cfg(windows)]
-    { Ok(crate::platform::context_windows().into_iter().map(|(app_name, title)| WindowContext { app_name, title }).collect()) }
+    {
+        let mut offers = WINDOWS.lock().unwrap();
+        offers.clear();
+        Ok(crate::platform::context_windows().into_iter().map(|(handle, pid, app_name, title)| {
+            let id = crate::flow::text::new_id();
+            offers.push(WindowOffer { id: id.clone(), handle, pid, at: Instant::now() });
+            WindowChoice { id, app_name, title }
+        }).collect())
+    }
     #[cfg(not(windows))]
     { Err("Window context is available on Windows.".into()) }
+}
+
+#[tauri::command]
+pub async fn chat_window_context(window: WebviewWindow, id: String) -> Result<WindowContext, String> {
+    from_chat(&window)?;
+    #[cfg(windows)]
+    {
+        let offer = {
+            let mut offers = WINDOWS.lock().unwrap();
+            offers.retain(|offer| offer.at.elapsed() < Duration::from_secs(120));
+            let index = offers.iter().position(|offer| offer.id == id).ok_or("Choose the window again.")?;
+            offers.remove(index)
+        };
+        tauri::async_runtime::spawn_blocking(move || {
+            let (app_name, title, url) = crate::platform::selected_window_context(offer.handle, offer.pid)?;
+            Ok(WindowContext { app_name, title, url })
+        }).await.map_err(|e| e.to_string())?
+    }
+    #[cfg(not(windows))]
+    { let _ = id; Err("Window context is available on Windows.".into()) }
 }
 
 #[cfg(test)]
