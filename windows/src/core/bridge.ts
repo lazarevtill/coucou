@@ -8,6 +8,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { Settings } from "./state";
 import type { ShellSnapshot, ToastSpec } from "./shell";
 import type { RecapHistory, RecapPrefs } from "../recap/summary";
+import type { MarketPrefs } from "./markets";
 import type { SpotifyState } from "./spotify";
 import type { UpdateStatus } from "./update";
 import type { WaIslandView, WaSettingsView, WaTestResult } from "./whatsapp";
@@ -412,6 +413,8 @@ export const Bridge = {
   chatSend: (query: string, context: ChatContext | null) =>
     callOrThrow<{ text: string }>("chat_send", { query, context }),
   chatReset: () => call<void>("chat_reset"),
+  marketPrefs: () => call<MarketPrefs>("markets_prefs"),
+  marketSave: (prefs: MarketPrefs) => invoke<MarketPrefs>("markets_save", { prefs }),
   musicRefresh: () => call<SpotifyState>("music_refresh"),
   musicControl: (action: string, value?: number) => call<boolean>("music_control", { action, value: value ?? null }),
   musicOpen: () => call<boolean>("music_open"),

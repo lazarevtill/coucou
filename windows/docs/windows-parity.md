@@ -16,7 +16,8 @@ The Windows app uses native Windows services where the Mac uses Apple APIs. The 
 | Wardrobe, desktop Mochi, sounds, shortcuts, displays, recap | Existing Windows frontend and native integration | Native visual and interaction checks |
 | Phone approval and chat | Android phone link with device authentication | Live Android pairing and remote flow |
 | Apple Music | Native Windows media sessions, independent playback controls, artwork, volume, pill and voice actions | Installed Apple Music playback and supported-control validation |
-| Portfolio and crypto | No Windows port yet | Implementation and read-only account validation |
+| Crypto prices | Coinbase and OKX public quotes, 24-hour charts, currency selection and opt-in movement alerts | Native settings and pill interaction |
+| Portfolio | No Windows port yet | Implementation and read-only account validation |
 | Chat microphone and window context | Local dictation fills the editable prompt; user-selected Windows app name and window title accompany a new chat | Native microphone and window picker click-through; browser URL capture is not implemented |
 | Traditional Chinese and Thai | Not registered in Windows language picker | Complete translations and language registration |
 | Apple iPhone/iCloud features | Windows has Android pairing; no iPhone transport equivalent yet | Cross-platform phone protocol and iPhone implementation |
@@ -32,3 +33,7 @@ Microphone and playback are stored separately at the 16 kHz mono rate required b
 ## Performance evidence
 
 A synthetic speech fixture on the development laptop completed transcription and automatic calibration, then produced the same transcript with the manual one-thread setting. The six-second calibration sample took about 613 ms at one thread, 413 ms at two, 370 ms at four, 500 ms at eight and 1,250 ms at sixteen. These measurements describe that machine and fixture, not a universal performance guarantee. Automatic mode measures the user's machine and stores timings, never calibration audio.
+
+## Public crypto prices
+
+Enable Crypto under Settings → Integrations, choose Coinbase or OKX, and save up to eight symbols. Requests run once per minute only while the pill is enabled and Coucou is not paused; history is cached for ten minutes. No account is required. OKX dollar pairs are labelled USDT. Missing prices remain unknown, and each failed source shows its error. Alerts are off by default and measure movement since the last alert or first successful quote. Service endpoints and request limits are in `src-tauri/src/markets/defaults.json`; preferences are stored separately in `markets.json`.
