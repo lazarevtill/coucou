@@ -15,11 +15,12 @@ const FORGET_AFTER: Duration = Duration::from_secs(90);
 pub struct Brain {
     messages: Vec<Value>,
     last: Instant,
+    engine: Option<crate::text_ai::Engine>,
 }
 
 impl Default for Brain {
     fn default() -> Self {
-        Self { messages: Vec::new(), last: Instant::now() }
+        Self { messages: Vec::new(), last: Instant::now(), engine: None }
     }
 }
 
@@ -104,6 +105,8 @@ Pills: {pills}",
 
 impl Brain {
     pub fn respond(&mut self, app: &AppHandle, transcript: &str) -> Option<Reply> {
+        let engine = crate::flow::get(app).map(|f| f.store.lock().unwrap().prefs.voice_engine).unwrap_or_default();
+        if self.engine != Some(engine) { self.messages.clear(); self.engine = Some(engine); }
         if self.last.elapsed() > FORGET_AFTER {
             self.messages.clear();
         }
@@ -121,6 +124,10 @@ impl Brain {
         let mut spoken = String::new();
         for _ in 0..5 {
             let turn = tauri::async_runtime::block_on(async {
+                if engine != crate::text_ai::Engine::Claude {
+                    let settings = app.state::<crate::Shared>().settings.lock().unwrap().clone();
+                    return crate::text_ai::voice_turn(&settings, engine, &system, &self.messages, &tools).await;
+                }
                 match crate::claude::voice_turn(FAST_MODEL, &system, &self.messages, &tools).await {
                     Ok(v) => Ok(v),
                     Err(err) if !chat_model.is_empty() => {

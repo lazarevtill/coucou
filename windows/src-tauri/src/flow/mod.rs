@@ -120,6 +120,7 @@ pub fn setup(app: &AppHandle) {
     app.manage(flow.clone());
     pill::setup(app);
     let prefs = flow.store.lock().unwrap().prefs.clone();
+    speech::performance::configure(prefs.speech_threads);
     pill::update(app, |s| {
         s.edge = pill::edge_name(prefs.edge).into();
         s.key = key_id(prefs.key);
@@ -380,15 +381,16 @@ fn process(app: &AppHandle, flow: &Arc<Flow>, samples: &[f32], front: Option<&(S
         pill::update(app, |s| s.phase = "idle".into());
         return Ok(());
     }
-    let (prepared, style, cleanup, words, key) = {
+    let (prepared, style, cleanup, words, key, engine) = {
         let store = flow.store.lock().unwrap();
         let app_id = front.map(|(id, _)| id.as_str());
-        (store.prepare(&raw), store.style_for(app_id), store.prefs.cleanup, store.words.words.clone(), store.prefs.key)
+        (store.prepare(&raw), store.style_for(app_id), store.prefs.cleanup, store.words.words.clone(), store.prefs.key, store.prefs.cleanup_engine)
     };
     let mut written = prepared.text.clone();
-    if cleanup && style != store::Style::Verbatim && cleanup::has_key() {
+    if cleanup && style != store::Style::Verbatim {
         let app_name = front.map(|(_, n)| n.clone());
-        let cleaned = tauri::async_runtime::block_on(cleanup::clean(&prepared.text, style, app_name.as_deref(), &words));
+        let settings = app.state::<crate::Shared>().settings.lock().unwrap().clone();
+        let cleaned = tauri::async_runtime::block_on(cleanup::clean(&settings, engine, &prepared.text, style, app_name.as_deref(), &words));
         if text::keeps_marks(&cleaned, &prepared.snippets) {
             written = cleaned;
         }
@@ -444,10 +446,12 @@ fn paste_again(app: &AppHandle, flow: &Arc<Flow>) {
 pub struct FlowStatus {
     prefs: Prefs,
     models: speech::ModelsStatus,
+    performance: speech::performance::Status,
     /// "ok", or why the key can't be watched here ("wayland", "no-display").
     keys: String,
     has_claude_key: bool,
     mics: Vec<audio::InputDevice>,
+    speakers: Vec<audio::InputDevice>,
     platform: &'static str,
     /// Coucou started with the computer.
     autostarted: bool,
@@ -460,12 +464,14 @@ pub fn flow_status(flow: State<Arc<Flow>>) -> FlowStatus {
     FlowStatus {
         prefs: flow.store.lock().unwrap().prefs.clone(),
         models: speech::status(),
+        performance: speech::performance::status(),
         keys: match os::keys_supported() {
             Ok(()) => "ok".into(),
             Err(why) => why.into(),
         },
         has_claude_key: cleanup::has_key(),
         mics: audio::input_devices(),
+        speakers: audio::output_devices(),
         platform: if cfg!(windows) { "windows" } else { "linux" },
         autostarted: crate::launched_at_login(),
         user_name: crate::platform::user_full_name()
@@ -475,18 +481,19 @@ pub fn flow_status(flow: State<Arc<Flow>>) -> FlowStatus {
 }
 
 #[tauri::command]
-pub fn flow_set_prefs(app: AppHandle, flow: State<Arc<Flow>>, prefs: Prefs) {
+pub fn flow_set_prefs(app: AppHandle, flow: State<Arc<Flow>>, mut prefs: Prefs) -> Result<(), String> {
+    prefs.speech_threads = prefs.speech_threads.min(speech::performance::available_threads());
     let flow = flow.inner().clone();
     let before = {
         let mut store = flow.store.lock().unwrap();
         let before = store.prefs.clone();
-        store.prefs = prefs.clone();
-        store.save_prefs();
+        store.set_prefs(prefs.clone())?;
         if before.keep_days != prefs.keep_days {
             store.prune(store::now_ms());
         }
         before
     };
+    speech::performance::configure(prefs.speech_threads);
     pill::update(&app, |s| {
         s.edge = pill::edge_name(prefs.edge).into();
         s.key = key_id(prefs.key);
@@ -498,14 +505,15 @@ pub fn flow_set_prefs(app: AppHandle, flow: State<Arc<Flow>>, prefs: Prefs) {
     if prefs.enabled && (!before.enabled || restart) {
         enable(&app, &flow);
     }
-    if before.voice != prefs.voice || before.mic != prefs.mic {
-        if before.mic != prefs.mic {
+    if before.voice != prefs.voice || before.mic != prefs.mic || before.voice_engine != prefs.voice_engine {
+        if before.mic != prefs.mic || before.voice_engine != prefs.voice_engine {
             crate::voice::restart(&app);
         } else {
             crate::voice::sync(&app);
         }
     }
     let _ = app.emit("flow-prefs", &prefs);
+    Ok(())
 }
 
 #[tauri::command]
@@ -648,8 +656,8 @@ pub fn flow_models_download(app: AppHandle) {
 }
 
 #[tauri::command]
-pub fn flow_models_remove(app: AppHandle) {
-    speech::remove(&app);
+pub fn flow_models_remove(app: AppHandle) -> Result<(), String> {
+    speech::remove(&app)
 }
 
 // ── The pill's page ───────────────────────────────────────────────────────────
@@ -704,3 +712,17 @@ pub fn pill_action(app: AppHandle, flow: State<Arc<Flow>>, action: String, id: O
         _ => {}
     }
 }
+
+#[tauri::command]
+pub fn flow_retune_speech() { speech::performance::retune(); }
+
+#[tauri::command]
+pub async fn flow_test_audio(app: AppHandle, flow: State<'_, Arc<Flow>>) -> Result<(), String> {
+    if crate::notes::is_recording(&app) { return Err("Use the live meters in Notetaker while recording.".into()); }
+    let prefs = flow.store.lock().unwrap().prefs.clone();
+    tauri::async_runtime::spawn_blocking(move || speech::monitor::test(app, prefs.mic, prefs.speakers))
+        .await.map_err(|_| "The audio test stopped unexpectedly.".to_string())?
+}
+
+#[tauri::command]
+pub fn flow_stop_audio_test() { speech::monitor::stop(); }

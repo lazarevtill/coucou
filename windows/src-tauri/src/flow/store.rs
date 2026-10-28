@@ -74,13 +74,7 @@ pub enum Edge {
     Right,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum SummaryEngine {
-    #[default]
-    Claude,
-    Off,
-}
+pub use crate::text_ai::Engine as SummaryEngine;
 
 /// The preferences of dictation and of the window.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -92,17 +86,23 @@ pub struct Prefs {
     pub edge: Edge,
     /// The microphone by name; empty is the system's default.
     pub mic: String,
+    /// Empty follows the Windows communications output; otherwise a device ID.
+    pub speakers: String,
     /// Days the history is kept: 0 = not kept, -1 = forever.
     pub keep_days: i64,
     /// Clean the words with Claude before pasting them (needs the Claude key).
     pub cleanup: bool,
+    pub cleanup_engine: SummaryEngine,
     /// The style of the apps that have none of their own.
     pub default_style: Style,
     pub summary_engine: SummaryEngine,
+    /// 0 measures the best CPU configuration; positive values override it.
+    pub speech_threads: u16,
     /// Open the Coucou window when Coucou is opened (not when it starts with the computer).
     pub open_at_launch: bool,
     /// « OK Coucou »: listen for it and answer with Claude (needs the Claude key).
     pub voice: bool,
+    pub voice_engine: SummaryEngine,
     /// How Coucou answers out loud: "system", "elevenlabs" or "off".
     pub voice_output: String,
     /// The ElevenLabs voice: "female" or "male".
@@ -116,12 +116,16 @@ impl Default for Prefs {
             key: FlowKey::default(),
             edge: Edge::Bottom,
             mic: String::new(),
+            speakers: String::new(),
             keep_days: 30,
             cleanup: false,
+            cleanup_engine: SummaryEngine::Claude,
             default_style: Style::Natural,
             summary_engine: SummaryEngine::Claude,
+            speech_threads: 0,
             open_at_launch: true,
             voice: false,
+            voice_engine: SummaryEngine::Claude,
             voice_output: "system".into(),
             voice_gender: "female".into(),
         }
@@ -211,21 +215,24 @@ impl Store {
         store
     }
 
+    fn write<T: Serialize>(&self, value: &T, name: &str) -> std::io::Result<()> {
+        crate::platform::ensure_private_dir(&self.folder)?;
+        let text = serde_json::to_string_pretty(value).map_err(std::io::Error::other)?;
+        let tmp = self.folder.join(format!("{name}.tmp"));
+        std::fs::write(&tmp, text)?;
+        std::fs::rename(&tmp, self.folder.join(name))
+    }
+
     fn save<T: Serialize>(&self, value: &T, name: &str) {
-        let write = || -> std::io::Result<()> {
-            crate::platform::ensure_private_dir(&self.folder)?;
-            let text = serde_json::to_string_pretty(value).map_err(std::io::Error::other)?;
-            let tmp = self.folder.join(format!("{name}.tmp"));
-            std::fs::write(&tmp, text)?;
-            std::fs::rename(&tmp, self.folder.join(name))
-        };
-        if let Err(err) = write() {
+        if let Err(err) = self.write(value, name) {
             crate::log::line(format!("flow: could not save {name}: {err}"));
         }
     }
 
-    pub fn save_prefs(&self) {
-        self.save(&self.prefs, "prefs.json");
+    pub fn set_prefs(&mut self, prefs: Prefs) -> Result<(), String> {
+        self.write(&prefs, "prefs.json").map_err(|e| format!("Could not save Flow settings: {e}"))?;
+        self.prefs = prefs;
+        Ok(())
     }
     pub fn save_words(&self) {
         self.save(&self.words, "words.json");
@@ -342,6 +349,23 @@ mod tests {
     fn temp_store() -> (Store, PathBuf) {
         let dir = std::env::temp_dir().join(format!("coucou-flow-{}-{}", std::process::id(), new_id()));
         (Store::load_from(dir.clone()), dir)
+    }
+
+    #[test]
+    fn preference_writes_are_durable_and_fail_without_changing_live_values() {
+        let (mut store, path) = temp_store();
+        let mut prefs = store.prefs.clone();
+        prefs.speech_threads = 2;
+        prefs.summary_engine = SummaryEngine::Codex;
+        store.set_prefs(prefs.clone()).unwrap();
+        assert_eq!(Store::load_from(path.clone()).prefs, prefs);
+        std::fs::remove_file(path.join("prefs.json")).unwrap();
+        std::fs::create_dir(path.join("prefs.json")).unwrap();
+        let before = store.prefs.clone();
+        prefs.speech_threads = 1;
+        assert!(store.set_prefs(prefs).is_err());
+        assert_eq!(store.prefs, before);
+        std::fs::remove_dir_all(path).unwrap();
     }
 
     #[test]

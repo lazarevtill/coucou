@@ -9,8 +9,8 @@
 use std::fs::File;
 use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::Path;
-use std::sync::mpsc;
-use std::time::Duration;
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use serde::Serialize;
@@ -28,7 +28,7 @@ pub struct Resampler {
     /// Position of the next output sample, in input samples from `buf[0]`.
     pos: f64,
     buf: Vec<f32>,
-    cutoff: f64,
+    coefficients: Vec<[f64; 32]>,
 }
 
 const HALF_TAPS: isize = 16;
@@ -36,7 +36,22 @@ const HALF_TAPS: isize = 16;
 impl Resampler {
     pub fn new(input_rate: u32) -> Self {
         let step = input_rate as f64 / SAMPLE_RATE as f64;
-        Self { step, pos: HALF_TAPS as f64, buf: vec![0.0; HALF_TAPS as usize], cutoff: (1.0 / step).min(1.0) * 0.92 }
+        let cutoff = (1.0 / step).min(1.0) * 0.92;
+        let coefficients = (0..1024).map(|phase| {
+            let frac = phase as f64 / 1024.0;
+            let mut row = [0.0; 32];
+            for (index, coefficient) in row.iter_mut().enumerate() {
+                let x = index as f64 - (HALF_TAPS - 1) as f64 - frac;
+                let sinc = if x.abs() < 1e-9 { 1.0 } else { (std::f64::consts::PI * x * cutoff).sin() / (std::f64::consts::PI * x * cutoff) };
+                let n = (x + HALF_TAPS as f64) / (2.0 * HALF_TAPS as f64);
+                let window = 0.42 - 0.5 * (2.0 * std::f64::consts::PI * n).cos() + 0.08 * (4.0 * std::f64::consts::PI * n).cos();
+                *coefficient = sinc * window;
+            }
+            let norm: f64 = row.iter().sum();
+            for coefficient in &mut row { *coefficient /= norm; }
+            row
+        }).collect();
+        Self { step, pos: HALF_TAPS as f64, buf: vec![0.0; HALF_TAPS as usize], coefficients }
     }
 
     pub fn process(&mut self, input: &[f32], out: &mut Vec<f32>) {
@@ -45,27 +60,16 @@ impl Resampler {
             return;
         }
         self.buf.extend_from_slice(input);
-        let fc = self.cutoff;
         while self.pos + (HALF_TAPS as f64) < self.buf.len() as f64 {
             let centre = self.pos.floor() as isize;
             let frac = self.pos - centre as f64;
-            let mut acc = 0.0f64;
-            let mut norm = 0.0f64;
-            for k in (-HALF_TAPS + 1)..=HALF_TAPS {
-                let idx = centre + k;
-                if idx < 0 || idx as usize >= self.buf.len() {
-                    continue;
-                }
-                let x = k as f64 - frac;
-                let sinc = if x.abs() < 1e-9 { 1.0 } else { (std::f64::consts::PI * x * fc).sin() / (std::f64::consts::PI * x * fc) };
-                // Blackman window over the 32 taps.
-                let n = (x + HALF_TAPS as f64) / (2.0 * HALF_TAPS as f64);
-                let w = 0.42 - 0.5 * (2.0 * std::f64::consts::PI * n).cos() + 0.08 * (4.0 * std::f64::consts::PI * n).cos();
-                let c = sinc * w;
-                acc += self.buf[idx as usize] as f64 * c;
-                norm += c;
-            }
-            out.push(if norm.abs() > 1e-9 { (acc / norm) as f32 } else { 0.0 });
+            // Coefficients are prepared once per device, not recalculated
+            // with sin/cos for every sample on the real-time audio thread.
+            let phase = (frac * 1024.0).floor().clamp(0.0, 1023.0) as usize;
+            let start = (centre - HALF_TAPS + 1) as usize;
+            let value: f64 = self.buf[start..start + 32].iter().zip(&self.coefficients[phase])
+                .map(|(&sample, &coefficient)| sample as f64 * coefficient).sum();
+            out.push(value as f32);
             self.pos += self.step;
         }
         // Keep what the next samples still need.
@@ -177,12 +181,13 @@ pub enum Source {
     /// A microphone by name, or the default one.
     Mic(Option<String>),
     /// What the computer plays (loopback / monitor).
-    System,
+    System(Option<String>),
 }
 
 /// A microphone the user can pick in Settings.
 #[derive(Debug, Clone, Serialize)]
 pub struct InputDevice {
+    pub id: String,
     pub name: String,
     pub default: bool,
 }
@@ -206,11 +211,27 @@ pub fn input_devices() -> Vec<InputDevice> {
             if name.is_empty() || is_monitor(&d) || out.iter().any(|x: &InputDevice| x.name == name) {
                 continue;
             }
-            out.push(InputDevice { default: Some(&name) == default.as_ref(), name });
+            out.push(InputDevice { id: device_id(&d), default: Some(&name) == default.as_ref(), name });
         }
     }
     out.sort_by_key(|d| !d.default);
     out
+}
+
+pub fn output_devices() -> Vec<InputDevice> {
+    let host = cpal::default_host();
+    let default = host.default_output_device().map(|d| device_name(&d));
+    let mut devices: Vec<_> = host.output_devices().into_iter().flatten().map(|d| {
+        let name = device_name(&d);
+        InputDevice { id: device_id(&d), default: Some(&name) == default.as_ref(), name }
+    }).filter(|d| !d.name.is_empty()).collect();
+    devices.sort_by_key(|d| !d.default);
+    devices.dedup_by(|a, b| a.name == b.name);
+    devices
+}
+
+pub fn selected_device_id(source: &Source) -> Option<String> {
+    open_device(source).map(|d| device_id(&d))
 }
 
 fn is_monitor(d: &cpal::Device) -> bool {
@@ -225,22 +246,29 @@ fn open_device(source: &Source) -> Option<cpal::Device> {
         Source::Mic(Some(name)) => host
             .input_devices()
             .ok()
-            .and_then(|mut it| it.find(|d| device_name(d) == *name))
-            .or_else(|| host.default_input_device()),
-        Source::Mic(None) => host.default_input_device(),
-        Source::System => system_device(&host),
+            .and_then(|mut it| it.find(|d| device_id(d) == *name || device_name(d) == *name)),
+        Source::Mic(None) => communication_device(&host, true).or_else(|| host.default_input_device()),
+        Source::System(Some(name)) => host.output_devices().ok()?.find(|d| device_id(d) == *name || device_name(d) == *name)
+            .and_then(|d| loopback_device(&host, d)),
+        Source::System(None) => system_device(&host),
     }
 }
 
 #[cfg(windows)]
 fn system_device(host: &cpal::Host) -> Option<cpal::Device> {
-    // WASAPI turns an output opened for input into its loopback.
-    host.default_output_device()
+    communication_device(host, false).or_else(|| host.default_output_device())
 }
+
+#[cfg(windows)]
+fn loopback_device(_: &cpal::Host, output: cpal::Device) -> Option<cpal::Device> { Some(output) }
 
 #[cfg(not(windows))]
 fn system_device(host: &cpal::Host) -> Option<cpal::Device> {
-    let sink = host.default_output_device()?;
+    loopback_device(host, host.default_output_device()?)
+}
+
+#[cfg(not(windows))]
+fn loopback_device(host: &cpal::Host, sink: cpal::Device) -> Option<cpal::Device> {
     let sink_id = device_id(&sink);
     let wanted = format!("{}.monitor", sink_id.rsplit(':').next().unwrap_or(&sink_id));
     let mut monitors: Vec<cpal::Device> = host.input_devices().ok()?.filter(is_monitor).collect();
@@ -251,22 +279,58 @@ fn system_device(host: &cpal::Host) -> Option<cpal::Device> {
     }
 }
 
+#[cfg(not(windows))]
+fn communication_device(_: &cpal::Host, _: bool) -> Option<cpal::Device> { None }
+
+#[cfg(windows)]
+fn communication_device(host: &cpal::Host, input: bool) -> Option<cpal::Device> {
+    use windows::Win32::{Media::Audio::{IMMDeviceEnumerator, MMDeviceEnumerator, eCapture, eRender, eCommunications},
+        System::Com::{CoInitializeEx, CoUninitialize, CoCreateInstance, CoTaskMemFree, COINIT_MULTITHREADED, CLSCTX_ALL}};
+    struct Com(bool);
+    impl Drop for Com { fn drop(&mut self) { if self.0 { unsafe { CoUninitialize(); } } } }
+    unsafe {
+        let _com = Com(CoInitializeEx(None, COINIT_MULTITHREADED).is_ok());
+        let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+        let endpoint = enumerator.GetDefaultAudioEndpoint(if input { eCapture } else { eRender }, eCommunications).ok()?;
+        let raw = endpoint.GetId().ok()?;
+        let id = raw.to_string();
+        CoTaskMemFree(Some(raw.0.cast()));
+        host.device_by_id(&cpal::DeviceId::new(cpal::HostId::Wasapi, id.ok()?))
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CaptureInfo {
+    pub name: String,
+    pub sample_rate: u32,
+    pub channels: u16,
+}
+
 /// An open input. Dropping it (or `stop`) closes the device.
 pub struct Capture {
     stop: Option<mpsc::Sender<()>>,
     thread: Option<std::thread::JoinHandle<()>>,
+    error: Arc<Mutex<Option<String>>>,
+    info: CaptureInfo,
 }
 
 impl Capture {
     /// Opens `source` and calls `sink` with 16 kHz mono samples from the audio
     /// thread. The stream lives on its own thread (cpal streams can't move).
-    pub fn start(source: Source, sink: impl FnMut(&[f32]) + Send + 'static) -> Result<Capture, String> {
-        let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
+    pub fn start(source: Source, mut sink: impl FnMut(&[f32]) + Send + 'static) -> Result<Capture, String> {
+        Self::start_timed(source, Instant::now(), move |samples, _| sink(samples))
+    }
+
+    pub fn start_timed(source: Source, origin: Instant, sink: impl FnMut(&[f32], Duration) + Send + 'static) -> Result<Capture, String> {
+        let error = Arc::new(Mutex::new(None));
+        let stream_error = error.clone();
+        let (ready_tx, ready_rx) = mpsc::channel::<Result<CaptureInfo, String>>();
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         let thread = std::thread::Builder::new()
             .name("coucou-audio".into())
             .spawn(move || {
-                let stream = match build_stream(&source, sink) {
+                let (stream, info) = match build_stream(&source, origin, stream_error, sink) {
                     Ok(s) => s,
                     Err(err) => {
                         let _ = ready_tx.send(Err(err));
@@ -277,17 +341,21 @@ impl Capture {
                     let _ = ready_tx.send(Err(err.to_string()));
                     return;
                 }
-                let _ = ready_tx.send(Ok(()));
+                let _ = ready_tx.send(Ok(info));
                 let _ = stop_rx.recv();
                 drop(stream);
             })
             .map_err(|e| e.to_string())?;
         match ready_rx.recv_timeout(Duration::from_secs(5)) {
-            Ok(Ok(())) => Ok(Capture { stop: Some(stop_tx), thread: Some(thread) }),
+            Ok(Ok(info)) => Ok(Capture { stop: Some(stop_tx), thread: Some(thread), error, info }),
             Ok(Err(err)) => Err(err),
             Err(_) => Err("the audio device did not answer".into()),
         }
     }
+
+    pub fn info(&self) -> &CaptureInfo { &self.info }
+
+    pub fn error(&self) -> Option<String> { self.error.lock().unwrap().clone() }
 
     pub fn stop(&mut self) {
         if let Some(tx) = self.stop.take() {
@@ -305,13 +373,14 @@ impl Drop for Capture {
     }
 }
 
-fn build_stream(source: &Source, mut sink: impl FnMut(&[f32]) + Send + 'static) -> Result<cpal::Stream, String> {
+fn build_stream(source: &Source, origin: Instant, error: Arc<Mutex<Option<String>>>, mut sink: impl FnMut(&[f32], Duration) + Send + 'static) -> Result<(cpal::Stream, CaptureInfo), String> {
     let device = open_device(source).ok_or("no audio device")?;
-    let supported = if *source == Source::System && cfg!(windows) {
+    let supported = if matches!(source, Source::System(_)) && cfg!(windows) {
         device.default_output_config().map_err(|e| e.to_string())?
     } else {
         device.default_input_config().map_err(|e| e.to_string())?
     };
+    let info = CaptureInfo { name: device_name(&device), sample_rate: supported.sample_rate(), channels: supported.channels() };
     let channels = supported.channels().max(1) as usize;
     let rate = supported.sample_rate();
     let format = supported.sample_format();
@@ -319,7 +388,9 @@ fn build_stream(source: &Source, mut sink: impl FnMut(&[f32]) + Send + 'static) 
     let mut resampler = Resampler::new(rate);
     let mut mono: Vec<f32> = Vec::with_capacity(4096);
     let mut out: Vec<f32> = Vec::with_capacity(4096);
-    let mut push = move |frame_samples: &mut dyn Iterator<Item = f32>| {
+    let mut push = move |frame_samples: &mut dyn Iterator<Item = f32>, info: &cpal::InputCallbackInfo| {
+        let stamp = info.timestamp();
+        let at = origin.elapsed().saturating_sub(stamp.callback.duration_since(stamp.capture));
         mono.clear();
         let mut acc = 0.0f32;
         let mut n = 0usize;
@@ -335,38 +406,41 @@ fn build_stream(source: &Source, mut sink: impl FnMut(&[f32]) + Send + 'static) 
         out.clear();
         resampler.process(&mono, &mut out);
         if !out.is_empty() {
-            sink(&out);
+            sink(&out, at);
         }
     };
-    let err_fn = |err: cpal::Error| crate::log::line(format!("audio: {err}"));
+    let err_fn = move |err: cpal::Error| {
+        crate::log::line(format!("audio: {err}"));
+        *error.lock().unwrap() = Some(err.to_string());
+    };
     let stream = match format {
         cpal::SampleFormat::F32 => device.build_input_stream::<f32, _, _>(
             config,
-            move |data: &[f32], _| push(&mut data.iter().copied()),
+            move |data: &[f32], info| push(&mut data.iter().copied(), info),
             err_fn,
             None,
         ),
         cpal::SampleFormat::I16 => device.build_input_stream::<i16, _, _>(
             config,
-            move |data: &[i16], _| push(&mut data.iter().map(|&s| s as f32 / 32768.0)),
+            move |data: &[i16], info| push(&mut data.iter().map(|&s| s as f32 / 32768.0), info),
             err_fn,
             None,
         ),
         cpal::SampleFormat::I32 => device.build_input_stream::<i32, _, _>(
             config,
-            move |data: &[i32], _| push(&mut data.iter().map(|&s| s as f32 / 2_147_483_648.0)),
+            move |data: &[i32], info| push(&mut data.iter().map(|&s| s as f32 / 2_147_483_648.0), info),
             err_fn,
             None,
         ),
         cpal::SampleFormat::U16 => device.build_input_stream::<u16, _, _>(
             config,
-            move |data: &[u16], _| push(&mut data.iter().map(|&s| (s as f32 - 32768.0) / 32768.0)),
+            move |data: &[u16], info| push(&mut data.iter().map(|&s| (s as f32 - 32768.0) / 32768.0), info),
             err_fn,
             None,
         ),
         other => return Err(format!("unsupported sample format {other:?}")),
     };
-    stream.map_err(|e| e.to_string())
+    stream.map(|stream| (stream, info)).map_err(|e| e.to_string())
 }
 
 // ── A recording in memory ─────────────────────────────────────────────────────
@@ -433,7 +507,8 @@ impl WavWriter {
             let v = (s.clamp(-1.0, 1.0) * 32767.0) as i16;
             self.out.write_all(&v.to_le_bytes())?;
         }
-        self.samples = self.samples.saturating_add(samples.len() as u32);
+        self.samples = self.samples.checked_add(u32::try_from(samples.len()).map_err(|_| std::io::Error::other("recording too long"))?)
+            .filter(|n| *n <= (u32::MAX - 36) / 2).ok_or_else(|| std::io::Error::other("recording too long"))?;
         Ok(())
     }
 
@@ -509,6 +584,21 @@ mod tests {
         assert!((crossings as i64 - 220).abs() <= 2, "{crossings}");
         let peak = mid.iter().fold(0.0f32, |m, &s| m.max(s.abs()));
         assert!((peak - 0.5).abs() < 0.05, "{peak}");
+    }
+
+    #[test]
+    fn resampling_suppresses_aliases_and_preserves_non_integer_rate_speech() {
+        for rate in [44_100, 48_000] {
+            let mut converter = Resampler::new(rate);
+            let mut speech = Vec::new();
+            for chunk in tone(1000.0, rate, 1.0).chunks(441) { converter.process(chunk, &mut speech); }
+            let rms = |v: &[f32]| (v.iter().map(|x| x*x).sum::<f32>() / v.len() as f32).sqrt();
+            assert!((rms(&speech[2000..14000]) - 0.35355).abs() < 0.02);
+            let mut converter = Resampler::new(rate);
+            let mut high = Vec::new();
+            converter.process(&tone(12_000.0, rate, 1.0), &mut high);
+            assert!(rms(&high[2000..14000]) < 0.01, "alias from {rate} Hz");
+        }
     }
 
     #[test]

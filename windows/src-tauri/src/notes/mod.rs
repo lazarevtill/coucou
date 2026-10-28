@@ -8,11 +8,13 @@
 // people should be told it is recorded.
 
 pub mod builder;
+pub mod track;
+mod summary;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -63,6 +65,8 @@ pub struct Note {
     /// The start written out in local time ("2026-10-14 22:31"), for the Markdown.
     #[serde(default)]
     pub start_local: String,
+    #[serde(default)]
+    pub capture_warning: Option<String>,
 }
 
 /// One side of the call being written to disk, with what the live transcript
@@ -74,19 +78,45 @@ struct Channel {
     /// Where `live` starts, in samples from the start of the recording.
     live_start: usize,
     total: usize,
+    error: Option<String>,
 }
 
 impl Channel {
     fn new(path: &std::path::Path) -> std::io::Result<Channel> {
-        Ok(Channel { writer: Some(audio::WavWriter::create(path)?), live: Vec::new(), live_start: 0, total: 0 })
+        Ok(Channel { writer: Some(audio::WavWriter::create(path)?), live: Vec::new(), live_start: 0, total: 0, error: None })
     }
 
     fn push(&mut self, samples: &[f32]) {
         if let Some(w) = self.writer.as_mut() {
-            let _ = w.write(samples);
+            if let Err(error) = w.write(samples) {
+                self.error = Some(format!("Could not write call audio: {error}"));
+                return;
+            }
         }
         self.live.extend_from_slice(samples);
         self.total += samples.len();
+        let keep = speech::SAMPLE_RATE as usize * 30;
+        if self.live.len() > keep {
+            let discard = self.live.len() - keep;
+            self.live.drain(..discard);
+            self.live_start += discard;
+        }
+    }
+
+    fn push_at(&mut self, samples: &[f32], at: Duration) {
+        if self.error.is_some() { return; }
+        let target = (at.as_secs_f64() * speech::SAMPLE_RATE as f64).round() as usize;
+        let tolerance = speech::SAMPLE_RATE as usize / 50;
+        // Preserve gaps while loopback is silent, a headset reconnects or the
+        // two devices start at different times. Small callback jitter is ignored.
+        if self.total == 0 || target > self.total + tolerance {
+            let silence = [0.0_f32; 4096];
+            while target > self.total && self.error.is_none() {
+                self.push(&silence[..(target - self.total).min(silence.len())]);
+            }
+        }
+        let overlap = if self.total > target + tolerance { (self.total - target).min(samples.len()) } else { 0 };
+        self.push(&samples[overlap..]);
     }
 
     /// A stretch ending on a pause (or a long one) for the live transcript.
@@ -112,15 +142,15 @@ impl Channel {
 
     fn close(&mut self) {
         if let Some(w) = self.writer.take() {
-            let _ = w.finish();
+            if let Err(error) = w.finish() { self.error = Some(format!("Could not finish call audio: {error}")); }
         }
     }
 }
 
 struct Recording {
     id: String,
-    mic: audio::Capture,
-    system: Option<audio::Capture>,
+    mic: track::Track,
+    system: Option<track::Track>,
     mic_channel: Arc<Mutex<Channel>>,
     system_channel: Option<Arc<Mutex<Channel>>>,
     stop_live: Arc<AtomicBool>,
@@ -148,6 +178,11 @@ fn get(app: &AppHandle) -> Option<Arc<NoteTaker>> {
 
 pub fn is_recording(app: &AppHandle) -> bool {
     get(app).is_some_and(|n| n.recording.lock().unwrap().is_some())
+}
+
+pub fn is_busy(app: &AppHandle) -> bool {
+    get(app).is_some_and(|n| n.starting.load(Ordering::Relaxed)
+        || n.recording.lock().unwrap().is_some() || !n.working.lock().unwrap().is_empty())
 }
 
 fn now_ms() -> u64 {
@@ -261,7 +296,7 @@ fn start_inner(app: &AppHandle, taker: &Arc<NoteTaker>) -> Result<String, String
     let now = now_ms();
     let stamp = local_stamp();
     let id = crate::flow::text::new_id();
-    let note = Note {
+    let mut note = Note {
         id: id.clone(),
         title: tf("Call · {0}", &[("0", stamp.get(5..).unwrap_or(&stamp))]),
         title_edited: false,
@@ -276,36 +311,28 @@ fn start_inner(app: &AppHandle, taker: &Arc<NoteTaker>) -> Result<String, String
         todos: Vec::new(),
         error: None,
         start_local: stamp,
+        capture_warning: None,
     };
     let dir = note_dir(&id);
     crate::platform::ensure_private_dir(&dir).map_err(|e| e.to_string())?;
-    let mic_channel = Arc::new(Mutex::new(Channel::new(&dir.join("mic.wav")).map_err(|e| e.to_string())?));
-    let mic_pref = crate::flow::get(app).map(|f| f.store.lock().unwrap().prefs.mic.clone()).unwrap_or_default();
-    let sink = mic_channel.clone();
-    let mic = audio::Capture::start(audio::Source::Mic(if mic_pref.is_empty() { None } else { Some(mic_pref) }), move |s| {
-        sink.lock().unwrap().push(s)
-    })
-    .map_err(|err| {
-        crate::log::line(format!("notes: microphone: {err}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        t("Coucou can't hear you: the microphone is not allowed or not available.")
-    })?;
-    // Without the computer's sound, the call is noted from the microphone alone.
-    let (system, system_channel) = match Channel::new(&dir.join("system.wav")) {
-        Ok(channel) => {
-            let channel = Arc::new(Mutex::new(channel));
-            let sink = channel.clone();
-            match audio::Capture::start(audio::Source::System, move |s| sink.lock().unwrap().push(s)) {
-                Ok(capture) => (Some(capture), Some(channel)),
-                Err(err) => {
-                    crate::log::line(format!("notes: system sound unavailable: {err}"));
-                    let _ = std::fs::remove_file(dir.join("system.wav"));
-                    (None, None)
-                }
-            }
-        }
-        Err(_) => (None, None),
-    };
+    let origin = Instant::now();
+    let prefs = crate::flow::get(app).map(|f| f.store.lock().unwrap().prefs.clone()).unwrap_or_default();
+    let mic = track::Track::start(audio::Source::Mic((!prefs.mic.is_empty()).then_some(prefs.mic)), origin, &dir.join("mic.wav"))?;
+    let system = track::Track::start(audio::Source::System((!prefs.speakers.is_empty()).then_some(prefs.speakers)), origin, &dir.join("system.wav"))?;
+    let mic_channel = mic.channel.clone();
+    let system_channel = Some(system.channel.clone());
+    if !mic.status().connected && !system.status().connected {
+        drop(mic);
+        drop(system);
+        let _ = std::fs::remove_file(dir.join("mic.wav"));
+        let _ = std::fs::remove_file(dir.join("system.wav"));
+        let _ = std::fs::remove_dir(&dir);
+        return Err(t("No audio source is available. Choose a microphone and playback device in Flow Settings."));
+    }
+    if !system.status().connected {
+        note.capture_warning = Some(t("Computer audio is unavailable. Only your microphone is being recorded. Check the Windows sound output device."));
+    }
+    let system = Some(system);
     let stop_live = Arc::new(AtomicBool::new(false));
     taker.notes.lock().unwrap().insert(0, note.clone());
     taker.save(&note);
@@ -318,11 +345,44 @@ fn start_inner(app: &AppHandle, taker: &Arc<NoteTaker>) -> Result<String, String
         stop_live: stop_live.clone(),
     });
     speech::preload();
+    spawn_monitor(app.clone(), taker.clone(), id.clone(), stop_live.clone());
     spawn_live(app.clone(), taker.clone(), id.clone(), mic_channel, system_channel, stop_live);
     pill::update(app, |s| s.note_started_at = Some(note.start));
     let _ = app.emit_to(crate::HUB_LABEL, "notes-changed", &id);
     crate::log::line("notes: recording");
     Ok(id)
+}
+
+/// Device recovery must keep running even when inference is slow.
+fn spawn_monitor(app: AppHandle, taker: Arc<NoteTaker>, id: String, stop: Arc<AtomicBool>) {
+    std::thread::spawn(move || {
+        while !stop.load(Ordering::Relaxed) {
+            std::thread::sleep(Duration::from_secs(1));
+            if stop.load(Ordering::Relaxed) { break; }
+            let warning = {
+                let mut recording = taker.recording.lock().unwrap();
+                let Some(rec) = recording.as_mut().filter(|r| r.id == id) else { break };
+                let prefs = crate::flow::get(&app).map(|f| f.store.lock().unwrap().prefs.clone()).unwrap_or_default();
+                rec.mic.set_source(audio::Source::Mic((!prefs.mic.is_empty()).then_some(prefs.mic)));
+                rec.mic.refresh();
+                if let Some(system) = rec.system.as_mut() {
+                    system.set_source(audio::Source::System((!prefs.speakers.is_empty()).then_some(prefs.speakers)));
+                    system.refresh();
+                }
+                recording_warning(rec)
+            };
+            if taker.note(&id).is_some_and(|n| n.capture_warning != warning) {
+                taker.change(&app, &id, |n| n.capture_warning = warning);
+            }
+        }
+    });
+}
+
+fn recording_warning(rec: &Recording) -> Option<String> {
+    let warnings: Vec<String> = [Some(rec.mic.status()), rec.system.as_ref().map(|s| s.status())]
+        .into_iter().flatten().flat_map(|s| s.warnings.into_iter().map(move |e| format!("{}: {e}", s.source)))
+        .collect();
+    (!warnings.is_empty()).then(|| warnings.join("\n"))
 }
 
 /// Every second while recording: the stretches ending on a pause go to
@@ -339,6 +399,7 @@ fn spawn_live(
     std::thread::spawn(move || {
         while !stop.load(Ordering::Relaxed) {
             std::thread::sleep(Duration::from_secs(1));
+            if stop.load(Ordering::Relaxed) { break; }
             let mut channels = vec![(mic.clone(), builder::ME)];
             if let Some(s) = &system {
                 channels.push((s.clone(), "others"));
@@ -378,6 +439,8 @@ pub fn stop(app: &AppHandle) {
         n.status = Status::Processing;
     });
     pill::update(app, |s| s.note_started_at = None);
+    let warning = recording_warning(&rec);
+    taker.change(app, &rec.id, |n| n.capture_warning = warning);
     let app = app.clone();
     let id = rec.id.clone();
     std::thread::spawn(move || process(&app, &id));
@@ -397,9 +460,11 @@ pub fn shutdown(app: &AppHandle) {
     if let Some(c) = &rec.system_channel {
         c.lock().unwrap().close();
     }
+    let warning = recording_warning(&rec);
     taker.change(app, &rec.id, |n| {
         n.end = Some(now_ms());
         n.status = Status::Processing;
+        n.capture_warning = warning;
     });
 }
 
@@ -434,7 +499,7 @@ fn process(app: &AppHandle, id: &str) {
     taker.working.lock().unwrap().retain(|w| w != id);
     if result.is_ok() {
         let engine = crate::flow::get(app).map(|f| f.store.lock().unwrap().prefs.summary_engine).unwrap_or_default();
-        if engine == SummaryEngine::Claude && crate::flow::cleanup::has_key() {
+        if engine != SummaryEngine::Off {
             summarize(app, id);
         }
         let title = taker.note(id).map(|n| n.title).unwrap_or_default();
@@ -508,35 +573,24 @@ fn summarize(app: &AppHandle, id: &str) {
     if note.lines.is_empty() {
         return;
     }
-    taker.working.lock().unwrap().push(id.to_string());
-    let _ = app.emit_to(crate::HUB_LABEL, "notes-changed", id);
-    let model = app
-        .try_state::<crate::Shared>()
-        .map(|s| s.settings.lock().unwrap().model.clone())
-        .filter(|m| !m.is_empty())
-        .unwrap_or_else(|| crate::claude::DEFAULT_MODEL.to_string());
-    let mut transcript = plain_transcript(&note);
-    if transcript.len() > 400_000 {
-        let mut cut = 400_000;
-        while !transcript.is_char_boundary(cut) {
-            cut -= 1;
-        }
-        transcript.truncate(cut);
+    {
+        let mut working = taker.working.lock().unwrap();
+        if working.iter().any(|w| w == id) { return; }
+        working.push(id.to_string());
     }
-    let user = format!("<transcript>\n{transcript}\n</transcript>");
-    let reply = tauri::async_runtime::block_on(async {
-        match crate::claude::complete(&model, builder::SUMMARY_INSTRUCTIONS, &user, 2048, Duration::from_secs(120)).await {
-            Ok(text) => Some(text),
-            Err(_) => crate::claude::complete(crate::flow::cleanup::MODEL, builder::SUMMARY_INSTRUCTIONS, &user, 2048, Duration::from_secs(120))
-                .await
-                .ok(),
-        }
-    });
+    let _ = app.emit_to(crate::HUB_LABEL, "notes-changed", id);
+    let engine = crate::flow::get(app).map(|f| f.store.lock().unwrap().prefs.summary_engine).unwrap_or_default();
+    let settings = app.state::<crate::Shared>().settings.lock().unwrap().clone();
+    let reply = tauri::async_runtime::block_on(summary::write(&settings, engine, &plain_transcript(&note)));
     taker.working.lock().unwrap().retain(|w| w != id);
-    let Some(reply) = reply else {
-        let _ = app.emit_to(crate::HUB_LABEL, "notes-changed", id);
-        return;
+    let reply = match reply {
+        Ok(reply) => reply,
+        Err(error) => {
+            taker.change(app, id, |n| n.error = Some(format!("Summary: {error}")));
+            return;
+        }
     };
+    taker.change(app, id, |n| n.error = None);
     taker.change(app, id, |n| match builder::parse_summary(&reply) {
         Some(parsed) => {
             if let Some(title) = parsed.title.filter(|_| !n.title_edited) {
@@ -608,16 +662,27 @@ pub struct NotesState {
     notes: Vec<Note>,
     recording: Option<String>,
     working: Vec<String>,
+    audio: Vec<track::SourceStatus>,
 }
 
 #[tauri::command]
 pub fn notes_state(taker: State<Arc<NoteTaker>>) -> NotesState {
-    NotesState {
-        notes: taker.notes.lock().unwrap().clone(),
-        recording: taker.recording.lock().unwrap().as_ref().map(|r| r.id.clone()),
-        working: taker.working.lock().unwrap().clone(),
-    }
+    let notes = taker.notes.lock().unwrap().clone();
+    let recording = taker.recording.lock().unwrap().as_ref().map(|r| r.id.clone());
+    let working = taker.working.lock().unwrap().clone();
+    NotesState { notes, recording, working, audio: audio_status(&taker) }
 }
+
+fn audio_status(taker: &NoteTaker) -> Vec<track::SourceStatus> {
+    let recording = taker.recording.lock().unwrap();
+    let Some(rec) = recording.as_ref() else { return vec![]; };
+    let mut status = vec![rec.mic.status()];
+    if let Some(system) = &rec.system { status.push(system.status()); }
+    status
+}
+
+#[tauri::command]
+pub fn notes_audio_status(taker: State<Arc<NoteTaker>>) -> Vec<track::SourceStatus> { audio_status(&taker) }
 
 #[tauri::command]
 pub async fn notes_start(app: AppHandle) -> Result<String, String> {
@@ -715,4 +780,36 @@ pub fn notes_export(taker: State<Arc<NoteTaker>>, id: String) -> Result<String, 
     std::fs::write(&path, markdown(&note)).map_err(|e| e.to_string())?;
     crate::platform::reveal_folder(&dir.to_string_lossy());
     Ok(path.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod capture_tests {
+    use super::*;
+    #[test]
+    fn delayed_sources_and_reconnections_preserve_the_call_timeline() {
+        let path = std::env::temp_dir().join(format!("coucou-channel-{}.wav", crate::flow::text::new_id()));
+        let mut channel = Channel::new(&path).unwrap();
+        channel.push_at(&vec![0.5; 1600], Duration::from_secs(2));
+        channel.push_at(&vec![0.25; 1600], Duration::from_secs(4));
+        channel.close();
+        let samples = audio::read_wav(&path).unwrap();
+        assert_eq!(samples.len(), 65_600);
+        assert!(samples[..32_000].iter().all(|v| *v == 0.0));
+        assert!(samples[32_000..33_600].iter().all(|v| (*v - 0.5).abs() < 0.001));
+        assert!(samples[33_600..64_000].iter().all(|v| *v == 0.0));
+        assert!(samples[64_000..].iter().all(|v| (*v - 0.25).abs() < 0.001));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn live_preview_memory_is_bounded_without_truncating_the_saved_audio() {
+        let path = std::env::temp_dir().join(format!("coucou-channel-{}.wav", crate::flow::text::new_id()));
+        let mut channel = Channel::new(&path).unwrap();
+        channel.push(&vec![0.1; 16_000 * 40]);
+        assert_eq!(channel.live.len(), 16_000 * 30);
+        assert_eq!(channel.live_start, 16_000 * 10);
+        channel.close();
+        assert_eq!(audio::read_wav(&path).unwrap().len(), 16_000 * 40);
+        std::fs::remove_file(path).unwrap();
+    }
 }

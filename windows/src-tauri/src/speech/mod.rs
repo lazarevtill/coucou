@@ -9,6 +9,7 @@
 
 pub mod audio;
 pub mod performance;
+pub mod monitor;
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -257,12 +258,24 @@ async fn download_all(app: &AppHandle) -> Result<(), String> {
 }
 
 /// Deletes the models (Settings → Remove the models).
-pub fn remove(app: &AppHandle) {
-    unload();
-    let _ = std::fs::remove_dir_all(PARAKEET.dir());
-    let _ = std::fs::remove_dir_all(DIARIZER.dir());
-    downloads().lock().unwrap().error = None;
+pub fn remove(app: &AppHandle) -> Result<(), String> {
+    {
+        let mut d = downloads().lock().unwrap();
+        if d.running { return Err("Wait for the model download to finish.".into()); }
+        if crate::notes::is_busy(app) || crate::voice::is_listening() {
+            return Err("Stop recording, transcription and voice before removing the models.".into());
+        }
+        let _loading = load_lock().lock().unwrap();
+        performance::retune();
+        let _files = model_files_lock().lock().unwrap();
+        unload();
+        for dir in [PARAKEET.dir(), DIARIZER.dir()] {
+            if dir.exists() { std::fs::remove_dir_all(dir).map_err(|e| format!("Could not remove the speech models: {e}"))?; }
+        }
+        d.error = None;
+    }
     emit_status(app);
+    Ok(())
 }
 
 // ── Recognition ───────────────────────────────────────────────────────────────

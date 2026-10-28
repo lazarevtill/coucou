@@ -11,7 +11,6 @@ use std::time::Duration;
 use super::store::Style;
 use super::text;
 
-pub const MODEL: &str = "claude-haiku-4-5";
 /// Past this, the words are pasted as heard rather than keeping you waiting.
 const TIMEOUT: Duration = Duration::from_secs(4);
 
@@ -19,12 +18,12 @@ pub fn has_key() -> bool {
     crate::secrets::present(crate::claude::KEY)
 }
 
-pub async fn clean(raw: &str, style: Style, app: Option<&str>, words: &[String]) -> String {
-    if style == Style::Verbatim || text::word_count(raw) < 3 || !has_key() {
+pub async fn clean(settings: &crate::settings::Settings, engine: crate::text_ai::Engine, raw: &str, style: Style, app: Option<&str>, words: &[String]) -> String {
+    if style == Style::Verbatim || text::word_count(raw) < 3 {
         return raw.to_string();
     }
     let user = format!("<dictation>\n{raw}\n</dictation>");
-    match crate::claude::complete(MODEL, &system(style, app, words), &user, 2048, TIMEOUT).await {
+    match crate::text_ai::complete(settings, engine, &system(style, app, words), &user, 2048, TIMEOUT).await {
         Ok(reply) => {
             let cleaned = reply.replace("<dictation>", "").replace("</dictation>", "").trim().to_string();
             if plausible(&cleaned, raw) {
