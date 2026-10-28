@@ -33,6 +33,24 @@ fn runtime() -> &'static Mutex<Runtime> {
     R.get_or_init(|| Mutex::new(Runtime::default()))
 }
 
+fn worker() -> &'static Mutex<Option<std::thread::JoinHandle<()>>> {
+    static W: OnceLock<Mutex<Option<std::thread::JoinHandle<()>>>> = OnceLock::new();
+    W.get_or_init(|| Mutex::new(None))
+}
+
+/// Native inference must finish before the process tears ONNX Runtime down.
+pub fn shutdown() {
+    let handle = {
+        let mut worker = worker().lock().unwrap();
+        let mut state = runtime().lock().unwrap();
+        state.generation += 1;
+        state.attempted = true;
+        worker.take()
+    };
+    if let Some(handle) = handle { let _ = handle.join(); }
+    runtime().lock().unwrap().tuning = false;
+}
+
 pub fn available_threads() -> u16 {
     std::thread::available_parallelism().map(|n| n.get().min(16) as u16).unwrap_or(1)
 }
@@ -126,6 +144,7 @@ pub fn retune() {
 /// is available. It never changes that transcript. Manual changes invalidate it.
 pub fn consider(samples: &[f32]) {
     if samples.len() < super::SAMPLE_RATE as usize * 3 { return; }
+    let mut worker = worker().lock().unwrap();
     let generation = {
         let mut state = runtime().lock().unwrap();
         if state.manual > 0 || state.cache.is_some() || state.tuning || state.attempted { return; }
@@ -134,12 +153,13 @@ pub fn consider(samples: &[f32]) {
         state.generation
     };
     let sample = samples[..samples.len().min(super::SAMPLE_RATE as usize * 6)].to_vec();
-    std::thread::spawn(move || {
+    *worker = Some(std::thread::spawn(move || {
         let mut measurements = Vec::new();
         let mut reference: Option<String> = None;
         for threads in candidates(available_threads()) {
             if runtime().lock().unwrap().generation != generation { break; }
             let Some(rec) = super::create_recognizer(threads as i32) else { continue };
+            if runtime().lock().unwrap().generation != generation { break; }
             let decode = || {
                 let stream = rec.create_stream();
                 stream.accept_waveform(super::SAMPLE_RATE as i32, &sample);
@@ -175,7 +195,7 @@ pub fn consider(samples: &[f32]) {
         }
         state.cache = Some(cache);
         crate::log::line(format!("Parakeet measured CPU selection: {} threads", selected(&state)));
-    });
+    }));
 }
 
 #[cfg(test)]

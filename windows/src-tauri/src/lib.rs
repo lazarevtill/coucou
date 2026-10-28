@@ -1410,6 +1410,7 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 phone_link::stop_on_exit(app);
                 notes::shutdown(app);
+                speech::performance::shutdown();
                 // GOWA started by Coucou stops with it; the conversations were only in memory.
                 whatsapp::shutdown();
             }

@@ -503,6 +503,9 @@ mod with_models {
         assert!(!t.text.is_empty());
         let turns = super::diarize(&samples);
         println!("{turns:?}");
+        assert!(!turns.is_empty(), "the fixture must contain a detected voice");
+        super::performance::shutdown();
+        assert!(!super::performance::status().tuning);
     }
 }
 
