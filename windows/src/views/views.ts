@@ -14,7 +14,7 @@ import { washRGBA, type IslandViewName, type Wash } from "../core/layout";
 import { stillStarting } from "../core/launching";
 import { createMiniBot, pruneMiniBots } from "../mochi/minibots";
 import { buildPrompt } from "./chat";
-import { buildChoose, buildUpload, buildUploading } from "./upload";
+import { buildChoose, buildMail, buildUpload, buildUploading } from "./upload";
 import { renderIntegrationCard, type IntegrationCardHooks } from "./integrations";
 import { highlightRow, listRows, openRow } from "./github";
 import { pillDefinition, sessionSubtitle } from "../core/pills";
@@ -987,8 +987,7 @@ export function buildViews(
   map.set("wardrobe", buildWardrobe(actions));
   map.set("update", buildUpdate());
   map.set("whatsNew", buildWhatsNew());
-  // Not in the Windows v1: sending a file by email, window attach + web result.
-  map.set("mail", buildPlaceholder(tl("Sending by email isn't in this version."), ""));
+  map.set("mail", buildMail(actions));
   map.set("searching", buildPlaceholder(tl("Claude is searching…"), ""));
   map.set("result", buildPlaceholder(tl("Result"), ""));
   return map;

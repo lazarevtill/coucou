@@ -2401,21 +2401,6 @@
       "th": "ส่งข้อความ",
       "zh-Hant": "發送消息"
     },
-    "Sending by email isn't in this version.": {
-      "zh-Hans": "此版本暂不支持通过邮件发送。",
-      "hi": "ईमेल से भेजना इस संस्करण में नहीं है।",
-      "es": "El envío por correo no está en esta versión.",
-      "ar": "الإرسال بالبريد الإلكتروني غير متاح في هذا الإصدار.",
-      "fr": "L'envoi par e-mail n'est pas dans cette version.",
-      "bn": "ইমেলে পাঠানো এই সংস্করণে নেই।",
-      "pt-BR": "O envio por e-mail não está nesta versão.",
-      "ru": "Отправки по почте в этой версии нет.",
-      "id": "Mengirim lewat email belum ada di versi ini.",
-      "de": "Der E-Mail-Versand ist in dieser Version nicht verfügbar.",
-      "tr": "Bu sürümde e-postayla gönderme yok.",
-      "th": "เวอร์ชันนี้ยังส่งทางอีเมลไม่ได้",
-      "zh-Hant": "此版本暫不支持通過郵件發送。"
-    },
     "Sessions — approvals stay in the agent": {
       "zh-Hans": "会话 — 审批仍在代理中进行",
       "hi": "सत्र — अनुमतियाँ एजेंट में ही रहती हैं",
@@ -7713,6 +7698,36 @@
       "hi": "{0} का अनुसरण",
       "bn": "{0} অনুসরণ করছে",
       "th": "ตาม {0}"
+    },
+    "Only files dropped on the island can be shared.": {
+      "fr": "Seuls les fichiers déposés sur l’îlot peuvent être partagés.",
+      "ru": "Можно поделиться только файлами, перетащенными на островок.",
+      "es": "Solo se pueden compartir archivos soltados en la isla.",
+      "de": "Nur auf der Insel abgelegte Dateien können geteilt werden.",
+      "pt-BR": "Só é possível compartilhar arquivos soltos na ilha.",
+      "id": "Hanya berkas yang dijatuhkan di pulau yang dapat dibagikan.",
+      "zh-Hans": "只能分享拖放到浮岛上的文件。",
+      "zh-Hant": "只能分享拖放到浮島上的檔案。",
+      "ar": "يمكن مشاركة الملفات التي أُسقطت على الجزيرة فقط.",
+      "hi": "केवल आइलैंड पर छोड़ी गई फ़ाइलें साझा की जा सकती हैं।",
+      "bn": "শুধু আইল্যান্ডে ড্রপ করা ফাইল শেয়ার করা যায়।",
+      "th": "แชร์ได้เฉพาะไฟล์ที่ลากมาวางบนเกาะ",
+      "tr": "Yalnızca adaya bırakılan dosyalar paylaşılabilir."
+    },
+    "Choose your mail app in Windows Share, then review and send there.": {
+      "fr": "Choisissez votre application de messagerie dans le partage Windows, puis vérifiez et envoyez depuis celle-ci.",
+      "ru": "Выберите почтовое приложение в окне «Поделиться» Windows, затем проверьте и отправьте письмо в нём.",
+      "es": "Elige tu aplicación de correo en Compartir de Windows, revisa el mensaje y envíalo desde allí.",
+      "de": "Wähle deine Mail-App im Windows-Teilen-Dialog, prüfe die Nachricht und sende sie dort.",
+      "pt-BR": "Escolha seu aplicativo de e-mail no Compartilhar do Windows, revise e envie por ele.",
+      "id": "Pilih aplikasi email di Berbagi Windows, lalu tinjau dan kirim dari sana.",
+      "zh-Hans": "在 Windows 共享中选择邮件应用，然后在其中检查并发送。",
+      "zh-Hant": "在 Windows 共用中選擇郵件應用程式，然後在其中檢查並傳送。",
+      "ar": "اختر تطبيق البريد في مشاركة Windows، ثم راجع الرسالة وأرسلها من هناك.",
+      "hi": "Windows शेयर में अपना मेल ऐप चुनें, फिर वहाँ समीक्षा करके भेजें।",
+      "bn": "Windows শেয়ারে আপনার মেইল অ্যাপ বেছে নিন, তারপর সেখানে দেখে পাঠান।",
+      "th": "เลือกแอปอีเมลในหน้าต่างแชร์ของ Windows จากนั้นตรวจสอบและส่งในแอปนั้น",
+      "tr": "Windows Paylaş içinde e-posta uygulamanızı seçin, ardından orada gözden geçirip gönderin."
     }
   }
 }

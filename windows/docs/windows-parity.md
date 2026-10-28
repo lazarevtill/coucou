@@ -19,6 +19,7 @@ The Windows app uses native Windows services where the Mac uses Apple APIs. The 
 | Crypto prices | Coinbase and OKX public quotes, 24-hour charts, currency selection and opt-in movement alerts | Native settings and pill interaction |
 | Portfolio | Read-only exchange balances, 16 native wallet networks, USD valuation and partial-data indicators | Real exchange accounts and each public wallet service |
 | Chat microphone and window context | Local dictation fills the editable prompt; user-selected Windows app name and window title accompany a new chat | Native microphone and window picker click-through; browser URL capture is not implemented |
+| Dropped-file email | Native Windows Share attaches the copied inbox file; the user chooses a mail app and sends there | Mail-client selection and draft attachment on the installed build; native attachment packaging is tested |
 | Traditional Chinese and Thai | Complete Windows catalogs and fourteen-language picker; native locale and plural rules | Native linguistic and layout review |
 | Apple iPhone/iCloud features | Windows has Android pairing; no iPhone transport equivalent yet | Cross-platform phone protocol and iPhone implementation |
 
@@ -61,3 +62,7 @@ Apple Music volume targets its own Core Audio sessions, including its packaged l
 ## Calendar
 
 Cal.com shows upcoming calls in the overview. Details opens a month calendar, then a day and the booking's time, attendee and notes. The date range is bounded to the next sixty days. Cursor pagination follows Cal.com's documented `2026-05-01` API contract, with response and refresh limits in `src-tauri/src/calcom/defaults.json`. Failed or incomplete pages produce an error instead of an apparently complete schedule. The integration is read-only; edits open Cal.com.
+
+## Dropped-file email
+
+After dropping a file, choose Send by email, then Share. Windows opens its native chooser with the copied file attached. Select a compatible mail application, review the draft and send it there. Coucou never sends the message. The native command accepts only a regular file directly inside Coucou's private drop inbox, and its share offer expires after two minutes. Windows Share decides which installed mail applications support the attachment.

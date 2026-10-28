@@ -1,11 +1,11 @@
 // Drop zone, upload progress and the "what do you want to do with it" card —
 // ports of UploadView / UploadingView / ChooseView from IslandViewContent.swift.
 //
-// Sending a file by email is not in the Windows v1, so `choose` offers the one
-// action the spec asks for: ask a question about it.
+// File sharing opens the native Windows chooser; the user reviews and sends.
 
 import { h, clear } from "./dom";
 import { State } from "../core/state";
+import { Bridge } from "../core/bridge";
 import type { ViewActions, ViewHost } from "./views";
 import { N_, t, tl } from "../i18n/i18n";
 
@@ -87,6 +87,9 @@ export function buildUploading(): ViewHost {
 export function buildChoose(actions: ViewActions): ViewHost {
   const title = h("div", { class: "title" });
   const sub = h("div", { class: "sub", text: tl("What do you want to do with it?") });
+  const share = h("button", { class: "btn secondary", text: tl("Send by email"), onclick: () => actions.setView("mail") });
+  share.hidden = true;
+  void Bridge.fileShareAvailable().then(available => { share.hidden = !available; });
   const row = h(
     "div",
     { class: "actions" },
@@ -95,6 +98,7 @@ export function buildChoose(actions: ViewActions): ViewHost {
       text: tl("Ask a question"),
       onclick: () => actions.setView("prompt"),
     }),
+    share,
     h("button", {
       class: "btn secondary",
       text: tl("Cancel"),
@@ -119,6 +123,36 @@ export function buildChoose(actions: ViewActions): ViewHost {
         h("b", { text: State.droppedFile?.name ?? t("file") }),
         document.createTextNode(t(" is ready.")),
       );
+    },
+  };
+}
+
+export function buildMail(actions: ViewActions): ViewHost {
+  const title = h("b");
+  const error = h("div", { class: "sub", role: "alert" });
+  let pending = false;
+  let currentPath = "";
+  const share = h("button", { class: "btn primary", text: tl("Share…"), onclick: async () => {
+    const file = State.droppedFile;
+    if (!file || pending) return;
+    pending = true;
+    share.disabled = true;
+    error.textContent = "";
+    try { await Bridge.shareFile(file.path); }
+    catch (reason) { if (State.droppedFile?.path === file.path) error.textContent = String(reason); }
+    finally { pending = false; share.disabled = !State.droppedFile; }
+  } }) as HTMLButtonElement;
+  return {
+    el: h("div", { class: "view" }, h("div", { class: "card" },
+      h("div", { class: "stack", style: "padding:0 18px 0 98px" }, title,
+        h("div", { class: "sub", text: tl("Choose your mail app in Windows Share, then review and send there.") }), error,
+        h("div", { class: "actions" }, share,
+          h("button", { class: "btn secondary", text: tl("Back"), onclick: () => actions.setView("choose") }))))),
+    sync() {
+      const path = State.droppedFile?.path ?? "";
+      if (path !== currentPath) { error.textContent = ""; currentPath = path; }
+      title.textContent = State.droppedFile?.name ?? t("File");
+      share.disabled = pending || !State.droppedFile;
     },
   };
 }

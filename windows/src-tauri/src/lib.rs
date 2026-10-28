@@ -11,6 +11,7 @@ mod codex_plan;
 mod config_file;
 mod desktop;
 mod files;
+mod file_share;
 mod flyout;
 mod host;
 mod ide_lock;
@@ -1228,6 +1229,8 @@ pub fn run() {
             plugin_tools,
             plugins_open_folder,
             ingest_file,
+            file_share::file_share_available,
+            file_share::share_file,
             secret_present,
             secret_set,
             secret_clear,

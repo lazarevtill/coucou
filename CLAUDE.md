@@ -29,6 +29,8 @@ Speech and call recording use `windows/src-tauri/src/speech/` and `notes/`. Flow
 
 `windows/src-tauri/src/local_chat.rs` owns model-server chat. Settings migration must retain Windows preferences and plugin trust, preserve explicit current values, and back up a migrated settings file before replacing it. Generic settings saves cannot grant plugin trust.
 
+`windows/src-tauri/src/file_share.rs` opens Windows Share for a copied inbox file. Its native attachment is prepared off the UI thread and marshalled through an agile reference. Only explicit clicks open the chooser; the user selects the mail application and sends the draft.
+
 ## Rules
 - Keep commits small, cohesive and readable, with clear plain messages. Once commit and push are authorized, push all task commits to the intended branch and verify the remote SHA. Keep upstream merges separate from subsequent feature and fix commits.
 - Swift 6, SwiftUI + AppKit. No third-party dependencies unless truly unavoidable. The character is drawn in code (`Canvas` + `TimelineView`), no Rive/Lottie/images.
