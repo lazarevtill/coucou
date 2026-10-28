@@ -18,6 +18,7 @@ The tray opens chat, settings and session activity. **Settings → General** con
 - [Terminal detection and focus](docs/terminals.md)
 - [Folder plugins](docs/plugins.md)
 - [Current integration verification](docs/integration-review.md)
+- [Windows features, call audio and Parakeet settings](docs/windows-parity.md)
 - [Project documentation](../docs/)
 
 ## Build and verify
