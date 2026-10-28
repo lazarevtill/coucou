@@ -6417,31 +6417,31 @@
       "hi": "{0} चैनल",
       "bn": "{0} চ্যানেল"
     },
-    "No provider is ready: add an API key or connect a local model first.": {
-      "zh-Hans": "没有可用的提供商：请先添加 API 密钥或连接本地模型。",
-      "hi": "कोई प्रदाता तैयार नहीं है: पहले API कुंजी जोड़ें या स्थानीय मॉडल कनेक्ट करें।",
-      "es": "Ningún proveedor está listo: añade primero una clave de API o conecta un modelo local.",
-      "ar": "لا يوجد مزوّد جاهز: أضف مفتاح API أو اتصل بنموذج محلي أولاً.",
-      "fr": "Aucun fournisseur n'est prêt : ajoutez d'abord une clé d'API ou connectez un modèle local.",
-      "bn": "কোনো প্রদানকারী প্রস্তুত নয়: আগে একটি API কী যোগ করুন বা স্থানীয় মডেল সংযুক্ত করুন।",
-      "pt-BR": "Nenhum provedor está pronto: adicione primeiro uma chave de API ou conecte um modelo local.",
-      "ru": "Нет готовых провайдеров: сначала добавьте ключ API или подключите локальную модель.",
-      "id": "Belum ada penyedia yang siap: tambahkan kunci API atau hubungkan model lokal terlebih dahulu.",
-      "de": "Kein Anbieter ist bereit: Füge zuerst einen API-Schlüssel hinzu oder verbinde ein lokales Modell.",
-      "tr": "Hazır sağlayıcı yok: önce API anahtarı ekle veya yerel bir model bağla."
+    "Connect Claude Code, Codex, an API provider or a model server first.": {
+      "zh-Hans": "请先连接 Claude Code、Codex、API 提供商或模型服务器。",
+      "hi": "पहले Claude Code, Codex, API प्रदाता या मॉडल सर्वर कनेक्ट करें।",
+      "es": "Primero conecta Claude Code, Codex, un proveedor de API o un servidor de modelos.",
+      "ar": "اتصل أولًا بـ Claude Code أو Codex أو مزوّد API أو خادم نماذج.",
+      "fr": "Connectez d’abord Claude Code, Codex, un fournisseur API ou un serveur de modèles.",
+      "bn": "প্রথমে Claude Code, Codex, কোনো API প্রদানকারী বা মডেল সার্ভার সংযুক্ত করুন।",
+      "pt-BR": "Primeiro, conecte Claude Code, Codex, um provedor de API ou um servidor de modelos.",
+      "ru": "Сначала подключите Claude Code, Codex, API-провайдера или сервер моделей.",
+      "id": "Hubungkan Claude Code, Codex, penyedia API, atau server model terlebih dahulu.",
+      "de": "Verbinde zuerst Claude Code, Codex, einen API-Anbieter oder einen Modellserver.",
+      "tr": "Önce Claude Code, Codex, bir API sağlayıcısı veya model sunucusu bağlayın."
     },
-    "Chat uses the API keys saved on this computer. The phone never sees them, and each message may cost money.": {
-      "zh-Hans": "聊天使用保存在这台电脑上的 API 密钥。手机永远看不到密钥，每条消息都可能产生费用。",
-      "hi": "चैट इस कंप्यूटर पर सहेजी गई API कुंजियों का उपयोग करती है। फ़ोन उन्हें कभी नहीं देखता, और हर संदेश पर शुल्क लग सकता है।",
-      "es": "El chat usa las claves de API guardadas en este ordenador. El teléfono nunca las ve y cada mensaje puede costar dinero.",
-      "ar": "تستخدم الدردشة مفاتيح API المحفوظة على هذا الكمبيوتر. لا يراها الهاتف أبدًا، وقد تترتب تكلفة على كل رسالة.",
-      "fr": "Le chat utilise les clés d'API enregistrées sur cet ordinateur. Le téléphone ne les voit jamais, et chaque message peut coûter de l'argent.",
-      "bn": "চ্যাট এই কম্পিউটারে সংরক্ষিত API কী ব্যবহার করে। ফোন কখনও সেগুলো দেখে না, এবং প্রতিটি বার্তায় খরচ হতে পারে।",
-      "pt-BR": "O chat usa as chaves de API salvas neste computador. O celular nunca as vê, e cada mensagem pode custar dinheiro.",
-      "ru": "Чат использует ключи API, сохранённые на этом компьютере. Телефон их никогда не видит, а каждое сообщение может стоить денег.",
-      "id": "Obrolan memakai kunci API yang tersimpan di komputer ini. Ponsel tidak pernah melihatnya, dan setiap pesan dapat memakan biaya.",
-      "de": "Der Chat nutzt die auf diesem Computer gespeicherten API-Schlüssel. Das Telefon sieht sie nie; jede Nachricht kann Kosten verursachen.",
-      "tr": "Sohbet, bu bilgisayarda kayıtlı API anahtarlarını kullanır. Telefon bunları asla görmez ve her ileti ücretli olabilir."
+    "Chat uses the sign-ins and providers on this computer. Credentials stay here. Your provider's usage limits and charges apply.": {
+      "zh-Hans": "聊天使用此电脑上的登录和提供商。凭据保留在此处。适用提供商的用量限制和费用。",
+      "hi": "चैट इस कंप्यूटर के साइन-इन और प्रदाताओं का उपयोग करती है। क्रेडेंशियल यहीं रहते हैं। प्रदाता की उपयोग सीमाएँ और शुल्क लागू होते हैं।",
+      "es": "El chat usa las sesiones y los proveedores de este equipo. Las credenciales se quedan aquí. Se aplican los límites de uso y las tarifas del proveedor.",
+      "ar": "تستخدم الدردشة حسابات تسجيل الدخول والمزوّدين على هذا الكمبيوتر. تبقى بيانات الاعتماد هنا. تسري حدود الاستخدام والرسوم الخاصة بالمزوّد.",
+      "fr": "Le chat utilise les connexions et fournisseurs de cet ordinateur. Les identifiants restent ici. Les limites d’utilisation et les frais du fournisseur s’appliquent.",
+      "bn": "চ্যাট এই কম্পিউটারের সাইন-ইন এবং প্রদানকারীদের ব্যবহার করে। পরিচয়পত্র এখানেই থাকে। প্রদানকারীর ব্যবহারসীমা ও খরচ প্রযোজ্য।",
+      "pt-BR": "O chat usa as contas e os provedores deste computador. As credenciais ficam aqui. Aplicam-se os limites de uso e as tarifas do provedor.",
+      "ru": "Чат использует входы и провайдеров на этом компьютере. Учётные данные остаются здесь. Действуют лимиты и тарифы вашего провайдера.",
+      "id": "Chat menggunakan akun dan penyedia di komputer ini. Kredensial tetap di sini. Batas penggunaan dan biaya penyedia berlaku.",
+      "de": "Der Chat nutzt die Anmeldungen und Anbieter auf diesem Computer. Die Zugangsdaten bleiben hier. Es gelten die Nutzungslimits und Gebühren deines Anbieters.",
+      "tr": "Sohbet bu bilgisayardaki oturumları ve sağlayıcıları kullanır. Kimlik bilgileri burada kalır. Sağlayıcınızın kullanım sınırları ve ücretleri geçerlidir."
     }
   }
 }

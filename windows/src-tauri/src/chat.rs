@@ -233,6 +233,10 @@ pub async fn send_for_phone(
     query: String,
     on_delta: impl FnMut(String),
 ) -> Result<ChatReply, String> {
+    if let Ok(agent) = crate::cli_agents::Agent::parse(provider) {
+        let runtime = crate::cli_agents::CliChat::default();
+        return crate::cli_agents::send(&runtime, chat, agent, query, None).await;
+    }
     if provider == ANTHROPIC {
         return claude::send(chat, model, query, None).await;
     }

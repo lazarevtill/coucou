@@ -30,8 +30,9 @@ export function toggleModel(allowed: readonly string[], id: string, on: boolean)
  * The providers worth offering: a cloud provider that has a key, a model server whose address is
  * set. `hasKey` maps a provider id to "its key is saved".
  */
-export function usableProviders(settings: Settings, hasKey: Readonly<Record<string, boolean>>): ProviderDef[] {
-  return PROVIDERS.filter((p) => (p.key ? hasKey[p.id] === true : p.urlField !== null && settings[p.urlField] !== ""));
+export function usableProviders(settings: Settings, hasKey: Readonly<Record<string, boolean>>, signedIn: Readonly<Record<string, boolean>> = {}): ProviderDef[] {
+  return PROVIDERS.filter((p) => (p.id === "claude-code" || p.id === "codex" ? signedIn[p.id] === true
+    : p.key ? hasKey[p.id] === true : p.urlField !== null && settings[p.urlField] !== ""));
 }
 
 /** The ids of `allowed` that belong to `provider`, without the provider part. */

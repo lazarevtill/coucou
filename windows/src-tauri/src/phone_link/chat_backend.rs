@@ -19,7 +19,7 @@ use crate::{chat, claude, log, openai_compat, secrets, Shared};
 pub const MAX_ALLOWED: usize = 50;
 const MAX_MODEL_CHARS: usize = 200;
 
-const PROVIDERS: [&str; 7] = ["anthropic", "google", "openai", "openrouter", "ollama", "lmstudio", "custom"];
+const PROVIDERS: [&str; 9] = ["claude-code", "codex", "anthropic", "google", "openai", "openrouter", "ollama", "lmstudio", "custom"];
 
 pub struct AppChat {
     app: AppHandle,
@@ -90,6 +90,8 @@ fn key_name(provider: &str) -> Option<&'static str> {
 
 pub fn provider_name(provider: &str) -> String {
     match provider {
+        "claude-code" => "Claude Code".into(),
+        "codex" => "Codex".into(),
         "anthropic" => "Anthropic".into(),
         "google" => "Google".into(),
         "openai" => "OpenAI".into(),
@@ -108,6 +110,7 @@ pub fn parse_model_id(id: &str) -> Option<(&str, &str)> {
     if !PROVIDERS.contains(&provider) || model.is_empty() || model.chars().count() > MAX_MODEL_CHARS || model.chars().any(char::is_control) {
         return None;
     }
+    if matches!(provider, "claude-code" | "codex") && model != "default" { return None; }
     Some((provider, model))
 }
 
@@ -203,5 +206,15 @@ mod tests {
         assert_eq!(key_name("openai"), Some("openai-api-key"));
         assert_eq!(key_name("ollama"), None);
         assert!(is_local("custom") && !is_local("openai"));
+    }
+
+    #[test]
+    fn both_cli_sign_ins_offer_only_their_configured_default_without_api_keys() {
+        for (provider, name) in [("claude-code", "Claude Code"), ("codex", "Codex")] {
+            assert_eq!(key_name(provider), None);
+            assert_eq!(provider_name(provider), name);
+            assert!(parse_model_id(&format!("{provider}/default")).is_some());
+            assert!(parse_model_id(&format!("{provider}/arbitrary")).is_none());
+        }
     }
 }

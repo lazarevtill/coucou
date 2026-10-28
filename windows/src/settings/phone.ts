@@ -462,9 +462,10 @@ function chatBlock(makeToggle: Toggle, settings: Settings): HTMLElement {
     if (!status.enabled) return;
     const hasKey: Record<string, boolean> = {};
     for (const p of usableProvidersCandidates()) hasKey[p.id] = (await Bridge.secretPresent(p.key!)) ?? false;
-    const providers = usableProviders(settings, hasKey);
+    const connections = await Bridge.agentConnections().catch(() => []);
+    const providers = usableProviders(settings, hasKey, Object.fromEntries(connections.map(c => [c.id, c.signedIn])));
     body.append(h("div", { class: "hint", text: t("Models the phone may use") }));
-    if (providers.length === 0) body.append(h("div", { class: "hint", text: t("No provider is ready: add an API key or connect a local model first.") }));
+    if (providers.length === 0) body.append(h("div", { class: "hint", text: t("Connect Claude Code, Codex, an API provider or a model server first.") }));
     for (const p of providers) body.append(providerRow(p));
     emptyNote.hidden = allowed.length > 0;
     body.append(emptyNote);
@@ -495,7 +496,7 @@ function chatBlock(makeToggle: Toggle, settings: Settings): HTMLElement {
     "div",
     {},
     h("div", { class: "row" }, h("label", { text: t("Let the phone chat with my AI providers") }), switchEl),
-    h("div", { class: "hint", text: t("Chat uses the API keys saved on this computer. The phone never sees them, and each message may cost money.") }),
+    h("div", { class: "hint", text: t("Chat uses the sign-ins and providers on this computer. Credentials stay here. Your provider's usage limits and charges apply.") }),
     note,
     body,
   );

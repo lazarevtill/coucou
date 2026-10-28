@@ -42,3 +42,10 @@ test("the models of one provider are told apart from the others'", () => {
   assert.deepEqual(modelsOf(list, "openrouter"), ["openrouter/auto"]);
   assert.deepEqual(modelsOf(list, "ollama"), []);
 });
+
+test("both CLI sign-ins are offered only after a successful sign-in probe", () => {
+  const offered = (signedIn) => usableProviders(DEFAULT_SETTINGS, {}, signedIn).map(p => p.id);
+  assert.deepEqual(offered({ "claude-code": true, codex: false }), ["claude-code"]);
+  assert.deepEqual(offered({ "claude-code": false, codex: true }), ["codex"]);
+  assert.deepEqual(offered({ "claude-code": true, codex: true }), ["claude-code", "codex"]);
+});
