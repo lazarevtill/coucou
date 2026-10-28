@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
 import { MAX_DECLARED, availablePills, chooseMainPill, pillDefinition, sanitizeDeclared, toggleDeclared } from "../core/pills";
 import { Spotify } from "../core/spotify";
-import { Music } from "../core/media";
+import { Music } from "../core/apple-music";
 import { State } from "../core/state";
 import { serviceCards } from "./phone-services";
 

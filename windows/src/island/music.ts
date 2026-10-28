@@ -1,15 +1,15 @@
 import { Bridge, onEvent } from "../core/bridge";
-import { MUSIC_ID, Music } from "../core/media";
+import { MUSIC_ID, Music } from "../core/apple-music";
 import { State } from "../core/state";
-import type { SpotifyState } from "../core/spotify";
-import type { SpotifyHost } from "./spotify";
+import type { MediaState } from "../core/media-state";
+interface MusicHost { revealSilently(): void }
 
 function syncName() {
   const task = State.tasks.find(task => task.id === MUSIC_ID);
   if (task) task.name = Music.state.track?.title || "Apple Music";
 }
 
-export function applyMusic(island: SpotifyHost, next: SpotifyState) {
+export function applyMusic(island: MusicHost, next: MediaState) {
   const wasPlaying = State.musicPlaying;
   Music.state = next;
   syncName();
@@ -17,8 +17,8 @@ export function applyMusic(island: SpotifyHost, next: SpotifyState) {
   State.notify();
 }
 
-export function registerMusicHandlers(island: SpotifyHost) {
-  void onEvent<SpotifyState>("apple-music", state => applyMusic(island, state));
+export function registerMusicHandlers(island: MusicHost) {
+  void onEvent<MediaState>("apple-music", state => applyMusic(island, state));
   void onEvent<{ artUrl: string; dataUrl: string }>("apple-music-artwork", art => {
     Music.artwork = art;
     State.notify();
@@ -27,7 +27,7 @@ export function registerMusicHandlers(island: SpotifyHost) {
   State.subscribe(() => {
     syncName();
     const now = State.mode === "expanded" && State.view === "overview" && State.focusTask?.id === MUSIC_ID;
-    if (now && !shown) void Bridge.musicRefresh();
+    if (now && !shown) void Bridge.appleMusicRefresh();
     shown = now;
   });
 }

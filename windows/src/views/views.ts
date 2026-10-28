@@ -28,9 +28,11 @@ import { buildRecap } from "./recap";
 import { buildWardrobe } from "./wardrobe";
 import { buildUpdate } from "./update";
 import { buildWhatsNew } from "./whatsnew";
-import { buildSpotifyCard, buildSpotifyPill, type SpotifyPillHost } from "./spotify";
+import { buildSpotifyCard, buildSpotifyPill } from "./spotify";
+import { buildAppleMusicCard, buildAppleMusicPill } from "./apple-music";
+import type { MediaPillHost } from "./media-player";
 import { SPOTIFY_ID } from "../core/spotify";
-import { MUSIC_ID, appleMusicPlayer, spotifyPlayer } from "../core/media";
+import { MUSIC_ID } from "../core/apple-music";
 import { buildWhatsAppCard } from "./whatsapp";
 import { WHATSAPP_ID } from "../core/whatsapp";
 import type { Outfit, OutfitSelection } from "../mochi/wardrobe";
@@ -224,8 +226,8 @@ function buildOverview(actions: ViewActions): ViewHost {
   // Spotify's card and pill are kept and updated in place: the progress bar
   // runs on, and a slider being dragged must not be rebuilt under the pointer.
   const spotifyCard = buildSpotifyCard();
-  const musicCard = buildSpotifyCard(appleMusicPlayer);
-  let mediaPills: SpotifyPillHost[] = [];
+  const musicCard = buildAppleMusicCard();
+  let mediaPills: MediaPillHost[] = [];
   // WhatsApp's card too: its reply field keeps the draft and the keyboard while messages arrive.
   const whatsappCard = buildWhatsAppCard({
     openSettings: () => actions.openSettingsWindow(),
@@ -444,7 +446,7 @@ function buildOverview(actions: ViewActions): ViewHost {
         mediaPills = [];
         for (const t of others) {
           if (t.id === SPOTIFY_ID || t.id === MUSIC_ID) {
-            const playerPill = buildSpotifyPill(t, () => actions.setFocus(t.id), t.id === MUSIC_ID ? appleMusicPlayer : spotifyPlayer);
+            const playerPill = (t.id === MUSIC_ID ? buildAppleMusicPill : buildSpotifyPill)(t, () => actions.setFocus(t.id));
             mediaPills.push(playerPill);
             pills.append(playerPill.el);
           } else {

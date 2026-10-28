@@ -46,6 +46,10 @@ mod settings;
 mod shortcuts;
 mod sounds;
 mod speech;
+mod media;
+#[cfg(windows)]
+mod media_windows;
+mod apple_music;
 mod spotify;
 mod tray;
 mod update;
@@ -146,6 +150,7 @@ fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) -> R
     }
     integrations::settings_saved(&app, &settings.active_integrations);
     spotify::sync(&app, &settings.active_integrations);
+    apple_music::sync(&app, &settings.active_integrations);
     whatsapp::sync(&settings.active_integrations);
     if shortcuts_changed {
         shortcuts::apply(&app, &settings.shortcuts);
@@ -1290,9 +1295,9 @@ pub fn run() {
             markets::markets_prefs,
             markets::markets_save,
             spotify::spotify_refresh,
-            spotify::music_refresh,
-            spotify::music_control,
-            spotify::music_open,
+            apple_music::apple_music_refresh,
+            apple_music::apple_music_control,
+            apple_music::apple_music_open,
             spotify::spotify_control,
             spotify::spotify_open,
             spotify::spotify_installed,
@@ -1402,6 +1407,7 @@ pub fn run() {
             phone_link::start_if_enabled(&handle);
             integrations::start(handle.clone());
             spotify::sync(&handle, &loaded.active_integrations);
+            apple_music::sync(&handle, &loaded.active_integrations);
             // WhatsApp (experimental): nothing runs unless it is turned on and its pill is active.
             whatsapp::start(&handle, &loaded.active_integrations);
             shortcuts::apply(&handle, &loaded.shortcuts);

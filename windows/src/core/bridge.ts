@@ -10,7 +10,7 @@ import type { ShellSnapshot, ToastSpec } from "./shell";
 import type { RecapHistory, RecapPrefs } from "../recap/summary";
 import type { PortfolioWallet, PortfolioSettings, PortfolioCredentials } from "./portfolio";
 import type { MarketPrefs } from "./markets";
-import type { SpotifyState } from "./spotify";
+import type { MediaState } from "./media-state";
 import type { UpdateStatus } from "./update";
 import type { WaIslandView, WaSettingsView, WaTestResult } from "./whatsapp";
 
@@ -420,9 +420,9 @@ export const Bridge = {
   portfolioDisconnect: (exchange: string) => invoke<void>("portfolio_disconnect", { exchange }),
   marketPrefs: () => call<MarketPrefs>("markets_prefs"),
   marketSave: (prefs: MarketPrefs) => invoke<MarketPrefs>("markets_save", { prefs }),
-  musicRefresh: () => call<SpotifyState>("music_refresh"),
-  musicControl: (action: string, value?: number) => call<boolean>("music_control", { action, value: value ?? null }),
-  musicOpen: () => call<boolean>("music_open"),
+  appleMusicRefresh: () => call<MediaState>("apple_music_refresh"),
+  appleMusicControl: (action: string, value?: number) => call<boolean>("apple_music_control", { action, value: value ?? null }),
+  appleMusicOpen: () => call<boolean>("apple_music_open"),
   chatDictationStart: () => callOrThrow<void>("chat_dictation_start"),
   chatDictationStop: (cancel: boolean) => callOrThrow<void>("chat_dictation_stop", { cancel }),
   chatWindows: () => callOrThrow<{ appName: string; title: string }[]>("chat_windows"),
@@ -496,7 +496,7 @@ export const Bridge = {
 
   // ── Spotify (src-tauri/src/spotify.rs) ────────────────────────────────────
   /** Reads the player again (the card came on screen) and reports it. */
-  spotifyRefresh: () => call<SpotifyState | null>("spotify_refresh"),
+  spotifyRefresh: () => call<MediaState | null>("spotify_refresh"),
   /** True when Spotify took it. `value`: seconds for seek, 0/1 for shuffle and repeat, 0…100 for volume. */
   spotifyControl: (action: SpotifyAction, value?: number) =>
     call<boolean>("spotify_control", { action, value: value ?? null }),

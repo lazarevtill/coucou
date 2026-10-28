@@ -15,7 +15,7 @@ The Windows app uses native Windows services where the Mac uses Apple APIs. The 
 | Spotify | Windows system media controls | Installed Spotify playback |
 | Wardrobe, desktop Mochi, sounds, shortcuts, displays, recap | Existing Windows frontend and native integration | Native visual and interaction checks |
 | Phone approval and chat | Android phone link with device authentication | Live Android pairing and remote flow |
-| Apple Music | Native Windows media sessions, independent playback controls, artwork, volume, pill and voice actions | Installed Apple Music playback and supported-control validation |
+| Apple Music | Dedicated native integration, commands, state, artwork, per-app volume, pill and voice actions | Playback controls and artwork on a playing track; discovery and 5% volume verified on the installed app |
 | Crypto prices | Coinbase and OKX public quotes, 24-hour charts, currency selection and opt-in movement alerts | Native settings and pill interaction |
 | Portfolio | Read-only exchange balances, 16 native wallet networks, USD valuation and partial-data indicators | Real exchange accounts and each public wallet service |
 | Chat microphone and window context | Local dictation fills the editable prompt; user-selected Windows app name and window title accompany a new chat | Native microphone and window picker click-through; browser URL capture is not implemented |
@@ -45,3 +45,9 @@ Enable Portfolio under Settings → Integrations. Binance, OKX, Bybit, Kraken an
 Public wallet addresses support Bitcoin, Dogecoin, Litecoin, Ethereum, Polygon, BNB Chain, Avalanche, Arbitrum, Optimism, Base, Solana, TRON, XRP, Cardano, Cosmos and NEAR. These show native coin balances only; token, staking and derivative positions are not included. Public services receive the address being checked. Addresses and labels live in `portfolio.json`; account balances remain in memory.
 
 Refresh runs only while the pill is enabled and Coucou is not paused. Each account reports its own failures. Missing prices stay unknown, and a partial total is labelled accordingly. USD prices and seven-day charts use public Coinbase endpoints. Service origins and request limits are in `src-tauri/src/markets/portfolio/defaults.json`.
+
+## Apple Music
+
+Apple Music and Spotify have separate pills, commands, event streams and player state. Each talks directly to its own native application and keeps sign-in in that application. Shared code handles only Windows media APIs and the common player layout.
+
+Apple Music volume targets its own Core Audio sessions, including its packaged library agent, across active speaker and headphone outputs. Other players and the system volume are not changed. Playback actions use the selected song or queue in Apple Music. If the application has no playable selection, open Apple Music and choose a song.

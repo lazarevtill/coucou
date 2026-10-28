@@ -14,7 +14,8 @@ import {
 import { Sound } from "../core/sound";
 import { State } from "../core/state";
 import { jumpNote } from "../core/sessionView";
-import { SPOTIFY_ID, islandDances } from "../core/spotify";
+import { islandDances } from "../core/media-state";
+import { SPOTIFY_ID } from "../core/spotify";
 import { BotEngine, hexToRGB } from "../mochi/engine";
 import { Greeting } from "../mochi/greeting";
 import { createMiniBot, pruneMiniBots, syncMiniBotStates, tickMiniBots } from "../mochi/minibots";
@@ -218,7 +219,7 @@ export class Island {
         } else if (task.id === "integration_n8n") void Bridge.openN8n();
         else if (task.id === "integration_gitea") void Bridge.openGitea();
         else if (task.id === SPOTIFY_ID) void Bridge.spotifyOpen();
-        else if (task.id === "integration_music") void Bridge.musicOpen();
+        else if (task.id === "integration_music") void Bridge.appleMusicOpen();
         else if (urls[task.id]) void Bridge.openUrl(urls[task.id]);
       },
       openUrl: (url) => {

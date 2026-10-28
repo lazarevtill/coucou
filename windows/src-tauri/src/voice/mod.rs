@@ -431,7 +431,7 @@ fn music(app: &AppHandle, input: &Value) -> (String, bool) {
     };
     let app2 = app.clone();
     let done = if apple {
-        tauri::async_runtime::block_on(crate::spotify::music_control(app2, control.into(), value))
+        tauri::async_runtime::block_on(crate::apple_music::apple_music_control(app2, control.into(), value))
     } else {
         tauri::async_runtime::block_on(crate::spotify::spotify_control(app2, control.into(), value))
     };

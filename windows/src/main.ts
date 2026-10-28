@@ -13,7 +13,7 @@ import { registerShortcutHandlers } from "./island/shortcuts";
 import { registerVoiceHandlers } from "./island/voice";
 import { applySpotify, registerSpotifyHandlers } from "./island/spotify";
 import { applyMusic, registerMusicHandlers } from "./island/music";
-import { MUSIC_ID } from "./core/media";
+import { MUSIC_ID } from "./core/apple-music";
 import { registerWhatsAppHandlers } from "./island/whatsapp";
 import { SPOTIFY_ID } from "./core/spotify";
 import { Recap } from "./recap/recap";
@@ -163,7 +163,7 @@ async function main() {
     void Bridge.spotifyRefresh().then((s) => s && applySpotify(island, s));
   }
   if (State.settings.activeIntegrations.includes(MUSIC_ID)) {
-    void Bridge.musicRefresh().then(s => s && applyMusic(island, s));
+    void Bridge.appleMusicRefresh().then(s => s && applyMusic(island, s));
   }
 
   // Monday recap: app start (greeting over), an agent starting work, waking up.
