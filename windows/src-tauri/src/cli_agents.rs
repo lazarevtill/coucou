@@ -179,7 +179,10 @@ pub fn agent_chat_cancel(chat: State<CliChat>) { chat.cancel(); }
 
 struct Finished<'a>(&'a CliChat);
 impl Drop for Finished<'_> {
-    fn drop(&mut self) { *self.0.active.lock().unwrap() = None; }
+    fn drop(&mut self) {
+        self.0.cancel();
+        *self.0.active.lock().unwrap() = None;
+    }
 }
 
 struct Captured { success: bool, stdout: Vec<u8>, stderr: Vec<u8> }
@@ -341,6 +344,31 @@ pub async fn send(runtime: &CliChat, chat: &Chat, agent: Agent, query: String, c
 
 pub fn models(agent: Agent) -> Vec<ModelInfo> {
     vec![ModelInfo { id: "default".into(), label: format!("{} default", agent.name()) }]
+}
+
+/// One text task using the same supervised, tool-free path for either CLI.
+pub async fn complete(agent: Agent, system: &str, user: &str, timeout: Duration) -> Result<String, String> {
+    let input = format!("{system}\n\n{user}");
+    if input.len() > MAX_PROMPT { return Err("The text is too large for this agent.".into()); }
+    struct CancelOnDrop(Arc<AtomicBool>);
+    impl Drop for CancelOnDrop { fn drop(&mut self) { self.0.store(true, Ordering::Release); } }
+    let cancel = Arc::new(AtomicBool::new(false));
+    let _guard = CancelOnDrop(cancel.clone());
+    let started = Instant::now();
+    let task = tauri::async_runtime::spawn_blocking(move || {
+        if !status_with_cancel(agent, &cancel).signed_in {
+            return Err(format!("Connect {} in Settings → Agents first.", agent.name()));
+        }
+        if cancel.load(Ordering::Acquire) { return Err("Task stopped.".into()); }
+        let remaining = timeout.checked_sub(started.elapsed()).ok_or("The text task timed out.")?;
+        let folder = crate::settings::local_dir().join("cli-text");
+        platform::ensure_private_dir(&folder).map_err(|_| "Could not prepare the text task folder.")?;
+        let mut cmd = agent.command()?;
+        cmd.args(chat_args(agent)).current_dir(folder);
+        answer(agent, capture(cmd, Some(input), remaining, &cancel)?)
+    });
+    tokio::time::timeout(timeout, task).await.map_err(|_| "The text task timed out.".to_string())?
+        .map_err(|_| "The text task process failed.".to_string())?
 }
 
 #[cfg(test)]

@@ -5,6 +5,7 @@ mod agents;
 mod chat;
 mod claude;
 mod cli_agents;
+mod text_ai;
 mod codex_plan;
 mod config_file;
 mod desktop;

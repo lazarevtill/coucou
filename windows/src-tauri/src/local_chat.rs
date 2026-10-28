@@ -307,6 +307,19 @@ pub async fn send_with(
 
 // ── Streaming ─────────────────────────────────────────────────────────────────
 
+/// A bounded text task, independent of the island's conversation or events.
+pub async fn complete(server: &Server, model: &str, system: &str, user: &str,
+    max_tokens: u32, timeout: Duration) -> Result<String, String> {
+    let base = base_url(server)?;
+    if model.trim().is_empty() { return Err(t("Pick a model above the chat box first.")); }
+    let mut body = request_body(model, system, &[], &json!({ "role": "user", "content": user }));
+    body["max_tokens"] = json!(max_tokens);
+    let reply = tokio::time::timeout(timeout, stream(&base, server.key.as_deref(), model, &body, |_| {}))
+        .await.map_err(|_| "The model server timed out.".to_string())??;
+    if reply.trim().is_empty() { return Err(t("No response text.")); }
+    Ok(reply)
+}
+
 /// One server-sent event line: `Some(Ok(text))` for a content delta,
 /// `Some(Err(message))` for an error event, None for anything else (other
 /// lines, `[DONE]`, a delta without content, such as reasoning-only ones).
@@ -375,6 +388,7 @@ async fn stream(
 
     let mut accumulated = String::new();
     let mut pending = Vec::<u8>::new();
+    let mut complete = false;
     let mut last = Instant::now().checked_sub(DELTA_INTERVAL).unwrap_or_else(Instant::now);
     while let Some(chunk) = reply.chunk().await.map_err(|_| unreachable(base))? {
         pending.extend_from_slice(&chunk);
@@ -382,6 +396,10 @@ async fn stream(
         while let Some(end) = pending.iter().position(|b| *b == b'\n') {
             let line: Vec<u8> = pending.drain(..=end).collect();
             let line = String::from_utf8_lossy(&line);
+            if line.trim_end().strip_prefix("data:").is_some_and(|v| v.trim() == "[DONE]") {
+                complete = true;
+                break;
+            }
             match parse_sse_line(line.trim_end()) {
                 Some(Ok(delta)) => accumulated.push_str(&delta),
                 Some(Err(message)) => return Err(message),
@@ -391,15 +409,19 @@ async fn stream(
         if pending.len() > MAX_LINE || accumulated.len() > MAX_ANSWER {
             return Err(t("The server's answer is too large."));
         }
+        if complete { break; }
         if last.elapsed() >= DELTA_INTERVAL {
             last = Instant::now();
             on_delta(progressive_filter(&accumulated));
         }
     }
     // A last line without its newline.
-    if let Some(Ok(delta)) = parse_sse_line(String::from_utf8_lossy(&pending).trim_end()) {
-        accumulated.push_str(&delta);
+    if !complete {
+        let line = String::from_utf8_lossy(&pending);
+        complete = line.trim_end().strip_prefix("data:").is_some_and(|v| v.trim() == "[DONE]");
+        if let Some(Err(message)) = parse_sse_line(line.trim_end()) { return Err(message); }
     }
+    if !complete { return Err("The model server stopped before finishing its reply. Try again.".into()); }
     // The last state always goes out, whatever the throttle skipped.
     on_delta(progressive_filter(&accumulated));
     Ok(filter_thinking_blocks(&accumulated))
@@ -540,6 +562,16 @@ mod tests {
         let u = serve_once("200 OK", "", vec![b'x'; MAX_LINE + 10]);
         let err = block_on(stream(&url(&u), None, "m", &json!({}), |_| {})).unwrap_err();
         assert_eq!(err, "The server's answer is too large.");
+    }
+
+    #[test]
+    fn an_unfinished_stream_or_final_error_is_not_a_successful_reply() {
+        let u = serve_once("200 OK", "", b"data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n".to_vec());
+        assert!(block_on(stream(&url(&u), None, "m", &json!({}), |_| {})).unwrap_err().contains("before finishing"));
+        let u = serve_once("200 OK", "", b"data: {\"error\":{\"message\":\"crashed\"}}".to_vec());
+        assert_eq!(block_on(stream(&url(&u), None, "m", &json!({}), |_| {})).unwrap_err(), "crashed");
+        let u = serve_once("200 OK", "", b"data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]".to_vec());
+        assert_eq!(block_on(stream(&url(&u), None, "m", &json!({}), |_| {})).unwrap(), "ok");
     }
 
     #[test]
