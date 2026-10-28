@@ -203,30 +203,46 @@ fn device_id(d: &cpal::Device) -> String {
 /// The microphones, the default first. Monitors of outputs are left out.
 pub fn input_devices() -> Vec<InputDevice> {
     let host = cpal::default_host();
-    let default = host.default_input_device().map(|d| device_name(&d));
+    let default = communication_device(&host, true).or_else(|| host.default_input_device()).map(|d| device_id(&d));
     let mut out = Vec::new();
     if let Ok(devices) = host.input_devices() {
         for d in devices {
             let name = device_name(&d);
-            if name.is_empty() || is_monitor(&d) || out.iter().any(|x: &InputDevice| x.name == name) {
+            if name.is_empty() || is_monitor(&d) {
                 continue;
             }
-            out.push(InputDevice { id: device_id(&d), default: Some(&name) == default.as_ref(), name });
+            let id = device_id(&d);
+            out.push(InputDevice { default: Some(&id) == default.as_ref(), id, name });
         }
     }
-    out.sort_by_key(|d| !d.default);
-    out
+    distinct_devices(out)
 }
 
 pub fn output_devices() -> Vec<InputDevice> {
     let host = cpal::default_host();
-    let default = host.default_output_device().map(|d| device_name(&d));
-    let mut devices: Vec<_> = host.output_devices().into_iter().flatten().map(|d| {
+    let default = communication_device(&host, false).or_else(|| host.default_output_device()).map(|d| device_id(&d));
+    let devices: Vec<_> = host.output_devices().into_iter().flatten().map(|d| {
         let name = device_name(&d);
-        InputDevice { id: device_id(&d), default: Some(&name) == default.as_ref(), name }
+        let id = device_id(&d);
+        InputDevice { default: Some(&id) == default.as_ref(), id, name }
     }).filter(|d| !d.name.is_empty()).collect();
-    devices.sort_by_key(|d| !d.default);
-    devices.dedup_by(|a, b| a.name == b.name);
+    distinct_devices(devices)
+}
+
+/// Identically named USB/Bluetooth endpoints are separate choices. Use a stable
+/// short identity only where the friendly names cannot distinguish them.
+fn distinct_devices(mut devices: Vec<InputDevice>) -> Vec<InputDevice> {
+    devices.sort_by(|a, b| (!a.default, &a.name, &a.id).cmp(&(!b.default, &b.name, &b.id)));
+    let mut seen = std::collections::HashSet::new();
+    devices.retain(|d| seen.insert(if d.id.is_empty() { format!("name:{}", d.name) } else { format!("id:{}", d.id) }));
+    let mut counts = std::collections::HashMap::new();
+    for device in &devices { *counts.entry(device.name.clone()).or_insert(0) += 1; }
+    for device in &mut devices {
+        if counts[&device.name] > 1 {
+            let tail: String = device.id.chars().rev().take(8).collect::<Vec<_>>().into_iter().rev().collect();
+            device.name = format!("{} · {tail}", device.name);
+        }
+    }
     devices
 }
 
@@ -302,6 +318,7 @@ fn communication_device(host: &cpal::Host, input: bool) -> Option<cpal::Device> 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CaptureInfo {
+    pub id: String,
     pub name: String,
     pub sample_rate: u32,
     pub channels: u16,
@@ -311,8 +328,22 @@ pub struct CaptureInfo {
 pub struct Capture {
     stop: Option<mpsc::Sender<()>>,
     thread: Option<std::thread::JoinHandle<()>>,
-    error: Arc<Mutex<Option<String>>>,
+    health: Arc<Mutex<CaptureHealth>>,
     info: CaptureInfo,
+}
+
+#[derive(Default)]
+struct CaptureHealth { error: Option<String>, warnings: Vec<String> }
+
+fn capture_error(health: &mut CaptureHealth, error: cpal::Error) {
+    if error.kind() == cpal::ErrorKind::Xrun {
+        // WASAPI continues delivering packets after DATA_DISCONTINUITY. Reopening
+        // the stream would create another avoidable gap, especially on Bluetooth.
+        let warning = crate::i18n::t("Audio was interrupted. Recording continues.");
+        if !health.warnings.contains(&warning) { health.warnings.push(warning); }
+    } else {
+        health.error = Some(error.to_string());
+    }
 }
 
 impl Capture {
@@ -323,8 +354,8 @@ impl Capture {
     }
 
     pub fn start_timed(source: Source, origin: Instant, sink: impl FnMut(&[f32], Duration) + Send + 'static) -> Result<Capture, String> {
-        let error = Arc::new(Mutex::new(None));
-        let stream_error = error.clone();
+        let health = Arc::new(Mutex::new(CaptureHealth::default()));
+        let stream_error = health.clone();
         let (ready_tx, ready_rx) = mpsc::channel::<Result<CaptureInfo, String>>();
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         let thread = std::thread::Builder::new()
@@ -347,7 +378,7 @@ impl Capture {
             })
             .map_err(|e| e.to_string())?;
         match ready_rx.recv_timeout(Duration::from_secs(5)) {
-            Ok(Ok(info)) => Ok(Capture { stop: Some(stop_tx), thread: Some(thread), error, info }),
+            Ok(Ok(info)) => Ok(Capture { stop: Some(stop_tx), thread: Some(thread), health, info }),
             Ok(Err(err)) => Err(err),
             Err(_) => Err("the audio device did not answer".into()),
         }
@@ -355,7 +386,9 @@ impl Capture {
 
     pub fn info(&self) -> &CaptureInfo { &self.info }
 
-    pub fn error(&self) -> Option<String> { self.error.lock().unwrap().clone() }
+    pub fn error(&self) -> Option<String> { self.health.lock().unwrap().error.clone() }
+
+    pub fn warnings(&self) -> Vec<String> { self.health.lock().unwrap().warnings.clone() }
 
     pub fn stop(&mut self) {
         if let Some(tx) = self.stop.take() {
@@ -373,14 +406,16 @@ impl Drop for Capture {
     }
 }
 
-fn build_stream(source: &Source, origin: Instant, error: Arc<Mutex<Option<String>>>, mut sink: impl FnMut(&[f32], Duration) + Send + 'static) -> Result<(cpal::Stream, CaptureInfo), String> {
-    let device = open_device(source).ok_or("no audio device")?;
+fn build_stream(source: &Source, origin: Instant, health: Arc<Mutex<CaptureHealth>>, mut sink: impl FnMut(&[f32], Duration) + Send + 'static) -> Result<(cpal::Stream, CaptureInfo), String> {
+    let device = open_device(source).ok_or_else(|| crate::i18n::t(if matches!(source, Source::Mic(Some(_)) | Source::System(Some(_))) { "Selected device (disconnected)" } else { "No device" }))?;
     let supported = if matches!(source, Source::System(_)) && cfg!(windows) {
         device.default_output_config().map_err(|e| e.to_string())?
     } else {
         device.default_input_config().map_err(|e| e.to_string())?
     };
-    let info = CaptureInfo { name: device_name(&device), sample_rate: supported.sample_rate(), channels: supported.channels() };
+    let devices = if matches!(source, Source::Mic(_)) { input_devices() } else { output_devices() };
+    let name = devices.into_iter().find(|d| d.id == device_id(&device)).map(|d| d.name).unwrap_or_else(|| device_name(&device));
+    let info = CaptureInfo { id: device_id(&device), name, sample_rate: supported.sample_rate(), channels: supported.channels() };
     let channels = supported.channels().max(1) as usize;
     let rate = supported.sample_rate();
     let format = supported.sample_format();
@@ -410,8 +445,9 @@ fn build_stream(source: &Source, origin: Instant, error: Arc<Mutex<Option<String
         }
     };
     let err_fn = move |err: cpal::Error| {
-        crate::log::line(format!("audio: {err}"));
-        *error.lock().unwrap() = Some(err.to_string());
+        // No file I/O on the real-time callback. The source meter and saved note
+        // expose interruptions; terminal device errors still trigger recovery.
+        capture_error(&mut health.lock().unwrap(), err);
     };
     let stream = match format {
         cpal::SampleFormat::F32 => device.build_input_stream::<f32, _, _>(
@@ -567,6 +603,106 @@ mod tests {
         (0..(rate as f64 * seconds) as usize)
             .map(|i| (2.0 * std::f64::consts::PI * freq * i as f64 / rate as f64).sin() as f32 * 0.5)
             .collect()
+    }
+
+    #[test]
+    fn a_discontinuity_is_preserved_without_invalidating_a_working_stream() {
+        let mut health = CaptureHealth::default();
+        capture_error(&mut health, cpal::ErrorKind::Xrun.into());
+        capture_error(&mut health, cpal::ErrorKind::Xrun.into());
+        assert!(health.error.is_none());
+        assert_eq!(health.warnings, ["Audio was interrupted. Recording continues."]);
+        capture_error(&mut health, cpal::ErrorKind::DeviceNotAvailable.into());
+        assert!(health.error.is_some());
+        assert_eq!(health.warnings.len(), 1);
+    }
+
+    #[test]
+    fn same_named_audio_endpoints_keep_separate_stable_choices() {
+        let device = |id: &str, default| InputDevice { id: id.into(), name: "USB Headset".into(), default };
+        let choices = distinct_devices(vec![device("endpoint-00000002", false), device("endpoint-00000001", true), device("endpoint-00000002", false)]);
+        assert_eq!(choices.len(), 2);
+        assert!(choices[0].default);
+        assert_eq!(choices[0].id, "endpoint-00000001");
+        assert_ne!(choices[0].name, choices[1].name);
+        let reversed = distinct_devices(vec![device("endpoint-00000001", true), device("endpoint-00000002", false)]);
+        assert_eq!(choices.iter().map(|d| &d.name).collect::<Vec<_>>(), reversed.iter().map(|d| &d.name).collect::<Vec<_>>());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "Lists real audio endpoints; opt-in hardware diagnostic"]
+    fn live_audio_devices() {
+        println!("microphones: {}", serde_json::to_string(&input_devices()).unwrap());
+        println!("playback: {}", serde_json::to_string(&output_devices()).unwrap());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "Opens the real microphone and playback endpoint and plays a very quiet test tone; requires explicit permission"]
+    fn live_dual_capture_quiet() {
+        #[derive(Default)]
+        struct Stats { samples: usize, peak: f32, last: Duration }
+        let origin = Instant::now();
+        let mut captures = Vec::new();
+        let mut stats = Vec::new();
+        // Exact IDs allow a laptop mic plus Bluetooth/wired/USB output to be
+        // tested independently of the Windows communications defaults.
+        let microphone = Source::Mic(std::env::var("COUCOU_TEST_MIC_ID").ok().filter(|v| !v.is_empty()));
+        let playback = Source::System(std::env::var("COUCOU_TEST_OUTPUT_ID").ok().filter(|v| !v.is_empty()));
+        for source in [microphone, playback.clone()] {
+            let measured = Arc::new(Mutex::new(Stats::default()));
+            let output = measured.clone();
+            let capture = Capture::start_timed(source.clone(), origin, move |samples, at| {
+                let mut state = output.lock().unwrap();
+                state.samples += samples.len();
+                state.peak = samples.iter().fold(state.peak, |peak, sample| peak.max(sample.abs()));
+                state.last = at;
+            }).unwrap_or_else(|error| panic!("{source:?}: {error}"));
+            println!("capture {source:?}: {} · {} Hz · {} channels", capture.info().name, capture.info().sample_rate, capture.info().channels);
+            captures.push(capture);
+            stats.push(measured);
+        }
+        let device = open_device(&playback).expect("playback endpoint");
+        let supported = device.default_output_config().expect("output format");
+        let format = supported.sample_format();
+        let config: cpal::StreamConfig = supported.into();
+        let output_error = Arc::new(Mutex::new(None));
+        fn tone_stream<T: cpal::SizedSample + cpal::FromSample<f32>>(device: &cpal::Device, config: cpal::StreamConfig, errors: Arc<Mutex<Option<String>>>) -> cpal::Stream {
+            let channels = config.channels as usize;
+            let rate = config.sample_rate as f64;
+            let mut frame = 0u64;
+            device.build_output_stream::<T, _, _>(config, move |data, _| {
+                for samples in data.chunks_mut(channels) {
+                    let elapsed = frame as f64 / rate;
+                    // -54 dBFS peak, with soft edges; never changes the user's mixer volume.
+                    let envelope = (elapsed / 0.05).min(1.0) * ((2.0 - elapsed) / 0.05).clamp(0.0, 1.0);
+                    let sample = (0.002 * envelope * (std::f64::consts::TAU * 440.0 * elapsed).sin()) as f32;
+                    samples.fill(T::from_sample(sample));
+                    frame += 1;
+                }
+            }, move |error| { *errors.lock().unwrap() = Some(error.to_string()); }, None).expect("quiet output stream")
+        }
+        let tone = match format {
+            cpal::SampleFormat::F32 => tone_stream::<f32>(&device, config, output_error.clone()),
+            cpal::SampleFormat::I16 => tone_stream::<i16>(&device, config, output_error.clone()),
+            cpal::SampleFormat::I32 => tone_stream::<i32>(&device, config, output_error.clone()),
+            other => panic!("test tone does not support {other:?}"),
+        };
+        tone.play().unwrap();
+        std::thread::sleep(Duration::from_secs(3));
+        drop(tone);
+        for (index, capture) in captures.iter_mut().enumerate() {
+            capture.stop();
+            assert!(capture.error().is_none(), "capture error: {:?}", capture.error());
+            println!("source {index} warnings: {:?}", capture.warnings());
+            let state = stats[index].lock().unwrap();
+            println!("source {index}: samples={} peak={:.6} elapsed={:.3}s", state.samples, state.peak, state.last.as_secs_f64());
+            assert!(state.samples > SAMPLE_RATE as usize, "source {index} returned no sustained audio stream");
+        }
+        assert!(output_error.lock().unwrap().is_none(), "output error");
+        assert!(stats[1].lock().unwrap().peak > 0.00001, "playback stream remained silent");
+        println!("microphone and digital playback captured together; only aggregate levels retained, no recording saved");
     }
 
     #[test]

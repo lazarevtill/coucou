@@ -6,7 +6,7 @@ import { h, clear } from "../../views/dom";
 import { t } from "../../i18n/i18n";
 import { onEvent } from "../../core/bridge";
 import { FlowBridge, type Edge, type FlowKey, type ModelsStatus, type FlowPrefs, type AudioSourceStatus } from "../../core/flow";
-import { audioMeters } from "../audio";
+import { audioMeters, updateAudioDevices } from "../audio";
 import type { HubContext } from "../shell";
 import { button, card, divider, keyKeycap, keycap, label, number, row, segmented, select, toggle } from "../ui";
 
@@ -106,14 +106,14 @@ export async function flowSettingsPage(page: HTMLElement, ctx: HubContext) {
 
   // ── Microphone ──
   page.append(label(t("Microphone")));
-  const mics: [string, string][] = [["", status.platform === "windows" ? t("Automatic — Windows call device") : t("System default")], ...status.mics.map((m): [string, string] => [m.id, m.name])];
-  if (prefs.mic && !mics.some(([id]) => id === prefs.mic)) mics.push([prefs.mic, prefs.mic]);
-  page.append(card(row(t("Microphone"), t("The one Coucou listens to for dictation and calls."), select(mics, prefs.mic, (mic) => void ctx.setPrefs((p) => (p.mic = mic))))));
-
-  const speakers: [string, string][] = [["", t("Automatic — Windows call device")], ...status.speakers.map((d): [string, string] => [d.id, d.name])];
-  if (prefs.speakers && !speakers.some(([id]) => id === prefs.speakers)) speakers.push([prefs.speakers, t("Selected device (disconnected)")]);
+  const micSelect = select([], prefs.mic, (mic) => void ctx.setPrefs((p) => (p.mic = mic))) as HTMLSelectElement;
+  const playbackSelect = select([], prefs.speakers, (device) => void ctx.setPrefs(p => (p.speakers = device))) as HTMLSelectElement;
+  updateAudioDevices(micSelect, status.mics, prefs.mic, status.platform === "windows");
+  updateAudioDevices(playbackSelect, status.speakers, prefs.speakers, status.platform === "windows");
+  page.append(card(row(t("Microphone"), t("The one Coucou listens to for dictation and calls."), micSelect)));
   const meters = audioMeters();
   let testing = false;
+  let visible = (await FlowBridge.hubShown()) !== false;
   const testMessage = h("div", { class: "hub-note" });
   const testButton = button(t("Test audio"), () => {
     if (testing) { void FlowBridge.stopAudioTest(); return; }
@@ -126,10 +126,13 @@ export async function flowSettingsPage(page: HTMLElement, ctx: HubContext) {
     });
   });
   const stopMeters = await onEvent<AudioSourceStatus[]>("audio-test-levels", levels => { if (page.isConnected) meters.update(levels); });
-  ctx.onLeave = () => { stopMeters(); void FlowBridge.stopAudioTest(); };
+  const stopVisibility = await onEvent<boolean>("hub-visible", shown => {
+    visible = shown;
+    if (!shown) void FlowBridge.stopAudioTest();
+  });
+  ctx.onLeave = () => { stopMeters(); stopVisibility(); void FlowBridge.stopAudioTest(); };
   page.append(card(
-    row(t("Call playback"), t("Choose the same headphones or speakers used by your call app. Automatic follows the Windows communications device."),
-      select(speakers, prefs.speakers, device => void ctx.setPrefs(p => (p.speakers = device)))),
+    row(t("Call playback"), t("Automatic follows the call app's active audio devices, then Windows call defaults. Device choices stay fixed."), playbackSelect),
     h("div", { class: "hub-note", text: t("Bluetooth headset microphones can reduce playback quality. A laptop or USB microphone with Bluetooth headphones can keep playback clearer. Wired and USB headsets also work.") }),
     h("div", { class: "hub-note", text: t("Playback is captured digitally, including other apps using the selected output. Automatic devices reconnect during a call; manual choices stay fixed.") }),
     testButton, testMessage, meters.element,
@@ -159,8 +162,13 @@ export async function flowSettingsPage(page: HTMLElement, ctx: HubContext) {
     button(t("Measure again"), () => void FlowBridge.retuneSpeech().then(() => ctx.refresh()).then(s => updatePerformance(s.performance)), "", true),
   ));
   const performanceTimer = window.setInterval(() => {
+    if (!visible || !page.isConnected) return;
     if (page.isConnected && !testing) void FlowBridge.audioStatus().then(sources => { if (sources?.length) meters.update(sources); });
-    if (page.isConnected) void FlowBridge.status().then(s => { if (s) updatePerformance(s.performance); });
+    if (page.isConnected) void FlowBridge.status().then(s => { if (s && page.isConnected) {
+      updatePerformance(s.performance);
+      updateAudioDevices(micSelect, s.mics, s.prefs.mic, s.platform === "windows");
+      updateAudioDevices(playbackSelect, s.speakers, s.prefs.speakers, s.platform === "windows");
+    } });
   }, 2000);
   const previousLeave = ctx.onLeave;
   ctx.onLeave = () => { window.clearInterval(performanceTimer); previousLeave?.(); };

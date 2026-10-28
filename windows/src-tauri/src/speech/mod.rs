@@ -10,6 +10,8 @@
 pub mod audio;
 pub mod performance;
 pub mod monitor;
+pub mod source;
+pub mod routing;
 
 use std::io::Write;
 use std::path::PathBuf;

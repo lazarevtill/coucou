@@ -22,6 +22,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use crate::flow::{pill, store::SummaryEngine};
 use crate::i18n::{t, tf};
 use crate::speech::{self, audio};
+use crate::speech::source::SourceStatus;
 use builder::{Line, Speaker, TimedWord, Todo};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -662,7 +663,7 @@ pub struct NotesState {
     notes: Vec<Note>,
     recording: Option<String>,
     working: Vec<String>,
-    audio: Vec<track::SourceStatus>,
+    audio: Vec<SourceStatus>,
 }
 
 #[tauri::command]
@@ -673,7 +674,7 @@ pub fn notes_state(taker: State<Arc<NoteTaker>>) -> NotesState {
     NotesState { notes, recording, working, audio: audio_status(&taker) }
 }
 
-fn audio_status(taker: &NoteTaker) -> Vec<track::SourceStatus> {
+fn audio_status(taker: &NoteTaker) -> Vec<SourceStatus> {
     let recording = taker.recording.lock().unwrap();
     let Some(rec) = recording.as_ref() else { return vec![]; };
     let mut status = vec![rec.mic.status()];
@@ -682,7 +683,7 @@ fn audio_status(taker: &NoteTaker) -> Vec<track::SourceStatus> {
 }
 
 #[tauri::command]
-pub fn notes_audio_status(taker: State<Arc<NoteTaker>>) -> Vec<track::SourceStatus> { audio_status(&taker) }
+pub fn notes_audio_status(taker: State<Arc<NoteTaker>>) -> Vec<SourceStatus> { audio_status(&taker) }
 
 #[tauri::command]
 pub async fn notes_start(app: AppHandle) -> Result<String, String> {

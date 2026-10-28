@@ -178,6 +178,7 @@ export interface AudioSourceStatus {
   warnings?: string[];
   sampleRate: number;
   channels: number;
+  application?: string | null;
 }
 
 export interface NotesState {

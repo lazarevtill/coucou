@@ -392,6 +392,22 @@ pub fn process_ancestors(pid: u32) -> Vec<u32> {
     session_window::ancestors(&process_table(), pid)
 }
 
+/// Audio helpers can live below a browser or call window's process. Group them
+/// by their owning application, without reading titles, pages or window content.
+pub fn audio_process_families(pids: &[u32]) -> HashMap<u32, (u32, String)> {
+    let processes = process_table();
+    let owners: std::collections::HashSet<_> = top_windows().into_iter().map(|(_, pid, _)| pid).collect();
+    pids.iter().filter_map(|&pid| {
+        let ancestors = session_window::ancestors(&processes, pid);
+        if pid == std::process::id() || ancestors.contains(&std::process::id()) { return None; }
+        let family = std::iter::once(pid).chain(ancestors.iter().copied()).find(|id| owners.contains(id))
+            .or_else(|| ancestors.iter().copied().find(|id| processes.get(id).is_some_and(|p| processes.get(&pid).is_some_and(|child| child.exe.eq_ignore_ascii_case(&p.exe)))))
+            .unwrap_or(pid);
+        let process = processes.get(&family)?;
+        Some((pid, (family, process.exe.trim_end_matches(".exe").to_string())))
+    }).collect()
+}
+
 /// Visible top-level windows that are nobody's dialog and have a title:
 /// (handle, process ID, title).
 fn top_windows() -> Vec<(isize, u32, String)> {

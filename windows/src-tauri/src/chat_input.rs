@@ -72,7 +72,7 @@ pub async fn chat_dictation_start(app: AppHandle, window: WebviewWindow, input: 
         let meter = level.clone();
         let capture = Capture::start(Source::Mic((!mic.is_empty()).then_some(mic)), move |incoming| {
             append(&mut writing.lock().unwrap(), incoming);
-            *meter.lock().unwrap() = crate::notes::track::levels(incoming).0;
+            *meter.lock().unwrap() = crate::speech::source::levels(incoming).0;
         });
         let mut capture = match capture {
             Ok(capture) => { let _ = ready_tx.send(Ok(())); capture }

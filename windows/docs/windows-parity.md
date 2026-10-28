@@ -24,9 +24,15 @@ The Windows app uses native Windows services where the Mac uses Apple APIs. The 
 
 ## Call audio
 
-Choose the actual microphone and the output used by the call application under Flow Settings. Automatic choices use the Windows communications endpoints, falling back to system defaults. Manual choices retain their device identity. A short audio test reports levels without writing audio to disk.
+Choose microphone and playback independently under Flow Settings. A laptop microphone with Bluetooth earbuds is a supported combination. Automatic mode inspects active Windows audio sessions to follow the call application's devices, including selections made inside Zoom or browser calls. If no call is identified, it uses the Windows communications endpoints and then system defaults. Manual choices retain their device identity and never silently switch to speakers. The picker refreshes when devices connect or disconnect.
+
+Automatic detection groups audio processes by their owning application. Multiple microphone applications or multiple outputs within one browser can be ambiguous; Coucou reports this and asks for explicit device choices. It does not read browser tabs or claim to distinguish Google Meet from another audio tab in the same browser. The source meters identify the actual device and the application supplying an automatic route.
+
+A short audio test reports levels without writing audio to disk. It shares source recovery with Notetaker. Device loss, source changes and recoverable WASAPI discontinuities remain visible after audio returns. Recoverable discontinuities do not force a working Bluetooth stream to restart. Detection runs only during a recording or an explicit audio test; Settings polling stops while its window is hidden.
 
 The playback source captures the digital mix on the selected endpoint, including other applications on that endpoint. It works with speakers, wired headphones, USB audio and supported Bluetooth endpoints. Recording cannot bypass a device's own bandwidth limits: enabling a Bluetooth headset microphone can change its playback profile. A separate laptop or USB microphone can avoid that limitation. The app shows the active source name and native format, and reports missing or failed sources.
+
+Native checks on the development laptop captured the laptop microphone and Bluetooth earbuds simultaneously at their 48 kHz stereo device format, and the laptop microphone with built-in speakers after the earbuds disconnected. Only aggregate levels were retained. A separate native fixture verified that Windows session detection found an application's actual microphone and playback endpoints. Real Zoom/Meet calls, an in-flight physical disconnect/reconnect and wired/USB hardware remain verification tasks.
 
 Microphone and playback are stored separately at the 16 kHz mono rate required by the speech models. A shared timeline preserves silence and device reconnection gaps. Disk writes run outside the audio callback. Transcript echo filtering removes repeated speaker playback from the microphone transcript; it is not an acoustic noise-cancellation driver. Audio is deleted after transcription succeeds. Summary generation sends text only to the explicitly selected provider.
 

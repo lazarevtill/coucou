@@ -25,6 +25,8 @@ Public crypto quotes and read-only portfolios use `windows/src-tauri/src/markets
 
 Speech and call recording use `windows/src-tauri/src/speech/` and `notes/`. Flow Settings selects text providers, audio devices and automatic or manual CPU threads. Source recovery runs independently of transcription; lost-audio warnings remain in the note. See `windows/docs/windows-parity.md` for feature coverage and hardware verification limits.
 
+`speech/source.rs` shares audio health and reconnection between Notetaker and the no-file Settings test. `speech/routing.rs` follows the active call application's Windows audio sessions before system defaults. Manual microphone and playback choices remain independent; ambiguous app routes must be visible. Hardware diagnostics are ignored tests that require explicit live-test authorization.
+
 `windows/src-tauri/src/local_chat.rs` owns model-server chat. Settings migration must retain Windows preferences and plugin trust, preserve explicit current values, and back up a migrated settings file before replacing it. Generic settings saves cannot grant plugin trust.
 
 ## Rules
