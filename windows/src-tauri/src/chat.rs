@@ -3,8 +3,9 @@
 // claude.rs (Anthropic), openai_compat.rs (OpenAI, Google AI, OpenRouter) and
 // local_chat.rs (Ollama, LM Studio, any OpenAI-compatible server).
 //
-// API keys never leave the credential store and file bytes never cross the IPC
-// boundary: the island sends the question and gets the answer's text back.
+// API keys never leave the credential store. Dropped files are read in Rust;
+// explicit screenshot pastes enter the private inbox through chat_images.rs.
+// A chat turn sends the question and gets the answer's text back.
 
 use std::sync::Mutex;
 

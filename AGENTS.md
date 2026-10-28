@@ -8,6 +8,7 @@ Read [CLAUDE.md](CLAUDE.md) for the repository structure and product rules. macO
 - Market integrations remain read-only, run only for enabled pills, and show unavailable prices as unknown. Keep credentials in the OS credential store.
 - Native coding sessions retain user-controlled tool permissions. Chat subprocesses are supervised, bounded and cancellable, with tools disabled.
 - Keep visual attachments equivalent for both CLI providers. Render every PDF page within explicit limits; reject oversized documents without sending partial pages. Provider changes must not transfer attachment bytes automatically.
+- Screenshot pixels enter chat only through an explicit paste. Preview them before Send; never monitor the clipboard or silently capture a screen.
 - Hook installation requires a reviewed diff, a successful backup and an explicit user click. Never auto-approve a tool or plugin.
 - Preserve Windows preferences, folder-plugin trust and native session focus when integrating upstream changes. Keep provider/schema contracts and behavior assertions together.
 - Run the frontend and Rust workspace checks listed in `windows/README.md`. Explicit live CLI smoke tests require installed signed-in accounts; report actual results and platform limits.

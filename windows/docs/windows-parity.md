@@ -20,6 +20,7 @@ The Windows app uses native Windows services where the Mac uses Apple APIs. The 
 | Crypto prices | Coinbase and OKX public quotes, 24-hour charts, currency selection and opt-in movement alerts | Native settings and pill interaction |
 | Portfolio | Read-only exchange balances, 16 native wallet networks, USD valuation and partial-data indicators | Real exchange accounts and each public wallet service |
 | Chat microphone and window context | Local dictation fills the editable prompt; selected app/window title and an exposed browser address accompany a new chat | Native microphone, browser navigation-bar detection and window picker click-through |
+| Screenshots and annotation | Open native Windows Snipping Tool, capture and annotate there, then explicitly paste a PNG into chat; preview and remove before Send | Installed Snipping Tool discovery is verified; capture, annotation and paste need GUI testing |
 | Dropped-file email | Native Windows Share attaches the copied inbox file; the user chooses a mail app and sends there | Mail-client selection and draft attachment on the installed build; native attachment packaging is tested |
 | Traditional Chinese and Thai | Complete Windows catalogs and fourteen-language picker; native locale and plural rules | Native linguistic and layout review |
 | Apple iPhone/iCloud features | Windows has Android pairing; no iPhone transport equivalent yet | Cross-platform phone protocol and iPhone implementation |
@@ -71,3 +72,9 @@ After dropping a file, choose Send by email, then Share. Windows opens its nativ
 ## Window attachments
 
 Chat's window button lists visible app titles. Selecting one authorizes a single bounded read of that window's browser navigation bar through Windows accessibility APIs. It never focuses the browser, uses the clipboard or traverses page documents. HTTP(S) addresses are attached only when unambiguous; embedded username/password fields are removed. Unsupported browsers, hidden address bars and unavailable accessibility providers attach the app and title alone. The context chip previews the address before Send, and leaving chat discards a late attachment result.
+
+## Screenshots
+
+Chat's screenshot button opens the installed Microsoft Snipping Tool. Capture a region or window, annotate it there if needed, copy it and paste into Coucou's chat field. Win+Shift+S also starts Windows capture. Coucou receives pixels only from the explicit paste event; it does not watch the clipboard or capture the screen in the background.
+
+Pasting a PNG starts a fresh chat with the image attached and shows a preview. Remove attachment clears it before Send; typing or dictating the question does not send it automatically. The image is copied into the private drop inbox with the same seven-day cleanup as dropped files. Limits are shared by the frontend and Rust in `src/chat-image-limits.json`: 5 MiB, 8,192 pixels per dimension and 32 megapixels. Files over these limits are rejected. The workflow uses native capture and annotation rather than an embedded annotation editor.

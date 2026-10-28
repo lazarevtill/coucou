@@ -236,3 +236,70 @@ test("leaving chat ignores a delayed browser attachment", async () => {
   assert.equal(State.promptContext, null);
   assert.equal(sent("chat_send").length, 0);
 });
+
+function paste(files) {
+  const event = { clipboardData: { files }, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+  for (const listener of $(".chat-input").listeners.get("paste") ?? []) listener(event);
+  return event;
+}
+const png = () => new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" });
+
+test("a pasted image is previewed, removable and waits for an explicit Send", async () => {
+  answers.chat_image_attach = { name: "Capture.png", path: "C:/inbox/Capture.png", size: 4 };
+  assert.equal(paste([png()]).defaultPrevented, true);
+  await flush();
+  await flush();
+  view.sync();
+  assert.equal(sent("chat_image_attach").length, 1);
+  assert.deepEqual(State.droppedFile, answers.chat_image_attach);
+  assert.match($(".chat-image-preview").src, /^data:image\/png;base64,/);
+  assert.equal($(".chat-image").hidden, false);
+  assert.equal(sent("chat_send").length, 0);
+  $(".chat-image-remove").fire("click");
+  assert.equal(State.droppedFile, null);
+  assert.equal($(".chat-image").hidden, true);
+});
+
+test("pasted screenshots become file context for either CLI only on Send", async () => {
+  for (const provider of ["claude-code", "codex"]) {
+    State.settings.chatProvider = provider;
+    answers.chat_image_attach = { name: "Capture.png", path: "C:/inbox/Capture.png", size: 4 };
+    answers.chat_send = { text: "Blue" };
+    paste([png()]);
+    await flush();
+    await flush();
+    view.sync();
+    const count = sent("chat_send").length;
+    $(".chat-input").value = "Describe this";
+    $(".send-btn").fire("click");
+    await flush();
+    assert.equal(sent("chat_send").length, count + 1);
+    assert.deepEqual(sent("chat_send").at(-1).context, { kind: "file", name: "Capture.png", path: "C:/inbox/Capture.png" });
+    view.sync();
+  }
+});
+
+test("plain text paste is untouched and oversized or multiple images are rejected", async () => {
+  assert.equal(paste([]).defaultPrevented, false);
+  paste([png(), png()]);
+  await flush();
+  assert.equal(sent("chat_image_attach").length, 0);
+  paste([{ type: "image/png", size: 10 * 1024 * 1024 }]);
+  await flush();
+  assert.equal(sent("chat_image_attach").length, 0);
+  assert.match($(".chat-image-status").textContent, /too large/);
+});
+
+test("leaving chat discards an image that finishes attaching later", async () => {
+  let finish;
+  answers.chat_image_attach = () => new Promise(resolve => { finish = resolve; });
+  paste([png()]);
+  await flush();
+  State.view = "overview";
+  view.sync();
+  finish({ name: "Capture.png", path: "C:/inbox/Capture.png", size: 4 });
+  await flush();
+  assert.equal(State.droppedFile, null);
+  assert.equal($(".chat-image").hidden, true);
+  assert.equal(sent("chat_send").length, 0);
+});

@@ -35,6 +35,8 @@ Chat window attachments use short-lived, single-use selections in `chat_input.rs
 
 `cli_agents/attachments.rs` shares image and PDF handling between Claude Code and Codex. Windows renders PDFs locally with bounded page counts, size and time. Keep native attachment history separate from provider-neutral text history. Codex temporary files are private and scoped to the supervised request; Claude images travel over stdin.
 
+`chat_images.rs` and `views/chat-images.ts` provide explicit screenshot pasting with bounded PNG storage and preview. The capture button launches the verified Microsoft Snipping Tool package. Capture and annotation stay in that native app; Coucou never polls the clipboard or sends an attachment without Send.
+
 ## Rules
 - Keep commits small, cohesive and readable, with clear plain messages. Once commit and push are authorized, push all task commits to the intended branch and verify the remote SHA. Keep upstream merges separate from subsequent feature and fix commits.
 - Swift 6, SwiftUI + AppKit. No third-party dependencies unless truly unavoidable. The character is drawn in code (`Canvas` + `TimelineView`), no Rive/Lottie/images.

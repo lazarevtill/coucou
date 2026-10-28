@@ -4,6 +4,7 @@ mod agent_hooks;
 mod agents;
 mod chat;
 mod chat_input;
+mod chat_images;
 mod claude;
 mod cli_agents;
 mod text_ai;
@@ -1321,6 +1322,8 @@ pub fn run() {
             chat_input::chat_dictation_stop,
             chat_input::chat_windows,
             chat_input::chat_window_context,
+            chat_images::chat_image_attach,
+            chat_images::chat_capture_open,
             flow::flow_set_prefs,
             flow::flow_retune_speech,
             flow::flow_test_audio,

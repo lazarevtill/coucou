@@ -10,6 +10,7 @@ import { h, svg, clear } from "./dom";
 import { ICONS } from "./icons";
 import { renderMarkdown } from "./markdown";
 import { chatInputTools } from "./chat-input";
+import { chatImages } from "./chat-images";
 import { Bridge, onEvent, type ChatContext, type ModelInfo } from "../core/bridge";
 import {
   activeModel, pickModel, providerDef, visibleProviders, withModel, type ProviderDef,
@@ -218,6 +219,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     input.focus();
   }, async context => {
     await Bridge.chatReset();
+    if (State.view !== "prompt") return;
     State.droppedFile = null;
     State.promptContext = { kind: "window", appName: context.appName, title: context.title,
       ...(context.url ? { url: context.url } : {}) };
@@ -226,7 +228,20 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     State.notify();
     onHeightChange();
   }, onHeightChange);
-  const bar = h("div", { class: "chat-bar" }, input, tools.controls, send);
+  const images = chatImages(input, async file => {
+    await Bridge.chatReset();
+    if (State.view !== "prompt") return;
+    State.droppedFile = file;
+    State.promptContext = null;
+    State.chatHistory = [];
+    renderedCount = -1;
+    State.notify();
+  }, () => {
+    State.droppedFile = null;
+    State.promptContext = null;
+    State.notify();
+  }, () => { State.notify(); onHeightChange(); });
+  const bar = h("div", { class: "chat-bar" }, input, tools.controls, images.control, send);
 
   const modelDot = h("i", { class: "model-dot" });
   const modelName = h("span", { class: "model-name" });
@@ -244,7 +259,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     body.classList.toggle("picking", picker.isOpen);
     drawModelButton();
   });
-  body.append(chipRow, log, picker.el, modelRow, bar, tools.details);
+  body.append(chipRow, images.preview, log, picker.el, modelRow, bar, tools.details, images.status);
 
   const el = h("div", { class: "view" }, h("div", { class: "card wash chat-card" }, body));
   (el.querySelector(".card") as HTMLElement).style.setProperty("--wash", "rgba(99,102,241,0.5)");
@@ -261,13 +276,13 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     modelDot.style.background = p.accent;
     const cli = p.id === "claude-code" || p.id === "codex";
     modelName.textContent = cli ? `${p.name} · default` : activeModel(State.settings) || t(STRINGS.noModel);
-    send.disabled = sending && (!cancellable || stopping);
+    send.disabled = sending ? (!cancellable || stopping) : tools.active || images.active;
     send.title = sending && cancellable ? t("Stop") : t(STRINGS.send);
     send.setAttribute("aria-label", send.title);
     clear(send);
     send.append(sending && cancellable ? svg(ICONS.xmark, 11) : svg(ICONS.arrowUp, 11));
     modelBtn.classList.toggle("open", picker.isOpen);
-    modelBtn.disabled = sending;
+    modelBtn.disabled = sending || tools.active || images.active;
   }
 
   modelBtn.addEventListener("click", () => {
@@ -289,7 +304,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
 
   async function submit() {
     const query = input.value.trim();
-    if (!query || sending || tools.active) return;
+    if (!query || sending || tools.active || images.active) return;
     if (picker.isOpen) picker.close();
     input.value = "";
     sending = true;
@@ -377,11 +392,12 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
 
       // Leaving the chat folds the picker away.
       if (State.view !== "prompt" && picker.isOpen) picker.close();
-      tools.sync(State.view === "prompt", sending);
+      tools.sync(State.view === "prompt", sending || images.active);
+      images.sync(State.view === "prompt", sending || tools.active, State.droppedFile?.path ?? null, State.chatHistory.length > 0);
       drawModelButton();
 
       input.placeholder = t(State.chatHistory.length === 0 ? STRINGS.placeholderFirst : STRINGS.placeholderNext);
-      input.disabled = sending || tools.active;
+      input.disabled = sending || tools.active || images.active;
     },
     focus() {
       input.focus();
