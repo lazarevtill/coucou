@@ -239,6 +239,22 @@ fn parse_history(exchange: &str, value: &Value) -> Result<Vec<f64>, String> {
         .collect())
 }
 
+pub async fn daily_history(http: &reqwest::Client, symbol: &str) -> Result<Vec<f64>, String> {
+    let url = format!(
+        "{}/products/{symbol}-USD/candles?granularity=86400",
+        network().coinbase
+    );
+    let points = parse_history("coinbase", &json(http.get(url)).await?)?;
+    Ok(points
+        .into_iter()
+        .rev()
+        .take(7)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

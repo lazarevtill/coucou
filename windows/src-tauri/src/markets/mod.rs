@@ -1,4 +1,5 @@
 // Read-only market integrations. Nothing is requested until its pill is enabled.
+pub mod portfolio;
 mod quotes;
 
 use serde::{Deserialize, Serialize};
