@@ -14,9 +14,11 @@
 //   * whatever happens we drop the connection after the decision timeout, and
 //     the terminal takes over.
 //
-// What we write back is the bare word `allow` or `deny`. Turning that into the
-// documented hookSpecificOutput JSON is coucou-hook's job, so the wire format
-// Claude Code expects lives in exactly one place.
+// What we write back is the bare word `allow` or `deny` — or, when the request
+// was Claude Code asking a question, `{"answers":{…}}` with what was picked on
+// the island. Turning either into the documented hookSpecificOutput JSON is
+// coucou-hook's job, so the wire format Claude Code expects lives in exactly
+// one place.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -33,6 +35,7 @@ use tokio::sync::mpsc;
 use crate::island::WINDOW_LABEL;
 use crate::log;
 use crate::sessions::Sessions;
+use crate::session_window;
 
 /// Slightly under coucou-hook's own 110 s wait, so we always answer first.
 const DECISION_TIMEOUT: Duration = Duration::from_secs(108);
@@ -192,6 +195,10 @@ pub fn start(app: AppHandle) {
 trait Relay: AsyncRead + AsyncWrite + Unpin {
     /// Ends the conversation once everything has been written.
     fn finish(&mut self) {}
+    /// The relay process on the other end, where the OS says.
+    fn client_pid(&self) -> Option<u32> {
+        None
+    }
 }
 
 #[cfg(windows)]
@@ -199,11 +206,21 @@ impl Relay for NamedPipeServer {
     fn finish(&mut self) {
         let _ = self.disconnect();
     }
+    fn client_pid(&self) -> Option<u32> {
+        use std::os::windows::io::AsRawHandle;
+        crate::platform::pipe_client_pid(self.as_raw_handle())
+    }
 }
 
 /// Dropping the stream closes it; the relay reads up to our newline first.
 #[cfg(target_os = "linux")]
-impl Relay for tokio::net::UnixStream {}
+impl Relay for tokio::net::UnixStream {
+    /// SO_PEERCRED: the process that connected, as the kernel saw it.
+    fn client_pid(&self) -> Option<u32> {
+        let pid = self.peer_cred().ok()?.pid()?;
+        u32::try_from(pid).ok().filter(|pid| *pid > 1)
+    }
+}
 
 async fn handle(app: AppHandle, mut pipe: impl Relay) {
     let mut buf = Vec::new();
@@ -235,14 +252,14 @@ async fn handle(app: AppHandle, mut pipe: impl Relay) {
         .unwrap_or_default()
         .to_string();
 
-    // Where this session lives, so the island can label it and jump to it.
     let sessions = app.state::<Sessions>();
     if let Some(host) = sessions.observe(&payload, Instant::now(), &|port| crate::ide_lock::read(port)) {
         payload["coucou_host"] = serde_json::to_value(host).unwrap_or(Value::Null);
     }
-
+    note_session_window(&pipe, &payload, &event);
+    crate::recap::observe(&app, &payload);
     if event != "PermissionRequest" {
-        log::line(format!("hook {event}"));
+        if event != "StatusLine" { log::line(format!("hook {event}")); }
         let ended = (event == "SessionEnd")
             .then(|| payload.get("session_id").and_then(Value::as_str).map(str::to_string))
             .flatten();
@@ -260,6 +277,7 @@ async fn handle(app: AppHandle, mut pipe: impl Relay) {
         let pending = app.state::<Pending>();
         pending.0.lock().unwrap().insert(id.clone(), tx);
     }
+    crate::recap::note_request(&app, &id, &payload);
     payload["request_id"] = json!(id);
     log::line(format!("hook PermissionRequest id={id}"));
     let _ = app.emit_to(WINDOW_LABEL, "hook", payload);
@@ -276,13 +294,37 @@ async fn handle(app: AppHandle, mut pipe: impl Relay) {
     pipe.finish();
 }
 
+/// Finds, once per session, the window it runs in — see session_window.rs.
+///
+/// Only while the session is unknown, so the process snapshot is not taken on
+/// every event. The relay must still be running for its parents to be found:
+/// a permission request always is (it waits for us), a quick event may already
+/// have exited, and then a later event of the session tries again.
+fn note_session_window(pipe: &impl Relay, payload: &Value, event: &str) {
+    let Some(session) = payload.get("session_id").and_then(Value::as_str) else { return };
+    if event == "SessionEnd" {
+        session_window::forget(session);
+        return;
+    }
+    if session_window::known(session) {
+        return;
+    }
+    let Some(relay) = pipe.client_pid() else { return };
+    let ancestors = crate::platform::process_ancestors(relay);
+    // No ancestors: the relay was already gone, so try again next time. Some,
+    // but none with a window (a classic console): settled, VS Code it is.
+    if !ancestors.is_empty() {
+        session_window::remember(session, crate::platform::window_owners(&ancestors));
+    }
+}
+
 /// Two waits: a short one for "the card is up", then the long one for a human.
 async fn wait_for_decision(id: &str, rx: &mut mpsc::Receiver<Reply>) -> Option<String> {
     match tokio::time::timeout(ACK_TIMEOUT, rx.recv()).await {
         Ok(Some(Reply::Ack)) => {}
         // A click that beats the ack is still a click.
         Ok(Some(Reply::Decision(d))) => {
-            log::line(format!("hook id={id} answered {d}"));
+            log::line(format!("hook id={id} answered {}", loggable(&d)));
             return Some(d);
         }
         Ok(Some(Reply::Decline)) => {
@@ -298,7 +340,7 @@ async fn wait_for_decision(id: &str, rx: &mut mpsc::Receiver<Reply>) -> Option<S
 
     match tokio::time::timeout(DECISION_TIMEOUT, rx.recv()).await {
         Ok(Some(Reply::Decision(d))) => {
-            log::line(format!("hook id={id} answered {d}"));
+            log::line(format!("hook id={id} answered {}", loggable(&d)));
             Some(d)
         }
         Ok(Some(Reply::Decline)) => {
@@ -310,6 +352,11 @@ async fn wait_for_decision(id: &str, rx: &mut mpsc::Receiver<Reply>) -> Option<S
             None
         }
     }
+}
+
+/// The log says a question was answered, never with what.
+fn loggable(decision: &str) -> &str {
+    if decision.starts_with('{') { "a question" } else { decision }
 }
 
 fn send(app: &AppHandle, request_id: &str, reply: Reply, keep: bool) {
@@ -346,4 +393,14 @@ pub fn answer(app: &AppHandle, request_id: &str, decision: &str) {
     };
     log::line(format!("decision id={request_id} {word}"));
     send(app, request_id, Reply::Decision(word.to_string()), false);
+}
+
+/// Called when an option is picked for a question Claude Code asked. `answers`
+/// maps each question's text to the chosen label, which is the shape
+/// AskUserQuestion takes them in.
+pub fn answer_question(app: &AppHandle, request_id: &str, answers: &HashMap<String, serde_json::Value>) {
+    log::line(format!("decision id={request_id} answered a question"));
+    // One line: the relay reads up to the first newline.
+    let line = json!({ "answers": answers }).to_string();
+    send(app, request_id, Reply::Decision(line), false);
 }

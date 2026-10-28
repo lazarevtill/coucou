@@ -29,7 +29,7 @@ const mochi: AgentTask = {
   stepIndex: 0, steps: [], source: "claudeCode", isIntegration: false,
 };
 const avatar = h("div", { class: "avatar" }, createMiniBot(mochi, 26));
-const title = h("div", { class: "title", text: "Claude Code" });
+const title = h("div", { class: "title", text: "Coding agents" });
 const headline = h("div", { class: "headline", text: "" });
 const pauseBtn = h("button", { class: "icon", title: "Pause", onclick: () => act({ kind: "pause" }) });
 const settingsBtn = h("button", {
@@ -51,15 +51,15 @@ const approvalSlot = h("div", { class: "approval-slot" });
 const note = h("div", { class: "note", role: "status" });
 const sessionList = h("div", { class: "list", role: "list" });
 const empty = h("div", { class: "empty" },
-  h("div", { class: "empty-title", text: "No Claude Code sessions" }),
-  h("div", { class: "empty-sub", text: "Start claude in a terminal or in Cursor and it shows up here." }),
+  h("div", { class: "empty-title", text: "No coding agent sessions" }),
+  h("div", { class: "empty-sub", text: "Open Claude Code or Codex from Settings → Agents. Enable its hooks to see sessions here." }),
 );
 const servicesTitle = h("div", { class: "section", text: "Services" });
 const serviceList = h("div", { class: "list services", role: "list" });
 const body = h("main", {}, approvalSlot, note, h("div", { class: "section", text: "Sessions" }), sessionList, empty, servicesTitle, serviceList);
 
 const footer = h("footer", {},
-  h("button", { class: "action", onclick: () => open("prompt") }, svg(ICONS.bubble, 14), h("span", { text: "Ask Claude" })),
+  h("button", { class: "action", onclick: () => open("prompt") }, svg(ICONS.bubble, 14), h("span", { text: "Chat" })),
   h("button", { class: "action", onclick: () => open("upload") }, svg(ICONS.plus, 14), h("span", { text: "Drop a file" })),
   h("button", { class: "action", onclick: () => open("overview") }, svg(ICONS.stack, 14), h("span", { text: "Island" })),
 );
@@ -239,7 +239,7 @@ function renderSessions(list: SessionRow[]) {
     parts.project.textContent = r.project;
     clear(parts.chips);
     if (r.bypass) parts.chips.append(h("span", { class: "chip", text: "bypass" }));
-    const where = [r.host, r.shell].filter(Boolean).join(" · ");
+    const where = [r.agent, r.host, r.shell].filter(Boolean).join(" · ");
     parts.state.textContent = where ? `${r.label} · ${where}` : r.label;
     parts.detail.textContent = r.detail;
     parts.jump.title = r.jumpLabel;

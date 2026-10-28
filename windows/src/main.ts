@@ -6,8 +6,23 @@ import { Sound } from "./core/sound";
 import { State, type Settings } from "./core/state";
 import { Island } from "./island/island";
 import { registerHookHandlers } from "./island/hooks";
+import { registerPhoneLink } from "./island/phone-link";
 import { registerIntegrationHandlers, refreshConfigured } from "./island/integrations";
 import { setPaused, startShellLink } from "./island/shellLink";
+import { registerShortcutHandlers } from "./island/shortcuts";
+import { registerVoiceHandlers } from "./island/voice";
+import { applySpotify, registerSpotifyHandlers } from "./island/spotify";
+import { registerWhatsAppHandlers } from "./island/whatsapp";
+import { SPOTIFY_ID } from "./core/spotify";
+import { Recap } from "./recap/recap";
+import { Updates } from "./island/update";
+import { WhatsNew } from "./whats-new/controller";
+import { onLanguageChange, resolveLanguage, setLanguage, systemLanguages } from "./i18n/i18n";
+
+/** Shows the language Settings asks for ("" = the system's, when Coucou has it). */
+function applyLanguage() {
+  setLanguage(resolveLanguage(State.settings.language, systemLanguages()));
+}
 
 async function main() {
   const root = document.getElementById("root");
@@ -15,17 +30,38 @@ async function main() {
 
   void Sound.preload();
 
+  // Before the island exists: its canvases size their bitmaps from the pixel
+  // ratio once, so the zoom correction has to land first. If zoom was adjusted,
+  // wait until the ratio updates (or up to 500ms) so nothing is sized against
+  // the stale value.
+  const dprBefore = window.devicePixelRatio || 1;
+  const zoomChanged = await Bridge.fitZoom(dprBefore);
+  if (zoomChanged) {
+    for (let i = 0; i < 20 && window.devicePixelRatio === dprBefore; i++) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
+  }
+
   const island = new Island(root);
 
   const boot = await Bridge.boot();
   if (boot) {
     State.settings = { ...State.settings, ...boot.settings };
   }
+  // A language change redraws the island in place: the texts given as tl(…)
+  // relabel themselves (views/dom.ts) and the views redraw the rest on this
+  // sync. Nothing is rebuilt, so tasks, steps and the chat stay as they are.
+  onLanguageChange(() => State.notify());
+  applyLanguage();
+  // Rust shows the tray and its errors in the same language as the webview.
+  void Bridge.setSystemLanguages(systemLanguages());
   island.applySettings();
   State.loadIntegrationTasks();
   if (boot && !boot.cursorPoll) island.followPageCursor();
+  await island.desktop.init();
 
   await onEvent<{ x: number; y: number }>("cursor", ({ x, y }) => island.onCursor(x, y));
+  await onEvent<boolean>("pointer-inside", (inside) => island.setPointerInside(inside));
 
   await onEvent<string>("tray", (what) => {
     switch (what) {
@@ -35,27 +71,107 @@ async function main() {
         if (island.enabled) island.openExplicit(State.defaultView());
         else void Bridge.flyoutShow();
         break;
+      case "recap":
+        setPaused(island, false);
+        void Recap.open(island);
+        break;
+      case "wardrobe":
+        setPaused(island, false);
+        island.alert("wardrobe");
+        break;
+      // "Update Coucou to X…", only in the menu while a new version is out.
+      case "update":
+        setPaused(island, false);
+        Updates.show();
+        break;
       case "pause":
         setPaused(island, !State.paused);
         break;
     }
   });
 
-  await onEvent<null>("screen-changed", () => void Bridge.reposition());
+  const checkZoom = async () => {
+    const dpr = window.devicePixelRatio || 1;
+    await Bridge.fitZoom(dpr);
+  };
+
+  await onEvent<null>("screen-changed", async () => {
+    await checkZoom();
+    void Bridge.reposition();
+    island.ensureRunning();
+  });
+
+  // A query only matches the ratio it was made for: once it changes, watch the
+  // new one, or the next monitor's scale goes unnoticed and the zoom stays wrong.
+  // One frame redraws Mochi at the new ratio, even while the loop is idle.
+  const watchRatio = () => {
+    window
+      .matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
+      .addEventListener?.("change", () => {
+        watchRatio();
+        void checkZoom();
+        island.ensureRunning();
+      }, { once: true });
+  };
+  watchRatio();
+
+  window.addEventListener(
+    "wheel",
+    (e) => {
+      if (e.ctrlKey) e.preventDefault();
+    },
+    { passive: false }
+  );
+  window.addEventListener("keydown", (e) => {
+    if (e.ctrlKey && (e.key === "+" || e.key === "-" || e.key === "=" || e.key === "0")) {
+      e.preventDefault();
+    }
+  });
+
+  // Settings → Reload sounds: read the sounds folder again, and let them hear it.
+  await onEvent<null>("sounds-changed", () => {
+    void Sound.reload().then(() => Sound.play("pop"));
+  });
 
   // The settings window writes preferences; apply them here without a restart.
   await onEvent<Settings>("settings-changed", (s) => {
-    // A conversation does not carry over to another chat source.
-    if (s.chatProvider !== State.settings.chatProvider) State.chatHistory = [];
+    const previousMain = State.mainPillId;
     State.settings = { ...State.settings, ...s };
+    applyLanguage();
     island.applySettings();
     State.loadIntegrationTasks();
+    // A new main tool comes to the front, as on macOS.
+    if (State.mainPillId !== previousMain) State.setFocus(State.mainPillId);
     void refreshConfigured();
   });
 
   registerHookHandlers(island);
+  registerPhoneLink(island);
   registerIntegrationHandlers(island);
   startShellLink(island);
+  registerShortcutHandlers(island, () => setPaused(island, false));
+  registerVoiceHandlers();
+  registerSpotifyHandlers(island);
+  registerWhatsAppHandlers(island);
+  // New versions: Rust offers the card, the island opens it when nothing else waits.
+  await Updates.register(island);
+  // Rust may have read Spotify before this page listened: ask once.
+  if (State.settings.activeIntegrations.includes(SPOTIFY_ID)) {
+    void Bridge.spotifyRefresh().then((s) => s && applySpotify(island, s));
+  }
+
+  // Monday recap: app start (greeting over), an agent starting work, waking up.
+  const checkRecap = () => void Recap.check(island);
+  // What's new, once after an update: when the greeting is over, or a few
+  // seconds in when there is no greeting (the card waits for a quiet island).
+  const whatsNew = () => void WhatsNew.launch(island);
+  island.onGreetingDone = () => {
+    checkRecap();
+    whatsNew();
+  };
+  window.setTimeout(whatsNew, 8000);
+  island.onWake = checkRecap;
+  await onEvent<null>("recap-check", checkRecap);
 
   island.launch();
 

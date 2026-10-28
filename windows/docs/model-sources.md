@@ -1,70 +1,27 @@
 # Chat sources
 
-The chat answers with Claude (the Anthropic API) or with your own model server —
-anything that speaks the OpenAI chat completions API: llama.cpp's
-`llama-server`, LM Studio, Ollama, vLLM.
+The chat model picker offers Claude Code, Codex, Anthropic, Google, OpenAI, OpenRouter, and configured model servers. It shows the selected provider/model above the message field. Provider changes retain the plain-text conversation; provider-specific tool blocks are not forwarded between services.
 
-## Choosing one
+## Existing agent sign-ins
 
-**Settings… → Chat → Answers from**:
+**Settings → Agents → Use for chat** selects Claude Code or Codex without an API key. Both also offer **Open project** for native coding sessions. See [coding-agents.md](coding-agents.md) for setup, permissions, limits and verification.
 
-- **Claude (Anthropic API)** — the key goes in **Settings… → Claude**. Web
-  search, PDFs and images work here.
-- **Your model server** — fill in:
-  - **Address**: the server's base URL up to and including `/v1`.
-    `llama-server` with no options listens on `http://127.0.0.1:8080/v1`.
-    **Check** asks the server for its models and only keeps an address that
-    answers.
-  - **Model**: one the server lists, or *First listed*.
-  - **API key**: only if the server asks for one (`llama-server --api-key …`).
-    It is stored in the Windows Credential Manager like every other key.
+## API providers
 
-The chat field says who answers — *Ask Claude…*, *Ask your model server…* or the
-model's name. Switching source starts a new conversation.
+Add the relevant key in **Settings → Chat**, then choose the provider and model in the chat picker. API keys use Windows Credential Manager or Linux Secret Service. They are separate from Claude/ChatGPT subscription sign-ins. Models are listed by the selected provider; file support depends on that provider.
 
-## What is sent where
+## Model servers
 
-- With your model server, the conversation goes to that address and nowhere else.
-- Plain `http://` is accepted only for this computer and the local network:
-  `localhost`, `127.0.0.0/8`, `::1`, `10.0.0.0/8`, `172.16.0.0/12`,
-  `192.168.0.0/16`, link-local addresses, and names ending in `.local`, `.lan`,
-  `.home.arpa`, `.internal`. Anything else needs `https://`.
-- Addresses with a user name or password, a `?query` or a `#fragment` are
-  refused. Redirects are not followed, so a local address can never send the
-  conversation somewhere else.
-- A model on the local network may take up to ten minutes over an answer (a
-  model running on the processor is slow); a remote one two minutes.
+**Settings → Chat → Local models** connects Ollama, LM Studio or an OpenAI-compatible server. Enter its address, connect, and select one of the models it reports. A server is visible in the chat picker once configured, or while selected.
 
-## What works with your own server
+An optional custom-server key is bound to the exact normalized address it was entered for. Changing an address cannot send that key to the new server. Keys are sent only over HTTPS or to loopback. The connection view indicates whether an address is on this computer or elsewhere. Redirects are refused.
 
-- Multi-turn conversation, as with Claude.
-- Text and code files dropped on the island, inlined up to 200 KB.
-- Not PDFs or images: the chat says so before anything is sent. Switch to Claude
-  for those.
-- No web search.
-- Reasoning models (gpt-oss and the like) keep their thinking apart from their
-  answer; only the answer is shown. If a model thinks without ever answering,
-  the chat says it may need more tokens.
+Local-model replies stream into the chat. Reasoning blocks are separated from the visible answer. Text attachment support and supported image formats depend on the provider; unsupported files produce an error.
 
-## How this is tested
+## Settings and credentials
 
-Automated (`cargo test --workspace`): the address rules, the request, reading
-answers (text, text in parts, reasoning without an answer, server errors), the
-model list in both the OpenAI and the Ollama shape, timeouts, and whole
-conversations against an HTTP server started inside the test — the history,
-the key as a Bearer token, a failed turn not resent, redirects refused, a PDF
-refused before anything is sent.
+Windows editor, terminal, island and notification preferences are retained. Folder plugins keep their approved manifest hashes; built-in service selections are stored separately. Model-server address and model preferences from a legacy settings file are imported into the custom-server fields without replacing explicit newer values. The first save keeps a dated `settings.json.migrated-*` copy.
 
-End to end, on a separate instance (see
-[terminals.md](terminals.md#how-this-is-tested)) and a real `llama-server`
-(build 11193) running SmolLM2-135M-Instruct (Q4_K_M, about 105 MB) on
-`127.0.0.1:18080`:
+A legacy server credential can be imported into the address-bound key entry using the original saved address; an existing bound key is never overwritten. The old credential remains in the OS store. If the credential store is inaccessible or the old address is remote plain HTTP, enter a key again beside an HTTPS address in Settings. No CLI credential is migrated.
 
-- **Check** in the settings window found the server and its model;
-- the island's chat answered, and a follow-up question kept the conversation;
-- a text file's content was used; a PDF was refused;
-- a stopped server gave *Can't reach the model server at …*;
-- with `--api-key`, no key gave the server's own *401: Invalid API Key*, and the
-  key saved in the settings window made it work;
-- an `http://` address on the internet was refused in the settings window;
-- switching back to Claude sent the next question to the Anthropic client.
+Tests in `local_chat.rs`, `net.rs`, `chat.rs`, `cli_agents.rs`, `settings.rs` and `tests/chat.test.mjs` cover the relevant protocol, address, migration and conversation contracts.

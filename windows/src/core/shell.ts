@@ -28,7 +28,7 @@ function where(s: SessionInfo): string {
 /** The tray icon's tooltip. Rust cuts it to what Windows shows (127 units). */
 export function tooltipText(sum: Summary, paused: boolean): string {
   if (paused) return "Coucou — paused";
-  if (sum.count === 0) return "Coucou — no Claude Code sessions";
+  if (sum.count === 0) return "Coucou — no coding agent sessions";
   const parts = [plural(sum.count, "session")];
   const top = sum.top;
   if (top && (top.state === "waiting" || top.state === "approval")) {
@@ -42,7 +42,7 @@ export function tooltipText(sum: Summary, paused: boolean): string {
 
 /** The line under the flyout's title. */
 export function headline(sum: Summary): string {
-  if (sum.count === 0) return "No Claude Code sessions";
+  if (sum.count === 0) return "No coding agent sessions";
   const needs = sum.waiting + sum.approval;
   if (needs > 0) return `${plural(sum.count, "session")} · ${needs} need${needs === 1 ? "s" : ""} you`;
   if (sum.working > 0) return `${plural(sum.count, "session")} · working`;
@@ -50,6 +50,7 @@ export function headline(sum: Summary): string {
 }
 
 export interface SessionRow {
+  agent: "Claude Code" | "Codex";
   id: string;
   project: string;
   /** "Windows Terminal", "Cursor"… or null when unknown. */
@@ -96,6 +97,7 @@ export function sessionRows(list: SessionInfo[]): SessionRow[] {
     const known = s.host && s.host.kind !== "unknown" ? s.host : null;
     return {
       id: s.id,
+      agent: s.agent === "codex" ? "Codex" : "Claude Code",
       project: s.project,
       host: known?.label ?? null,
       shell: known?.shellLabel ?? null,
@@ -271,7 +273,7 @@ export interface SnapshotInput {
   now: number;
   paused: boolean;
   island: "on" | "off";
-  pending: { requestId: string; sessionId: string; command: string; tool: string } | null;
+  pending: { requestId: string; sessionId: string; command: string; tool: string; questions?: unknown; pillId?: string } | null;
   tasks: TaskLike[];
   integrations: Record<string, IntegrationLike | undefined>;
   /** Plugins from the folder. */
@@ -282,13 +284,13 @@ export function buildSnapshot(input: SnapshotInput): ShellSnapshot {
   const sum = input.store.summary(input.now);
   const pending = input.pending;
   let approval: ApprovalCard | null = null;
-  if (pending) {
+  if (pending && !pending.questions) {
     const s = pending.sessionId ? input.store.get(pending.sessionId) : undefined;
     const known = s?.host && s.host.kind !== "unknown" ? s.host : null;
     approval = {
       requestId: pending.requestId,
       sessionId: pending.sessionId,
-      project: s?.project ?? "Claude Code",
+      project: s?.project ?? input.tasks.find((task) => task.id === pending.pillId)?.name ?? "Claude Code",
       host: known?.label ?? null,
       target: pending.command || pending.tool,
     };

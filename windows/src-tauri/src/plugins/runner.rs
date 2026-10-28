@@ -1,10 +1,6 @@
-// Running plugins: the built-in integrations and the plugins from the folder,
-// behind one trait and one pause switch.
-//
-// Built-ins keep exactly the delays and intervals they always had (the macOS
-// ones) and report through their own `integration` events. Plugins from the
-// folder report a `plugin-update`, wait longer after each failure, and are
-// started and stopped by `refresh` as they are approved, edited or removed.
+// Folder plugins report plugin-update events, back off after failures, and
+// start or stop as their approved manifests change. Built-in services are
+// scheduled separately by integrations.rs.
 
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
@@ -37,22 +33,6 @@ fn paused() -> bool {
 
 fn enabled(app: &AppHandle, id: &str) -> bool {
     app.try_state::<crate::Shared>().map(|s| s.settings.lock().unwrap().is_enabled(id)).unwrap_or(false)
-}
-
-/// A built-in: its first poll after its delay, then on a fixed cadence. Ticks
-/// while paused or switched off are skipped: no network at all.
-pub fn run_builtin(app: AppHandle, plugin: Arc<dyn Plugin>) {
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(plugin.first_delay()).await;
-        let mut ticker = tokio::time::interval(plugin.every());
-        loop {
-            ticker.tick().await;
-            if paused() || !enabled(&app, plugin.id()) {
-                continue;
-            }
-            let _ = plugin.poll(app.clone()).await;
-        }
-    });
 }
 
 /// After this many failures in a row a plugin from the folder waits an hour.

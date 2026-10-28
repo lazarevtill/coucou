@@ -14,7 +14,7 @@ use crate::proc::Ancestor;
 /// Whose console to look at: the Claude Code process when the chain has one,
 /// else the shell Windows Terminal started (a Claude Code run through Node).
 pub fn target(chain: &[Ancestor]) -> Option<u32> {
-    if let Some(claude) = chain.iter().find(|a| a.exe.eq_ignore_ascii_case("claude.exe")) {
+    if let Some(claude) = chain.iter().find(|a| a.exe.eq_ignore_ascii_case("claude.exe") || a.exe.eq_ignore_ascii_case("codex.exe")) {
         return Some(claude.pid);
     }
     let terminal = chain.iter().position(|a| a.exe.eq_ignore_ascii_case("WindowsTerminal.exe"))?;
@@ -70,6 +70,13 @@ mod tests {
 
     fn chain(entries: &[(u32, &str)]) -> Vec<Ancestor> {
         entries.iter().map(|(pid, exe)| Ancestor { pid: *pid, exe: (*exe).to_string() }).collect()
+    }
+
+    #[test]
+    fn both_native_agents_select_their_own_console() {
+        for agent in ["claude.exe", "codex.exe"] {
+            assert_eq!(target(&chain(&[(1, "bash.exe"), (2, agent), (3, "pwsh.exe")])), Some(2));
+        }
     }
 
     #[test]

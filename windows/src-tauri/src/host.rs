@@ -81,14 +81,14 @@ fn shell_of_exe(exe: &str) -> Option<ShellKind> {
     }
 }
 
-/// The nearest process above the relay that is Claude Code itself.
-fn claude_index(chain: &[ChainEntry]) -> Option<usize> {
-    chain.iter().position(|e| stem(&e.exe) == "claude")
+/// The nearest Claude Code or Codex process above the relay.
+fn agent_index(chain: &[ChainEntry]) -> Option<usize> {
+    chain.iter().position(|e| matches!(stem(&e.exe).as_str(), "claude" | "codex"))
 }
 
-/// The Claude Code process of a session — what has to be alive for the session to be.
-pub(crate) fn claude_entry(chain: &[ChainEntry]) -> Option<&ChainEntry> {
-    claude_index(chain).map(|i| &chain[i])
+/// The coding agent process of a session — what has to be alive for the session to be.
+pub(crate) fn agent_entry(chain: &[ChainEntry]) -> Option<&ChainEntry> {
+    agent_index(chain).map(|i| &chain[i])
 }
 
 /// The shell the user typed `claude` into: the nearest shell above Claude Code.
@@ -96,7 +96,7 @@ pub(crate) fn claude_entry(chain: &[ChainEntry]) -> Option<&ChainEntry> {
 /// Without a Claude Code entry (a renamed binary) the outermost shell is the best
 /// remaining guess.
 fn shell_of_chain(chain: &[ChainEntry]) -> Option<ShellKind> {
-    match claude_index(chain) {
+    match agent_index(chain) {
         Some(i) => chain[i + 1..].iter().find_map(|e| shell_of_exe(&e.exe)),
         None => chain.iter().rev().find_map(|e| shell_of_exe(&e.exe)),
     }
@@ -170,6 +170,15 @@ mod tests {
 
     fn host(chain: &[ChainEntry], hint: &str, term: &str, wt: bool, ide: Option<&str>) -> HostInfo {
         classify(&Signals { chain, hint, term_program: term, has_wt_session: wt, ide_name: ide })
+    }
+
+    #[test]
+    fn both_native_agents_identify_their_own_process_and_outer_shell() {
+        for agent in ["claude.exe", "codex.exe"] {
+            let c = chain(&["bash.exe", agent, "pwsh.exe", "WindowsTerminal.exe"]);
+            assert_eq!(agent_entry(&c).unwrap().exe, agent);
+            assert_eq!(shell_of_chain(&c), Some(ShellKind::Pwsh));
+        }
     }
 
     #[test]

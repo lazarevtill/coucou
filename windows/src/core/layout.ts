@@ -22,7 +22,11 @@ export type IslandViewName =
   | "note"
   | "settings"
   | "greeting"
-  | "session";
+  | "session"
+  | "recap"
+  | "wardrobe"
+  | "update"
+  | "whatsNew";
 
 export type BotStateName =
   | "idle"
@@ -91,11 +95,24 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   // left column, the latest change on the right (docs/media/claude-code.png).
   // 288 stays inside the 320 px panel.
   session: { height: 288, botX: 86, botY: 92, botDiameter: 54, agentMode: "none" },
+  // Mac: 160. The extra 24 hold the two lines with top agent, project, busiest
+  // day, longest session, permissions and questions, which the Mac card leaves
+  // to the shared image.
+  recap: { height: 184, botX: 62, botY: null, botDiameter: 58, agentMode: "column" },
+  wardrobe: { height: 160, botX: 68, botY: null, botDiameter: 58, agentMode: "none" },
+  // New version: Mochi on the left, the version and Update now (Mac: .update).
+  update: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
+  // After an update: what the new version brings, then "Your Coucou so far".
+  // Taller than a card, for two rows of items with their line.
+  whatsNew: { height: 222, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
 };
 
 // The upload views above are only the fallback geometry. Once a file is actually
 // dropped the whole sequence — Mochi included — is drawn by src/upload, which
 // owns its own constants (USC) straight from UploadSequenceEngine.swift.
+
+/** The question view with options to pick from: room for two rows of them. */
+export const QUESTION_PICKER_H = 200;
 
 /** Chat view grows with the conversation — IslandContainer.chatPromptHeight. */
 export function chatPromptHeight(messageCount: number): number {

@@ -1,4 +1,4 @@
-// What Rust remembers about each live Claude Code session: enough to find its
+// What Rust remembers about each live coding agent session: enough to find its
 // window. The island keeps everything it needs to *display* a session; this is
 // only the part that touches the operating system.
 //
@@ -144,15 +144,15 @@ impl Sessions {
         self.0.lock().unwrap().len()
     }
 
-    /// Forgets sessions whose Claude Code process has exited (a crash or a closed
+    /// Forgets sessions whose coding agent process has exited (a crash or a closed
     /// terminal sends no SessionEnd) and ones that went quiet long ago. Returns
     /// the ids that were dropped.
     pub fn prune(&self, now: Instant, alive: &dyn Fn(&ChainEntry) -> bool) -> Vec<String> {
         let mut dropped = Vec::new();
         self.0.lock().unwrap().retain(|id, record| {
             let stale = now.saturating_duration_since(record.last_seen) > STALE_AFTER;
-            // Without a Claude Code entry there is nothing to ask the OS about.
-            let dead = host::claude_entry(&record.chain).map(|c| !alive(c)).unwrap_or(false);
+            // Without a native coding agent entry there is nothing to ask the OS about.
+            let dead = host::agent_entry(&record.chain).map(|c| !alive(c)).unwrap_or(false);
             if stale || dead {
                 dropped.push(id.clone());
             }

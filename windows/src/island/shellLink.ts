@@ -58,7 +58,7 @@ export function startShellLink(island: Island) {
     State.flyoutOpen = visible;
     // With the island off, the flyout was the only place the card could be
     // answered. Gone from the screen, nobody can: the terminal asks right away.
-    if (!visible && !island.enabled) handBackPending();
+    if (!visible && island.enabled === false) handBackPending();
   });
 }
 
@@ -111,8 +111,7 @@ export function clearStaleToasts() {
 export function handBackPending() {
   const pending = State.pendingApproval;
   if (!pending) return;
-  State.pendingApproval = null;
-  State.isPinned = false;
+  State.endApproval();
   if (pending.requestId) void Bridge.approvalDecline(pending.requestId);
   State.sessions.handBack(pending.sessionId);
   State.syncClaude();

@@ -31,7 +31,7 @@ test("the tray icon says the most important thing", () => {
 
 test("the tooltip names who needs you and where", () => {
   const s = new SessionStore();
-  assert.equal(tooltipText(s.summary(T0), false), "Coucou — no Claude Code sessions");
+  assert.equal(tooltipText(s.summary(T0), false), "Coucou — no coding agent sessions");
   assert.equal(tooltipText(s.summary(T0), true), "Coucou — paused");
   s.apply(ev("api", "PreToolUse", { ...BASH, coucou_host: WT }), T0);
   assert.equal(tooltipText(s.summary(T0), false), "Coucou — 1 session · 1 working");
@@ -41,7 +41,7 @@ test("the tooltip names who needs you and where", () => {
 
 test("the flyout headline counts sessions and who needs you", () => {
   const s = new SessionStore();
-  assert.equal(headline(s.summary(T0)), "No Claude Code sessions");
+  assert.equal(headline(s.summary(T0)), "No coding agent sessions");
   s.apply(ev("a", "PreToolUse", BASH), T0);
   assert.equal(headline(s.summary(T0)), "1 session · working");
   s.apply(ev("b", "PreToolUse", ASK), T0);
@@ -217,3 +217,19 @@ test("a session row carries its latest edit and its last few steps", () => {
   assert.equal(rows.idle.edit, null);
   assert.deepEqual(rows.idle.steps, []);
 });
+
+for (const agent of ["claude", "codex"]) {
+  test(`${agent} appears in the tray with its own label and independent state`, () => {
+    const store = new SessionStore();
+    store.apply(ev("claude-session", "PreToolUse", { ...BASH, coucou_agent: "claude" }), T0);
+    store.apply(ev("codex-session", "PreToolUse", { ...BASH, coucou_agent: "codex" }), T0);
+    store.apply(ev(`${agent}-session`, "Stop", { coucou_agent: agent, last_assistant_message: "Done" }), T0 + 1);
+    const rows = sessionRows(store.list());
+    assert.equal(rows.length, 2);
+    const row = rows.find((r) => r.id === `${agent}-session`);
+    assert.equal(row.agent, agent === "claude" ? "Claude Code" : "Codex");
+    assert.equal(row.state, "finished");
+    assert.equal(store.summary(T0 + 1).working, 1);
+    assert.equal(store.summary(T0 + 1, agent).count, 1);
+  });
+}

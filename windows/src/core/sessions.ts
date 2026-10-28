@@ -1,9 +1,4 @@
-// Claude Code sessions, one record each.
-//
-// Until now every session collapsed onto a single pill: whichever hook event came
-// last overwrote the state, so one session finishing marked its neighbour done and
-// one SessionEnd cleared them all. This keeps a record per session_id and works out
-// what to show from all of them.
+// Claude Code and Codex sessions, one record per session ID.
 //
 // Pure on purpose — no DOM, no Tauri, no clock of its own — so it is tested
 // directly (windows/tests). The island turns what it says into pills and sounds.
@@ -32,6 +27,7 @@ export interface HostInfo {
 
 /** The part of a hook payload this reads. */
 export interface HookEvent {
+  coucou_agent?: string;
   hook_event_name?: string;
   session_id?: string;
   cwd?: string;
@@ -51,6 +47,7 @@ export interface HookEvent {
 }
 
 export interface SessionInfo {
+  agent?: "claude" | "codex";
   id: string;
   cwd: string;
   project: string;
@@ -194,7 +191,7 @@ const ASK_TOOL = "AskUserQuestion";
 
 /** A session's identity. Older relays sent no session_id; those group by folder. */
 function keyOf(ev: HookEvent): string {
-  return ev.session_id ? ev.session_id : `cwd:${ev.cwd ?? ""}`;
+  return ev.session_id ? ev.session_id : `cwd:${ev.coucou_agent === "codex" ? "codex:" : ""}${ev.cwd ?? ""}`;
 }
 
 /** The first question of an AskUserQuestion call. */
@@ -265,12 +262,12 @@ export class SessionStore {
   }
 
   /** Most urgent first, then most recently active. */
-  list(): SessionInfo[] {
-    return [...this.map.values()].sort((a, b) => rank(a) - rank(b) || b.lastEventAt - a.lastEventAt);
+  list(agent?: "claude" | "codex"): SessionInfo[] {
+    return [...this.map.values()].filter((s) => !agent || (s.agent ?? "claude") === agent).sort((a, b) => rank(a) - rank(b) || b.lastEventAt - a.lastEventAt);
   }
 
-  summary(now: number): Summary {
-    const all = this.list();
+  summary(now: number, agent?: "claude" | "codex"): Summary {
+    const all = this.list(agent);
     const top = all[0] ?? null;
     let state: SessionState = top?.state ?? "idle";
     if (state === "finished" && (top?.finishedAt == null || now - top.finishedAt > CELEBRATE_MS)) {
@@ -449,6 +446,7 @@ export class SessionStore {
       };
       this.map.set(id, s);
     }
+    if (ev.coucou_agent === "codex") s.agent = "codex";
     if (ev.cwd) {
       s.cwd = ev.cwd;
       s.project = aliasProjectName(lastPathComponent(ev.cwd) || "Session");
