@@ -24,6 +24,11 @@ The integrated branch contains upstream `47d1c2da12bf1dce8fb28b825757d497c1e1d88
 | Rust workspace suite | 768 passed: 719 app, 46 hook, 3 relay; 21 opt-in tests ignored |
 | TypeScript and Vite production frontend | Passed; existing large shared-chunk warning remains |
 | Rust compile | Passed without warnings |
+| CI for source commit `a818c03e2adeae16633e8ac77ef5b0a3f66eaa44` | [Windows checks](https://github.com/lazarevtill/coucou/actions/runs/40788808510) and [macOS/iPhone checks and unsigned builds](https://github.com/lazarevtill/coucou/actions/runs/40788808481) passed |
+| Windows installer | NSIS 0.5.3 built and installed successfully; complete executable matches the compiled release with Tauri's NSIS bundle marker |
+| Installed startup | Process remains responsive, WebView2 starts and the native log confirms 0.5.3; GUI behavior is not yet verified |
+| Installation preservation | Coucou preferences and both CLI hook configurations remain byte-for-byte unchanged; bundled and staged hook executables match |
+| Installed speech models | All six files match the manifest sizes and SHA-256 hashes; an optimized native check passed transcription, automatic calibration and manual override |
 | Both official CLI subscriptions | Real text replies and structured text tasks passed |
 | Both CLI visual paths | Real image identification and both pages of a synthetic PDF passed |
 | Windows PDF and attachment handling | Native rendering, cancellation, limits, history separation and temporary-file cleanup passed |
@@ -31,7 +36,7 @@ The integrated branch contains upstream `47d1c2da12bf1dce8fb28b825757d497c1e1d88
 | Snipping Tool | Installed Microsoft package discovery passed |
 | Audio | Laptop mic plus Bluetooth playback passed; laptop mic plus speakers after disconnect passed |
 | App audio routing | Separate native capture/playback fixture detected on its actual endpoints |
-| Parakeet | Synthetic transcription, CPU calibration, manual override and speaker separation passed |
+| Parakeet | Synthetic transcription, CPU calibration, manual override and speaker separation passed; the installed-model release check measured four threads fastest at about 247 ms per six-second sample |
 | Markets | Public quotes and nine public wallet-service checks passed |
 | Apple Music | Installed app discovery and 5% per-app volume verified; latest probe has no active media session |
 
@@ -42,7 +47,7 @@ The opt-in tests require signed-in providers, native applications, model fixture
 - The native computer-control pipe and browser inspection host are unavailable. Visual inspection, real login/project/hook approval round trips, screenshot capture/paste and mail-client drafts remain unverified.
 - Real Zoom/Meet device changes, in-flight headset disconnection/reconnection, wired/USB hardware and actual call transcription need interactive verification. The latest endpoint probe exposes only the built-in microphone and speakers.
 - Apple Music needs a playable song and active media session for control, seek and artwork verification. Private exchange accounts and other configured service accounts are not tested.
-- Installer packaging and installation are not yet verified. No public release or upstream PR is published by these checks.
-- Linux/macOS builds and native behavior remain outside this Windows validation. Full app production readiness is not established by the passing suites.
+- The installed build is a local validation build. No public release or upstream PR is published by these checks.
+- Linux builds and native macOS/iPhone behavior remain outside this validation. Full app production readiness is not established by the passing suites and unsigned CI builds.
 
 The fourteen-language catalogs pass completeness and placeholder checks; native linguistic and layout review remains open. The proactive assistant in [agent-design.md](agent-design.md) is a specification.

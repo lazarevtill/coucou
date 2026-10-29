@@ -41,7 +41,7 @@ Microphone and playback are stored separately at the 16 kHz mono rate required b
 
 ## Performance evidence
 
-A synthetic speech fixture on the development laptop completed transcription and automatic calibration, then produced the same transcript with the manual one-thread setting. The six-second calibration sample took about 613 ms at one thread, 413 ms at two, 370 ms at four, 500 ms at eight and 1,250 ms at sixteen. These measurements describe that machine and fixture, not a universal performance guarantee. Automatic mode measures the user's machine and stores timings, never calibration audio.
+A release-profile check using the installed models on the development laptop completed synthetic transcription and automatic calibration, then produced the same transcript with the manual one-thread setting. The six-second calibration sample took about 534 ms at one thread, 336 ms at two, 247 ms at four, 675 ms at eight and 1,071 ms at sixteen. These measurements describe that machine and fixture, not a universal performance guarantee. Automatic mode measures the user's machine and stores timings, never calibration audio.
 
 ## Public crypto prices
 
