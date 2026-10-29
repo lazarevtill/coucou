@@ -14,6 +14,8 @@ pub mod paste;
 pub mod pill;
 pub mod store;
 pub mod text;
+#[cfg(windows)]
+mod keyboard;
 
 #[cfg(windows)]
 #[path = "os_windows.rs"]
@@ -115,9 +117,13 @@ fn is_terminal(id: &str) -> bool {
 
 // ── Setup, on and off ─────────────────────────────────────────────────────────
 
-pub fn setup(app: &AppHandle) {
+pub fn init(app: &AppHandle) {
     let flow = Arc::new(Flow { store: Mutex::new(Store::load()), running: Mutex::new(None) });
-    app.manage(flow.clone());
+    app.manage(flow);
+}
+
+pub fn setup(app: &AppHandle) {
+    let flow = app.state::<Arc<Flow>>().inner().clone();
     pill::setup(app);
     let prefs = flow.store.lock().unwrap().prefs.clone();
     speech::performance::configure(prefs.speech_threads);
@@ -461,14 +467,18 @@ pub struct FlowStatus {
 
 #[tauri::command]
 pub fn flow_status(flow: State<Arc<Flow>>) -> FlowStatus {
+    let prefs = flow.store.lock().unwrap().prefs.clone();
+    let listener_started = flow.running.lock().unwrap().as_ref().is_some_and(|r| r._listener.is_some());
+    let keys = match os::keys_supported() {
+        Ok(()) if prefs.enabled && !listener_started => "unavailable",
+        Ok(()) => "ok",
+        Err(why) => why,
+    };
     FlowStatus {
-        prefs: flow.store.lock().unwrap().prefs.clone(),
+        prefs,
         models: speech::status(),
         performance: speech::performance::status(),
-        keys: match os::keys_supported() {
-            Ok(()) => "ok".into(),
-            Err(why) => why.into(),
-        },
+        keys: keys.into(),
         has_claude_key: cleanup::has_key(),
         mics: audio::input_devices(),
         speakers: audio::output_devices(),

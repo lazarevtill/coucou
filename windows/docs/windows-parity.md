@@ -25,6 +25,12 @@ The Windows app uses native Windows services where the Mac uses Apple APIs. The 
 | Traditional Chinese and Thai | Complete Windows catalogs and fourteen-language picker; native locale and plural rules | Native linguistic and layout review |
 | Apple iPhone/iCloud features | Windows has Android pairing; no iPhone transport equivalent yet | Cross-platform phone protocol and iPhone implementation |
 
+## Floating toolbar and dictation key
+
+Flow Settings selects the dictation key and the bottom, left or right screen edge. The floating toolbar keeps its buttons in place when tooltips appear; side tooltips open toward the screen interior. Its microphone starts hands-free dictation, the record button toggles Notetaker, and the window button opens Coucou.
+
+Windows offers **Copilot** for keyboards that emit **Win + Shift + F23**, alongside Right Ctrl, Right Alt, Right Shift and Ctrl + Win. Selecting Copilot assigns that chord to dictation while Flow is enabled; other shortcuts pass through. A Copilot key remapped by Windows to Right Ctrl requires selecting Right Ctrl instead. Hardware that emits Win + C is not handled by the Copilot option. Synthetic key injection is ignored. The settings status reports a failed keyboard-listener startup instead of claiming the key is ready. Physical key presses and paste in the target application remain necessary hardware checks.
+
 ## Call audio
 
 Choose microphone and playback independently under Flow Settings. A laptop microphone with Bluetooth earbuds is a supported combination. Automatic mode inspects active Windows audio sessions to follow the call application's devices, including selections made inside Zoom or browser calls. If no call is identified, it uses the Windows communications endpoints and then system defaults. Manual choices retain their device identity and never silently switch to speakers. The picker refreshes when devices connect or disconnect.

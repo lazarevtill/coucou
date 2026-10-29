@@ -116,7 +116,7 @@ export async function startHub(root: HTMLElement, opts: HubOptions) {
         const next = { ...status.prefs };
         change(next);
         await FlowBridge.setPrefs(next);
-        status = { ...status, prefs: next };
+        status = (await FlowBridge.status()) ?? { ...status, prefs: next };
         prefsError.textContent = "";
         prefsError.hidden = true;
         drawStatus();
