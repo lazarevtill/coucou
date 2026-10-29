@@ -52,7 +52,7 @@ impl Agent {
         }
         if let Some(path) = platform::find_on_path(stem) { return Some(path); }
         if self == Self::Codex {
-            if let Some(path) = platform::codex_candidates().into_iter().next() { return Some(path); }
+            if let Some(path) = platform::cli_candidates("codex").into_iter().next() { return Some(path); }
         }
         let bin = platform::home_dir().join(".local").join("bin");
         let path = bin.join(if cfg!(windows) { format!("{stem}.exe") } else { stem.into() });

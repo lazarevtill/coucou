@@ -71,6 +71,8 @@ interface HookPayload extends HookEvent {
   term_editor?: string;
   /** StatusLine (the plan usage relay): Claude Code's 5-hour and weekly limits. */
   rate_limits?: unknown;
+  /** SubagentStart / SubagentStop: "Explore", "general-purpose"…; "" for Claude Code's own helpers. */
+  agent_type?: string;
 }
 
 const PROJECT_ALIASES: Record<string, string> = {
@@ -270,6 +272,14 @@ export function registerHookHandlers(island: Island) {
     }
   });
   void onEvent<string>("session-ended", (id) => { State.sessions.remove(id); State.syncClaude(); clearStaleToasts(); State.notify(); });
+  // The relay stopped waiting without a decision and the terminal has taken
+  // over: a card still up for that request would be lying (#857).
+  void onEvent<string>("approval-expired", (requestId) => {
+    if (State.pendingApproval?.requestId !== requestId) return;
+    if (pendingTimeout != null) window.clearTimeout(pendingTimeout);
+    pendingTimeout = null;
+    dropPendingCard(island);
+  });
 }
 
 function handleHook(island: Island, payload: HookPayload) {
@@ -500,6 +510,10 @@ function handleHook(island: Island, payload: HookPayload) {
       break;
 
     case "SubagentStop":
+      // Claude Code's own helpers (the prompt suggestion after each turn) end
+      // with a SubagentStop of empty agent_type and never start one. Shown, it
+      // pushed the turn's last edit off the ticker a few seconds after Stop.
+      if (payload.agent_type === "") break;
       State.appendStep(agentId, t("• subagent done"));
       break;
 

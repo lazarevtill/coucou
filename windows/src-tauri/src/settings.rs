@@ -242,6 +242,14 @@ fn not_loaded() -> MutexGuard<'static, Vec<PathBuf>> {
     NOT_LOADED.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// Serializes saves across all threads so concurrent writes do not collide on
+/// the temporary file or interleave file renames.
+static SAVE_LOCK: Mutex<()> = Mutex::new(());
+
+fn save_lock() -> MutexGuard<'static, ()> {
+    SAVE_LOCK.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 /// One line in coucou.log. Tests must never write to the real one.
 fn note(message: String) {
     #[cfg(not(test))]
@@ -462,6 +470,7 @@ fn write_whole(file: &mut std::fs::File, bytes: &[u8]) -> std::io::Result<()> {
 
 /// `save`, for the file at `path`, whose directory already exists.
 fn save_to(path: &Path, settings: &Settings) -> std::io::Result<()> {
+    let _lock = save_lock();
     keep_what_was_not_loaded(path)?;
     match std::fs::read(path) {
         Ok(bytes) if needs_migration(&bytes) => { set_aside(path, "migrated", &bytes)?; }
@@ -1126,6 +1135,30 @@ mod tests {
 
         assert!(save_to(&file, &Settings::default()).is_err());
         assert_eq!(std::fs::read(&file).unwrap(), CUSTOM.as_bytes());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn concurrent_saves_never_collide() {
+        let (dir, file) = scratch("concurrent");
+        let handles: Vec<_> = (0..20)
+            .map(|i| {
+                let path = file.clone();
+                std::thread::spawn(move || {
+                    let mut s = Settings::default();
+                    s.sound_volume = (i as f64) * 0.05;
+                    save_to(&path, &s)
+                })
+            })
+            .collect();
+
+        for h in handles {
+            assert!(h.join().unwrap().is_ok());
+        }
+
+        // Must still be valid settings that load cleanly without corruption
+        let loaded = load_from(&file);
+        assert!(loaded.sound_volume >= 0.0);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

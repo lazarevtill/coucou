@@ -468,6 +468,12 @@ fn build_stream(source: &Source, origin: Instant, health: Arc<Mutex<CaptureHealt
             err_fn,
             None,
         ),
+        cpal::SampleFormat::I24 => device.build_input_stream::<cpal::I24, _, _>(
+            config,
+            move |data: &[cpal::I24], info| push(&mut data.iter().map(|&s| s.inner() as f32 / 8_388_608.0), info),
+            err_fn,
+            None,
+        ),
         cpal::SampleFormat::U16 => device.build_input_stream::<u16, _, _>(
             config,
             move |data: &[u16], info| push(&mut data.iter().map(|&s| (s as f32 - 32768.0) / 32768.0), info),

@@ -150,6 +150,8 @@ macOS releases are published as `v*` tags. See [CHANGELOG.md](CHANGELOG.md) for 
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| [0.5.5](https://github.com/Louis-CFM/coucou/releases/tag/v0.5.5) | Oct 29, 2026 | Chat on your Claude plan with no API key; each session apart behind its pill, questions side by side; Claude Code on a remote machine |
+| [0.5.4](https://github.com/Louis-CFM/coucou/releases/tag/v0.5.4) | Oct 29, 2026 | Reliability: 25 community fixes — the hook server never gives up, your own hooks stay untouched, no crash without a mic, truer n8n, Stripe and GitHub pills |
 | [0.5.3](https://github.com/Louis-CFM/coucou/releases/tag/v0.5.3) | Oct 22, 2026 | Mochi turns blue when a new version waits; What's new and your Coucou so far after each update; Buy Mochi a coffee |
 | [0.5.2](https://github.com/Louis-CFM/coucou/releases/tag/v0.5.2) | Oct 20, 2026 | New version in the notch, one click to install it; German, Turkish, Thai, Traditional Chinese; Homebrew; plan approval from the notch |
 | [0.5.1](https://github.com/Louis-CFM/coucou/releases/tag/v0.5.1) | Oct 18, 2026 | WhatsApp in one click: Coucou installs and starts the gateway, no Terminal |
@@ -175,6 +177,8 @@ Windows and Linux are released together, under the `windows-v*` and `linux-v*` t
 
 | Windows & Linux | Date | Highlights |
 |---------|------|------------|
+| 0.5.5 · [Windows](https://github.com/Louis-CFM/coucou/releases/tag/windows-v0.5.5) · [Linux](https://github.com/Louis-CFM/coucou/releases/tag/linux-v0.5.5) | Oct 29, 2026 | No API key? Your own Claude Code answers the chat, Flow's clean-up and the notes of a call, on your Claude plan |
+| 0.5.4 · [Windows](https://github.com/Louis-CFM/coucou/releases/tag/windows-v0.5.4) · [Linux](https://github.com/Louis-CFM/coucou/releases/tag/linux-v0.5.4) | Oct 29, 2026 | Reliability: 25 community fixes — the hook server never gives up, approval cards go when the terminal takes over, a sturdier Flow pill, WhatsApp group names |
 | 0.5.3 · [Windows](https://github.com/Louis-CFM/coucou/releases/tag/windows-v0.5.3) · [Linux](https://github.com/Louis-CFM/coucou/releases/tag/linux-v0.5.3) | Oct 22, 2026 | WhatsApp in the island (experimental): one-click gateway install, your chats and replies |
 | 0.5.2 · [Windows](https://github.com/Louis-CFM/coucou/releases/tag/windows-v0.5.2) · [Linux](https://github.com/Louis-CFM/coucou/releases/tag/linux-v0.5.2) | Oct 22, 2026 | Mochi turns blue when a new version waits, What's new after each update; GitLab and Gitea pills; the weekly recap on Android |
 | 0.5.1 · [Windows](https://github.com/Louis-CFM/coucou/releases/tag/windows-v0.5.1) · [Linux](https://github.com/Louis-CFM/coucou/releases/tag/linux-v0.5.1) | Oct 20, 2026 | New version in the island, one click to install it on Windows; German and Turkish; an optional clock; Linux idle CPU fixed |
@@ -251,7 +255,7 @@ Download **[Coucou-Windows.msi](https://github.com/Louis-CFM/coucou/releases/dow
 
 This is only because the app isn't signed with a paid certificate yet. Coucou is open source, and Microsoft Defender scans the installer as clean.
 
-**Windows and Linux 0.5.3** bring **WhatsApp** to the island (experimental), with the gateway installed in one click. **0.5.2** turn Mochi blue when a new version waits and show what it brings after the update; they add **GitLab and Gitea** pills. **0.5.1** tell you when a new version is out (once you agree) and, on Windows, install it in one click; they also speak German and Turkish. **0.5.0** caught up with the Mac: Coucou is now an app with its own window in the taskbar, **Flow dictation** anywhere (hold right Ctrl, speak, let go) with Parakeet running offline on your computer, the **Notetaker** for your calls, and **« OK Coucou »** to talk to Mochi, powered by Claude with your key. On Linux, dictation works on X11 and Wayland. 0.4.0 paired with [Coucou for Android](#coucou-for-android): approve, answer and chat from your Android phone (Settings → Android phone, off by default). 0.3.0 added open on hover, your own sounds, a colour of your own for each Mochi and the Mochi-to-desktop shortcut; on Linux, the Spotify pill with Mochi dancing to it, global shortcuts on Wayland and "Open terminal" that brings the terminal forward. 0.2.0 caught up with the Mac: Codex, Copilot CLI, Muse Code and six more agents with approvals from the island, answers to Claude's questions, live diffs, GitHub pull requests and CI, plan usage, local models, the wardrobe, Mochi on the desktop, keyboard shortcuts, the weekly recap and 10 languages. See the [changelog](CHANGELOG.md).
+**Windows and Linux 0.5.5** answer on your Claude plan through Claude Code when no API key is saved. **0.5.4** bring 25 reliability fixes from the community. **0.5.3** bring **WhatsApp** to the island (experimental), with the gateway installed in one click. **0.5.2** turn Mochi blue when a new version waits and show what it brings after the update; they add **GitLab and Gitea** pills. **0.5.1** tell you when a new version is out (once you agree) and, on Windows, install it in one click; they also speak German and Turkish. **0.5.0** caught up with the Mac: Coucou is now an app with its own window in the taskbar, **Flow dictation** anywhere (hold right Ctrl, speak, let go) with Parakeet running offline on your computer, the **Notetaker** for your calls, and **« OK Coucou »** to talk to Mochi, powered by Claude with your key. On Linux, dictation works on X11 and Wayland. 0.4.0 paired with [Coucou for Android](#coucou-for-android): approve, answer and chat from your Android phone (Settings → Android phone, off by default). 0.3.0 added open on hover, your own sounds, a colour of your own for each Mochi and the Mochi-to-desktop shortcut; on Linux, the Spotify pill with Mochi dancing to it, global shortcuts on Wayland and "Open terminal" that brings the terminal forward. 0.2.0 caught up with the Mac: Codex, Copilot CLI, Muse Code and six more agents with approvals from the island, answers to Claude's questions, live diffs, GitHub pull requests and CI, plan usage, local models, the wardrobe, Mochi on the desktop, keyboard shortcuts, the weekly recap and 10 languages. See the [changelog](CHANGELOG.md).
 
 There is no notch on a PC, so the island slides out of the top edge of the screen
 instead of hiding inside one. See [`windows/README.md`](windows/README.md) for the
@@ -261,7 +265,7 @@ rest of the differences.
 
 ### Linux
 
-**Coucou for Linux 0.5.1** is out (x86_64): [AppImage](https://github.com/Louis-CFM/coucou/releases/download/linux-v0.5.1/Coucou-Linux-0.5.1-x86_64.AppImage) · [.deb](https://github.com/Louis-CFM/coucou/releases/download/linux-v0.5.1/Coucou-Linux-0.5.1-amd64.deb) · [.rpm](https://github.com/Louis-CFM/coucou/releases/download/linux-v0.5.1/Coucou-Linux-0.5.1-x86_64.rpm) · [all files and checksums](https://github.com/Louis-CFM/coucou/releases/tag/linux-v0.5.1). The newest AppImage is always at [`linux-latest`](https://github.com/Louis-CFM/coucou/releases/download/linux-latest/Coucou-Linux-x86_64.AppImage).
+**Coucou for Linux 0.5.5** is out (x86_64): [AppImage](https://github.com/Louis-CFM/coucou/releases/download/linux-v0.5.5/Coucou-Linux-0.5.5-x86_64.AppImage) · [.deb](https://github.com/Louis-CFM/coucou/releases/download/linux-v0.5.5/Coucou-Linux-0.5.5-amd64.deb) · [.rpm](https://github.com/Louis-CFM/coucou/releases/download/linux-v0.5.5/Coucou-Linux-0.5.5-x86_64.rpm) · [all files and checksums](https://github.com/Louis-CFM/coucou/releases/tag/linux-v0.5.5). The newest AppImage is always at [`linux-latest`](https://github.com/Louis-CFM/coucou/releases/download/linux-latest/Coucou-Linux-x86_64.AppImage).
 
 - **AppImage** (any distribution): `chmod +x Coucou-Linux-*.AppImage`, then run it.
 - **Debian / Ubuntu**: `sudo apt install ./Coucou-Linux-*.deb`
@@ -414,6 +418,8 @@ ENGINE_TYPE=baileys SSRF_ALLOWED_HOSTS=127.0.0.1 npm run start:prod
 | Any other | `--agent <name>` flag; see [`docs/AGENTS.md`](docs/AGENTS.md) | No |
 
 OpenCode, Amp and Hermes use a plugin model rather than a hook command. Coucou installs the plugin file into `~/.config/opencode/plugins/`, `~/.config/amp/plugins/` and `~/.hermes/plugins/coucou/` respectively. On Windows and Linux the plugins start the `coucou-hook` relay directly — see [`windows/README.md`](windows/README.md#supported-agents).
+
+Agents running on a server (VS Code Remote - SSH, an SSH environment in the Claude app, Codex on a dev box) can reach Coucou on your Mac through an SSH tunnel: see [`docs/REMOTE.md`](docs/REMOTE.md).
 
 ## Things to try
 
