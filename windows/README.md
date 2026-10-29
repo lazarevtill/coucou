@@ -19,6 +19,7 @@ The tray opens chat, settings and session activity. **Settings → General** con
 - [Folder plugins](docs/plugins.md)
 - [Current integration verification](docs/integration-review.md)
 - [Windows features, call audio and Parakeet settings](docs/windows-parity.md)
+- [NetBird remote-management integration note](docs/netbird.md)
 - [Project documentation](../docs/)
 
 ## Build and verify
