@@ -533,6 +533,29 @@ pub fn flow_set_prefs(app: AppHandle, flow: State<Arc<Flow>>, mut prefs: Prefs) 
 }
 
 #[tauri::command]
+pub fn flow_use_agent(app: AppHandle, flow: State<Arc<Flow>>, agent: String) -> Result<(), String> {
+    let engine = match crate::cli_agents::Agent::parse(&agent)? {
+        crate::cli_agents::Agent::Claude => store::SummaryEngine::ClaudeCode,
+        crate::cli_agents::Agent::Codex => store::SummaryEngine::Codex,
+    };
+    // Patch under the store lock: a provider choice must never overwrite an
+    // independently changed microphone, key, performance setting or switch.
+    let (prefs, restart_voice) = {
+        let mut store = flow.store.lock().unwrap();
+        let mut prefs = store.prefs.clone();
+        let restart_voice = prefs.voice && prefs.voice_engine != engine;
+        prefs.cleanup_engine = engine;
+        prefs.summary_engine = engine;
+        prefs.voice_engine = engine;
+        store.set_prefs(prefs.clone())?;
+        (prefs, restart_voice)
+    };
+    if restart_voice { crate::voice::restart(&app); }
+    let _ = app.emit("flow-prefs", &prefs);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn flow_history(flow: State<Arc<Flow>>) -> Vec<Entry> {
     flow.store.lock().unwrap().history.clone()
 }

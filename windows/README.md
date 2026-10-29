@@ -5,7 +5,7 @@ Coucou follows coding-agent sessions from the tray and an optional island at the
 ## Claude Code and Codex
 
 1. Open **Settings → Agents**. Existing Claude Code and Codex/ChatGPT sign-ins are detected automatically.
-2. Choose **Use for chat** beside either agent, then open **Chat** from the tray or press **Ctrl+Alt+Space**.
+2. Choose **Use for all text** beside either agent for chat, dictation cleanup, call summaries and voice. Open **Chat** from the tray or press **Ctrl+Alt+Space**. The optional voice and cleanup switches are in Flow Settings.
 3. To code with the full agent, enter a **Project folder** and choose **Open project**. Its tools, skills, MCP setup and permission prompts stay in its native terminal.
 4. To monitor sessions, review and install each agent's hooks in Settings. Codex also requires trusting the hooks with **/hooks**.
 

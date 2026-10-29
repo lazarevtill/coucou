@@ -1,4 +1,6 @@
 import { Bridge, type AgentConnection } from "../core/bridge";
+import { FlowBridge } from "../core/flow";
+import { t } from "../i18n/i18n";
 import type { ProviderId } from "../core/providers";
 import { h, clear } from "../views/dom";
 
@@ -33,12 +35,21 @@ export function connectionsSection(current: () => ProviderId, select: (id: Provi
         feedback.textContent = `${agent.name} is selected. Open Chat from the tray to start.`;
         draw();
       }));
+      const allText = h("button", { text: t("Use for all text"), disabled: !agent.signedIn,
+        title: t("Chat, dictation cleanup, call summaries and voice") });
+      allText.addEventListener("click", () => void action(allText, async () => {
+        await select(agent.id);
+        try { await FlowBridge.useAgent(agent.id); }
+        catch (error) { throw new Error(t("Chat is selected, but Flow settings could not be saved: {0}", { 0: String(error) })); }
+        finally { draw(); }
+        feedback.textContent = t("{0} is selected for all text features.", { 0: agent.name });
+      }));
       const open = h("button", { text: "Open project", disabled: !agent.signedIn });
       open.addEventListener("click", () => void action(open, async () => {
         await Bridge.agentOpen(agent.id, false, project.value.trim());
         feedback.textContent = `${agent.name} is opening in your project.`;
       }));
-      const row = h("div", { class: "row" }, h("label", { text: agent.name }), chat, open);
+      const row = h("div", { class: "row", style: "flex-wrap:wrap" }, h("label", { text: agent.name }), chat, allText, open);
       if (!agent.signedIn) row.append(login);
       list.append(row, message);
     }

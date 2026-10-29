@@ -1336,6 +1336,7 @@ pub fn run() {
             chat_images::chat_image_attach,
             chat_images::chat_capture_open,
             flow::flow_set_prefs,
+            flow::flow_use_agent,
             flow::flow_retune_speech,
             flow::flow_test_audio,
             flow::flow_stop_audio_test,

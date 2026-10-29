@@ -225,6 +225,7 @@ export const FlowBridge = {
   /** The Coucou window is on screen (shown, not minimised); `hub-visible` tells when it changes. */
   hubShown: () => call<boolean>("hub_shown"),
   setPrefs: (prefs: FlowPrefs) => callOrThrow<void>("flow_set_prefs", { prefs }),
+  useAgent: (agent: "claude-code" | "codex") => callOrThrow<void>("flow_use_agent", { agent }),
   history: () => call<FlowEntry[]>("flow_history"),
   deleteEntry: (id: string) => call<void>("flow_delete", { id }),
   clear: (everything: boolean) => call<void>("flow_clear", { everything }),

@@ -7,7 +7,9 @@ Coucou uses the official CLIs and their existing account sign-ins. It has no sep
 1. Install [Claude Code](https://code.claude.com/docs/en/setup) or [Codex](https://developers.openai.com/codex/cli) using its official instructions.
 2. Open **Settings → Agents**. Coucou checks both installed CLIs. An existing Claude subscription or ChatGPT sign-in appears as connected.
 3. If needed, choose **Sign in**, finish the official CLI's browser flow, then choose **Refresh connections**.
-4. Choose **Use for chat** beside either connected agent. Open **Chat** in the tray, or press **Ctrl+Alt+Space**.
+4. Choose **Use for all text** beside either connected agent to use it for chat, dictation cleanup, call summaries and voice. **Use for chat** changes chat alone. Open **Chat** in the tray, or press **Ctrl+Alt+Space**.
+
+The combined action changes provider choices only. Dictation cleanup and voice still need their switches enabled in Flow Settings; microphone, playback, hotkey and performance preferences are retained. Each feature can also select a different provider in Flow Settings.
 
 API credentials are optional separate chat providers. A CLI signed in only with an API key is not shown as a subscription connection. Plan limits and model availability belong to the selected agent's account.
 

@@ -7893,6 +7893,66 @@
       "tr": "Son biçim: {0} Hz · {1} kanal",
       "th": "รูปแบบล่าสุด: {0} Hz · {1} ช่องเสียง",
       "zh-Hant": "最後的格式：{0} Hz · {1} 聲道"
+    },
+    "Use for all text": {
+      "zh-Hans": "用于所有文本功能",
+      "hi": "सभी टेक्स्ट के लिए उपयोग करें",
+      "es": "Usar para todo el texto",
+      "ar": "استخدام لكل ميزات النص",
+      "fr": "Utiliser pour tous les textes",
+      "bn": "সব টেক্সটের জন্য ব্যবহার করুন",
+      "pt-BR": "Usar para todo o texto",
+      "ru": "Для всех текстовых функций",
+      "id": "Gunakan untuk semua teks",
+      "de": "Für alle Textfunktionen nutzen",
+      "tr": "Tüm metinler için kullan",
+      "th": "ใช้กับข้อความทั้งหมด",
+      "zh-Hant": "用於所有文字功能"
+    },
+    "Chat, dictation cleanup, call summaries and voice": {
+      "zh-Hans": "聊天、听写润色、通话摘要和语音",
+      "hi": "चैट, डिक्टेशन सुधार, कॉल सारांश और वॉइस",
+      "es": "Chat, corrección del dictado, resúmenes de llamadas y voz",
+      "ar": "الدردشة وتنقيح الإملاء وملخصات المكالمات والصوت",
+      "fr": "Chat, correction de dictée, résumés d’appels et voix",
+      "bn": "চ্যাট, ডিক্টেশন সংশোধন, কলের সারাংশ ও ভয়েস",
+      "pt-BR": "Chat, revisão de ditado, resumos de chamadas e voz",
+      "ru": "Чат, обработка диктовки, итоги звонков и голос",
+      "id": "Chat, perapian dikte, ringkasan panggilan dan suara",
+      "de": "Chat, Diktatkorrektur, Gesprächszusammenfassungen und Sprache",
+      "tr": "Sohbet, dikte düzeltme, arama özetleri ve ses",
+      "th": "แชต การปรับข้อความตามคำบอก สรุปการโทร และเสียง",
+      "zh-Hant": "聊天、聽寫潤飾、通話摘要和語音"
+    },
+    "{0} is selected for all text features.": {
+      "zh-Hans": "已为所有文本功能选择 {0}。",
+      "hi": "सभी टेक्स्ट सुविधाओं के लिए {0} चुना गया है।",
+      "es": "Se seleccionó {0} para todas las funciones de texto.",
+      "ar": "تم اختيار {0} لكل ميزات النص.",
+      "fr": "{0} est sélectionné pour toutes les fonctions de texte.",
+      "bn": "সব টেক্সট ফিচারের জন্য {0} নির্বাচিত।",
+      "pt-BR": "{0} foi selecionado para todas as funções de texto.",
+      "ru": "{0} выбран для всех текстовых функций.",
+      "id": "{0} dipilih untuk semua fitur teks.",
+      "de": "{0} ist für alle Textfunktionen ausgewählt.",
+      "tr": "Tüm metin özellikleri için {0} seçildi.",
+      "th": "เลือก {0} สำหรับฟีเจอร์ข้อความทั้งหมดแล้ว",
+      "zh-Hant": "已為所有文字功能選擇 {0}。"
+    },
+    "Chat is selected, but Flow settings could not be saved: {0}": {
+      "zh-Hans": "已选择聊天提供商，但无法保存 Flow 设置：{0}",
+      "hi": "चैट चुना गया है, लेकिन Flow सेटिंग्स सहेजी नहीं जा सकीं: {0}",
+      "es": "Se seleccionó el chat, pero no se pudo guardar la configuración de Flow: {0}",
+      "ar": "تم اختيار الدردشة، لكن تعذر حفظ إعدادات Flow: {0}",
+      "fr": "Le chat est sélectionné, mais les réglages de Flow n’ont pas pu être enregistrés : {0}",
+      "bn": "চ্যাট নির্বাচিত হয়েছে, কিন্তু Flow সেটিংস সংরক্ষণ করা যায়নি: {0}",
+      "pt-BR": "O chat foi selecionado, mas não foi possível salvar as configurações do Flow: {0}",
+      "ru": "Провайдер чата выбран, но настройки Flow не сохранены: {0}",
+      "id": "Chat dipilih, tetapi pengaturan Flow tidak dapat disimpan: {0}",
+      "de": "Chat ist ausgewählt, aber die Flow-Einstellungen konnten nicht gespeichert werden: {0}",
+      "tr": "Sohbet seçildi, ancak Flow ayarları kaydedilemedi: {0}",
+      "th": "เลือกแชตแล้ว แต่บันทึกการตั้งค่า Flow ไม่ได้: {0}",
+      "zh-Hant": "已選擇聊天提供者，但無法儲存 Flow 設定：{0}"
     }
   }
 }

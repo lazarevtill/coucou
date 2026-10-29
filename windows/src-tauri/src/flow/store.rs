@@ -90,7 +90,7 @@ pub struct Prefs {
     pub speakers: String,
     /// Days the history is kept: 0 = not kept, -1 = forever.
     pub keep_days: i64,
-    /// Clean the words with Claude before pasting them (needs the Claude key).
+    /// Clean the words with the explicitly selected text provider before pasting.
     pub cleanup: bool,
     pub cleanup_engine: SummaryEngine,
     /// The style of the apps that have none of their own.
@@ -100,7 +100,7 @@ pub struct Prefs {
     pub speech_threads: u16,
     /// Open the Coucou window when Coucou is opened (not when it starts with the computer).
     pub open_at_launch: bool,
-    /// « OK Coucou »: listen for it and answer with Claude (needs the Claude key).
+    /// « OK Coucou »: listen for it and answer with the selected text provider.
     pub voice: bool,
     pub voice_engine: SummaryEngine,
     /// How Coucou answers out loud: "system", "elevenlabs" or "off".
