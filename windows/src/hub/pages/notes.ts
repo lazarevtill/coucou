@@ -5,7 +5,7 @@ import { h, clear } from "../../views/dom";
 import { t } from "../../i18n/i18n";
 import { onEvent } from "../../core/bridge";
 import { FlowBridge, clock, speakerColor, type Note, type NotesState } from "../../core/flow";
-import { audioMeters } from "../audio";
+import { audioMeters, audioReport } from "../audio";
 import type { HubContext } from "../shell";
 import { emptyState, glowCard } from "../hero";
 import { button, iconButton, segmented } from "../ui";
@@ -158,7 +158,8 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
       confirm,
     );
 
-    if (note.captureWarning) detail.append(h("div", { class: "hub-warn", text: note.captureWarning }));
+    if (note.audioSources?.length && note.status !== "recording") detail.append(audioReport(note.audioSources));
+    else if (note.captureWarning) detail.append(h("div", { class: "hub-warn", text: note.captureWarning }));
     if (note.error && note.status !== "failed") detail.append(h("div", { class: "hub-warn", text: note.error }));
 
     // The people, renamed with a click.

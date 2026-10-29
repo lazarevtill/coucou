@@ -3,10 +3,10 @@
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use super::audio::{self, Capture, Source};
 
-#[derive(Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceStatus {
     pub source: String,
@@ -22,6 +22,12 @@ pub struct SourceStatus {
     pub sample_rate: u32,
     pub channels: u16,
     pub application: Option<String>,
+    /// Successful endpoints used by this source, retained across recovery.
+    #[serde(default)]
+    pub devices: Vec<String>,
+    /// Peak across the capture, including packets between UI polls.
+    #[serde(default)]
+    pub peak_seen: f32,
 }
 
 impl SourceStatus {
@@ -76,6 +82,7 @@ impl LiveSource {
             let (rms, peak) = levels(samples);
             m.0.level = rms;
             m.0.peak = peak;
+            m.0.peak_seen = m.0.peak_seen.max(peak);
             m.0.clipping = peak >= 0.995;
             m.0.received = true;
             if let Err(error) = result { m.0.fail(error); }
@@ -87,6 +94,7 @@ impl LiveSource {
                 let mut m = self.meter.lock().unwrap();
                 m.0.connected = true;
                 m.0.device = info.name.clone();
+                if !m.0.devices.contains(&info.name) { m.0.devices.push(info.name.clone()); }
                 m.0.sample_rate = info.sample_rate;
                 m.0.channels = info.channels;
                 m.0.error = None;
@@ -133,8 +141,11 @@ impl LiveSource {
         {
             let mut m = self.meter.lock().unwrap();
             let warnings = std::mem::take(&mut m.0.warnings);
+            let devices = std::mem::take(&mut m.0.devices);
+            let peak_seen = m.0.peak_seen;
+            let received = m.0.received;
             let kind = m.0.source.clone();
-            m.0 = SourceStatus { source: kind, automatic: matches!(self.source, Source::Mic(None) | Source::System(None)), warnings, ..Default::default() };
+            m.0 = SourceStatus { source: kind, automatic: matches!(self.source, Source::Mic(None) | Source::System(None)), warnings, devices, peak_seen, received, ..Default::default() };
             m.1 = None;
         }
         self.open();

@@ -6,6 +6,7 @@ Read [CLAUDE.md](CLAUDE.md) for the repository structure and product rules. macO
 - Keep both CLI sign-ins available for text tasks and opted-in phone chat. Speech performance uses measured local runtime capabilities, with a persisted manual override. Call capture must show source health and preserve gaps and warnings after device recovery.
 - Automatic call audio follows observed application routes before Windows defaults; manual microphone and playback choices stay independent and fixed. Use the same recovery path for Settings meters and recording. Report ambiguous browser/app routes instead of guessing.
 - Keep floating toolbar buttons mounted during tooltip updates. Tooltips open inward without changing the capsule's position; native click-through and hover must use the rendered geometry.
+- Wait for Flow setup before reporting keyboard-listener availability. Saved call diagnostics retain devices, received audio, peak levels and warnings; never infer speech or a disconnect from a discontinuity alone.
 - Windows dictation may consume only the explicitly selected Copilot chord while enabled. Ignore injected keys, preserve ordinary modifier shortcuts, and keep physical-key verification distinct from event-sequence tests.
 - Market integrations remain read-only, run only for enabled pills, and show unavailable prices as unknown. Keep credentials in the OS credential store.
 - Native coding sessions retain user-controlled tool permissions. Chat subprocesses are supervised, bounded and cancellable, with tools disabled.

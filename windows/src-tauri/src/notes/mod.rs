@@ -68,6 +68,9 @@ pub struct Note {
     pub start_local: String,
     #[serde(default)]
     pub capture_warning: Option<String>,
+    /// Final source diagnostics, kept after the recording audio is removed.
+    #[serde(default)]
+    pub audio_sources: Vec<SourceStatus>,
 }
 
 /// One side of the call being written to disk, with what the live transcript
@@ -313,6 +316,7 @@ fn start_inner(app: &AppHandle, taker: &Arc<NoteTaker>) -> Result<String, String
         error: None,
         start_local: stamp,
         capture_warning: None,
+        audio_sources: Vec::new(),
     };
     let dir = note_dir(&id);
     crate::platform::ensure_private_dir(&dir).map_err(|e| e.to_string())?;
@@ -380,10 +384,15 @@ fn spawn_monitor(app: AppHandle, taker: Arc<NoteTaker>, id: String, stop: Arc<At
 }
 
 fn recording_warning(rec: &Recording) -> Option<String> {
-    let warnings: Vec<String> = [Some(rec.mic.status()), rec.system.as_ref().map(|s| s.status())]
-        .into_iter().flatten().flat_map(|s| s.warnings.into_iter().map(move |e| format!("{}: {e}", s.source)))
+    let warnings: Vec<String> = recording_sources(rec).into_iter()
+        .flat_map(|s| s.warnings.into_iter().map(move |e| format!("{}: {e}", s.source)))
         .collect();
     (!warnings.is_empty()).then(|| warnings.join("\n"))
+}
+
+fn recording_sources(rec: &Recording) -> Vec<SourceStatus> {
+    [Some(rec.mic.status()), rec.system.as_ref().map(|s| s.status())]
+        .into_iter().flatten().collect()
 }
 
 /// Every second while recording: the stretches ending on a pause go to
@@ -438,10 +447,10 @@ pub fn stop(app: &AppHandle) {
     taker.change(app, &rec.id, |n| {
         n.end = Some(now_ms());
         n.status = Status::Processing;
+        n.capture_warning = recording_warning(&rec);
+        n.audio_sources = recording_sources(&rec);
     });
     pill::update(app, |s| s.note_started_at = None);
-    let warning = recording_warning(&rec);
-    taker.change(app, &rec.id, |n| n.capture_warning = warning);
     let app = app.clone();
     let id = rec.id.clone();
     std::thread::spawn(move || process(&app, &id));
@@ -466,6 +475,7 @@ pub fn shutdown(app: &AppHandle) {
         n.end = Some(now_ms());
         n.status = Status::Processing;
         n.capture_warning = warning;
+        n.audio_sources = recording_sources(&rec);
     });
 }
 
@@ -677,9 +687,7 @@ pub fn notes_state(taker: State<Arc<NoteTaker>>) -> NotesState {
 fn audio_status(taker: &NoteTaker) -> Vec<SourceStatus> {
     let recording = taker.recording.lock().unwrap();
     let Some(rec) = recording.as_ref() else { return vec![]; };
-    let mut status = vec![rec.mic.status()];
-    if let Some(system) = &rec.system { status.push(system.status()); }
-    status
+    recording_sources(rec)
 }
 
 #[tauri::command]
@@ -786,6 +794,26 @@ pub fn notes_export(taker: State<Arc<NoteTaker>>, id: String) -> Result<String, 
 #[cfg(test)]
 mod capture_tests {
     use super::*;
+    #[test]
+    fn saved_source_diagnostics_survive_note_reload_and_old_notes_still_load() {
+        let legacy = serde_json::json!({"id": "test", "title": "Short call", "start": 10, "status": "ready"});
+        let mut note: Note = serde_json::from_value(legacy).unwrap();
+        assert!(note.audio_sources.is_empty());
+        note.audio_sources.push(SourceStatus {
+            source: "playback".into(), device: "Speakers".into(),
+            devices: vec!["Buds".into(), "Speakers".into()], received: true, peak_seen: 0.5,
+            warnings: vec!["Audio was interrupted".into()], sample_rate: 48_000, channels: 2,
+            ..Default::default()
+        });
+        let reloaded: Note = serde_json::from_str(&serde_json::to_string(&note).unwrap()).unwrap();
+        let source = &reloaded.audio_sources[0];
+        assert_eq!(source.devices, ["Buds", "Speakers"]);
+        assert!(source.received);
+        assert_eq!(source.peak_seen, 0.5);
+        assert_eq!(source.warnings, ["Audio was interrupted"]);
+        assert_eq!((source.sample_rate, source.channels), (48_000, 2));
+    }
+
     #[test]
     fn delayed_sources_and_reconnections_preserve_the_call_timeline() {
         let path = std::env::temp_dir().join(format!("coucou-channel-{}.wav", crate::flow::text::new_id()));

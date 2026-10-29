@@ -339,7 +339,7 @@ fn capture_error(health: &mut CaptureHealth, error: cpal::Error) {
     if error.kind() == cpal::ErrorKind::Xrun {
         // WASAPI continues delivering packets after DATA_DISCONTINUITY. Reopening
         // the stream would create another avoidable gap, especially on Bluetooth.
-        let warning = crate::i18n::t("Audio was interrupted. Recording continues.");
+        let warning = crate::i18n::t("Audio was interrupted. Some audio may be missing.");
         if !health.warnings.contains(&warning) { health.warnings.push(warning); }
     } else {
         health.error = Some(error.to_string());
@@ -617,7 +617,7 @@ mod tests {
         capture_error(&mut health, cpal::ErrorKind::Xrun.into());
         capture_error(&mut health, cpal::ErrorKind::Xrun.into());
         assert!(health.error.is_none());
-        assert_eq!(health.warnings, ["Audio was interrupted. Recording continues."]);
+        assert_eq!(health.warnings, ["Audio was interrupted. Some audio may be missing."]);
         capture_error(&mut health, cpal::ErrorKind::DeviceNotAvailable.into());
         assert!(health.error.is_some());
         assert_eq!(health.warnings.len(), 1);

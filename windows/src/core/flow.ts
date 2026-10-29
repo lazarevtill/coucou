@@ -163,6 +163,7 @@ export interface Note {
   error?: string | null;
   startLocal: string;
   captureWarning?: string | null;
+  audioSources?: AudioSourceStatus[];
 }
 
 export interface AudioSourceStatus {
@@ -179,6 +180,8 @@ export interface AudioSourceStatus {
   sampleRate: number;
   channels: number;
   application?: string | null;
+  devices?: string[];
+  peakSeen?: number;
 }
 
 export interface NotesState {

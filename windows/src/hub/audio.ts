@@ -20,6 +20,25 @@ export function levelDb(level: number): number {
   return Number.isFinite(level) && level > 0 ? Math.max(-60, Math.min(0, 20 * Math.log10(level))) : -60;
 }
 
+/** Saved evidence, not live meters: packets alone do not establish speech. */
+export function audioReport(sources: AudioSourceStatus[]): HTMLElement {
+  const report = h("details", { class: "hub-audio-report" }, h("summary", { text: t("Capture details") }));
+  for (const source of sources) {
+    const devices = [...new Set([...(source.devices ?? []), source.device].filter(Boolean))];
+    const warnings = [...new Set([...(source.warnings ?? []), source.error].filter(Boolean))];
+    report.append(h("div", { style: "display:grid;gap:6px;margin:12px 0" },
+      h("b", { text: source.source === "microphone" ? t("Microphone") : t("Call playback") }),
+      ...devices.map(text => h("div", { class: "hub-note", text })),
+      h("div", { class: source.received ? "hub-note" : "hub-warn", text: source.received ? t("Audio received") : t("No audio received") }),
+      source.peakSeen !== undefined ? h("div", { class: "hub-note", text: t("Peak level: {0} dBFS", { 0: Math.round(levelDb(source.peakSeen)) }) }) : null,
+      source.sampleRate ? h("div", { class: "hub-note", text: t("Last format: {0} Hz · {1} channels", { 0: source.sampleRate.toLocaleString(), 1: source.channels }) }) : null,
+      ...warnings.map(text => h("div", { class: "hub-warn", text: text! })),
+    ));
+  }
+  if (sources.some(source => source.error || source.warnings?.length || !source.received)) report.setAttribute("open", "");
+  return report;
+}
+
 /** Shared by Notetaker's live sources and the short Settings audio check. */
 export function audioMeters() {
   const element = h("div", { class: "hub-audio-meters", style: "display:grid;gap:12px;margin:12px 0" });
