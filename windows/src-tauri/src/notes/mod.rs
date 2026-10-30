@@ -562,11 +562,11 @@ fn transcript(app: &AppHandle, taker: &Arc<NoteTaker>, id: &str) -> Result<(), S
     taker.progress(app, id, progress::Stage::Speakers, None);
     let built = if theirs.len() >= 5 {
         // A call: you on the microphone, the others on the computer's sound.
-        let turns = speech::diarize(&system_samples);
+        let turns = builder::merging_fragments(speech::diarize(&system_samples));
         builder::build(&mine, &theirs, &turns, &me, person_name)
     } else if mine.len() >= 20 {
         // People around the computer: one recording, the voices told apart.
-        let turns = speech::diarize(&mic_samples);
+        let turns = builder::merging_fragments(speech::diarize(&mic_samples));
         let voices: std::collections::HashSet<&str> = turns.iter().map(|t| t.speaker.as_str()).collect();
         if voices.len() > 1 {
             builder::build_room(&mine, &turns, person_name)
@@ -752,9 +752,7 @@ pub fn notes_rename_speaker(app: AppHandle, taker: State<Arc<NoteTaker>>, id: St
         return;
     }
     taker.change(&app, &id, |n| {
-        if let Some(s) = n.speakers.iter_mut().find(|s| s.id == speaker) {
-            s.name = name;
-        }
+        builder::rename_speaker(&mut n.speakers, &mut n.lines, &speaker, &name);
     });
 }
 

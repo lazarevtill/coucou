@@ -49,6 +49,10 @@ Audio-route process grouping uses title-free window ownership. Never call `GetWi
 
 Notetaker retains one Record/Stop button across timer and note updates. Pending actions disable it; failed start/stop commands leave the error visible and permit retry. The stop bridge must propagate failures.
 
+Final transcription retains existing text on screen and emits `notes-progress` by source. Progress counts examined audio; speaker analysis has a stage and elapsed time, without a fabricated percentage. Only exact digital silence skips model inference. A failed model chunk fails the operation instead of saving a partial result as complete. Note writes are serialized; `notes/storage.rs` saves and syncs the final transcript before removing source audio. Failed commits retain recordings and the prior transcript for retry.
+
+Windows uses the Mac's short-speaker-fragment rules with temporal matching because Sherpa does not expose per-turn embeddings. Giving two remote speakers the same name combines their lines; microphone identity stays separate. Automatic speaker labels are estimates, not verified identities.
+
 Windows note exports use `notes/export.rs` and the native Save As dialog. Its dedicated COM apartment keeps the main UI responsive and preserves Windows overwrite confirmation. Cancellation writes no file; the page prevents duplicate dialogs and reports write failures and the chosen saved path. Export must not alter the stored note.
 
 Dictionary, snippet and app-style commands commit their JSON file before updating the Flow store. Their pages use `hub/save.ts` to prevent overlapping edits and show native write errors. Keep entered text and the saved list on failure; only clear a submitted form after success. A failed style selection returns to its saved value.

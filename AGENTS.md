@@ -12,6 +12,8 @@ Read [CLAUDE.md](CLAUDE.md) for the repository structure and product rules. macO
 - Explicit shortcut and tray requests open their views even when the idle island is off. Keep automatic alerts subject to that preference.
 - Read the Hub's initial visibility on the native UI queue after startup. Its canvases must draw on first open and stop while hidden or minimized.
 - Keep Notetaker's Record/Stop control mounted through clock ticks and note updates. Prevent duplicate pending actions and show start/stop failures so the user can retry.
+- Keep saved transcript lines visible during final processing and failure. Report measured per-source progress without guessing speaker-analysis completion. Serialize note writes; delete source audio only after the final transcript is durably saved.
+- Keep the Mac's brief-speaker fragment handling and rename-to-combine behavior. Automatic labels are estimates; never merge the microphone identity into a remote participant.
 - Windows note export uses the native Save As dialog on a dedicated COM apartment. Cancellation writes nothing; retain native overwrite confirmation and show export failures without losing the note.
 - Dictionary, snippet and app-style edits must reach disk before replacing live values. Keep drafts and saved lists on failure, show the error and prevent overlapping submissions.
 - History deletion and erasure must report disk failures and remain retryable. Keep live values consistent with each saved file; report partial history/statistics erasure explicitly.

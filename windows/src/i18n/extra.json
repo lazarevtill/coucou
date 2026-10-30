@@ -9078,6 +9078,23 @@
       "th": "{tool} ไม่สามารถตอบได้",
       "zh-Hant": "{tool} 無法回覆。"
     },
+    "To combine speakers, give them the same name.": {
+      "zh-Hans": "要合并说话人，请将他们设为相同的姓名。",
+      "hi": "वक्ताओं को मिलाने के लिए उन्हें एक ही नाम दें।",
+      "es": "Para combinar hablantes, asígnales el mismo nombre.",
+      "ar": "لدمج المتحدثين، امنحهم الاسم نفسه.",
+      "fr": "Pour regrouper des intervenants, donnez-leur le même nom.",
+      "bn": "বক্তাদের একত্র করতে তাদের একই নাম দিন।",
+      "pt-BR": "Para combinar falantes, dê a eles o mesmo nome.",
+      "ru": "Чтобы объединить говорящих, задайте им одинаковое имя.",
+      "id": "Untuk menggabungkan pembicara, beri mereka nama yang sama.",
+      "de": "Gib Sprechern denselben Namen, um sie zusammenzuführen.",
+      "tr": "Konuşmacıları birleştirmek için onlara aynı adı verin.",
+      "ko": "화자를 합치려면 같은 이름을 지정하세요.",
+      "ja": "話者を統合するには、同じ名前を付けてください。",
+      "th": "หากต้องการรวมผู้พูด ให้ตั้งชื่อเดียวกัน",
+      "zh-Hant": "要合併說話者，請將他們設為相同的姓名。"
+    },
     "Live transcript — still being finalized.": {
       "zh-Hans": "实时转写——仍在整理中。",
       "hi": "लाइव प्रतिलेख — अभी अंतिम रूप दिया जा रहा है।",

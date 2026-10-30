@@ -79,6 +79,51 @@ fn distance(t: f64, turn: &Turn) -> f64 {
     }
 }
 
+/// Match the Mac's fragment handling. Sherpa exposes no per-turn embedding,
+/// so brief orphan voices use the nearest established turn in time.
+pub fn merging_fragments(turns: Vec<Turn>) -> Vec<Turn> {
+    let mut durations: HashMap<&str, (f64, f64)> = HashMap::new();
+    for turn in &turns {
+        let length = (turn.end - turn.start).max(0.0);
+        let entry = durations.entry(&turn.speaker).or_default();
+        entry.0 += length;
+        entry.1 = entry.1.max(length);
+    }
+    let all: f64 = durations.values().map(|(total, _)| total).sum();
+    let solid: std::collections::HashSet<&str> = durations.into_iter()
+        .filter(|(_, (total, longest))| *longest >= 3.0 || *total >= 20.0_f64.max(all * 0.1))
+        .map(|(speaker, _)| speaker).collect();
+    if solid.is_empty() { return turns; }
+    turns.iter().map(|turn| {
+        let mut result = turn.clone();
+        if !solid.contains(turn.speaker.as_str()) {
+            let mid = (turn.start + turn.end) / 2.0;
+            if let Some(nearest) = turns.iter().filter(|t| solid.contains(t.speaker.as_str()))
+                .min_by(|a, b| distance(mid, a).total_cmp(&distance(mid, b))) {
+                result.speaker = nearest.speaker.clone();
+            }
+        }
+        result
+    }).collect()
+}
+
+/// As on Mac, giving two remote speakers the same name combines their lines.
+/// The microphone identity remains independent even if a participant shares its name.
+pub fn rename_speaker(speakers: &mut Vec<Speaker>, lines: &mut [Line], id: &str, name: &str) {
+    let name = name.trim();
+    let Some(index) = speakers.iter().position(|s| s.id == id) else { return };
+    if name.is_empty() { return; }
+    let other = (!speakers[index].is_me).then(|| speakers.iter()
+        .find(|s| s.id != id && !s.is_me && s.name.to_lowercase() == name.to_lowercase())
+        .map(|s| s.id.clone())).flatten();
+    if let Some(other) = other {
+        for line in lines.iter_mut().filter(|line| line.speaker == id) { line.speaker = other.clone(); }
+        speakers.remove(index);
+    } else {
+        speakers[index].name = name.to_string();
+    }
+}
+
 /// The others' words, each given to the voice speaking at that moment (or the
 /// nearest one).
 pub fn assign(words: &[TimedWord], turns: &[Turn], fallback: &str) -> Vec<(String, TimedWord)> {
@@ -294,6 +339,39 @@ pub fn parse_summary(reply: &str) -> Option<Summary> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn brief_orphan_speakers_join_established_turns_without_moving_audio() {
+        let original = vec![t("A", 0.0, 8.0), t("fragment-a", 8.0, 8.7), t("B", 20.0, 28.0), t("fragment-b", 28.0, 29.0)];
+        let merged = merging_fragments(original.clone());
+        assert_eq!(merged.iter().map(|turn| turn.speaker.as_str()).collect::<Vec<_>>(), ["A", "A", "B", "B"]);
+        assert_eq!(merged.iter().map(|turn| (turn.start, turn.end)).collect::<Vec<_>>(), original.iter().map(|turn| (turn.start, turn.end)).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn fragment_merging_keeps_short_only_calls_and_repeated_brief_speakers() {
+        let short = vec![t("A", 0.0, 1.0), t("B", 2.0, 3.0)];
+        assert_eq!(merging_fragments(short.clone()), short);
+        let mut repeated = vec![t("A", 0.0, 10.0)];
+        for i in 0..10 { repeated.push(t("B", 20.0 + i as f64 * 3.0, 22.0 + i as f64 * 3.0)); }
+        assert_eq!(merging_fragments(repeated.clone()), repeated);
+    }
+
+    #[test]
+    fn matching_remote_names_merge_without_rewriting_text_or_microphone_identity() {
+        let (mut people, mut transcript) = build(&[w("mine", 0.0, 1.0)], &[w("one", 2.0, 3.0), w("two", 6.0, 7.0)], &[t("A", 2.0, 3.0), t("B", 6.0, 7.0)], "Me", |n| format!("Person {n}"));
+        let original_text: Vec<_> = transcript.iter().map(|line| (line.text.clone(), line.start, line.end)).collect();
+        rename_speaker(&mut people, &mut transcript, "p2", "Alex");
+        rename_speaker(&mut people, &mut transcript, "p3", " alex ");
+        assert_eq!(people.len(), 2);
+        assert_eq!(transcript[1].speaker, "p2");
+        assert_eq!(transcript[2].speaker, "p2");
+        assert_eq!(transcript.iter().map(|line| (line.text.clone(), line.start, line.end)).collect::<Vec<_>>(), original_text);
+        rename_speaker(&mut people, &mut transcript, ME, "Alex");
+        assert_eq!(people.len(), 2);
+        assert_eq!(transcript[0].speaker, ME);
+        rename_speaker(&mut people, &mut transcript, "p2", " ");
+        assert_eq!(people[1].name, "Alex");
+    }
     use super::*;
 
     fn w(text: &str, start: f64, end: f64) -> TimedWord {

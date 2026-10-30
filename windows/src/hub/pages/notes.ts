@@ -231,7 +231,7 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
         });
         people.append(chip);
       }
-      detail.append(people);
+      detail.append(people, h("div", { class: "hub-note", text: t("To combine speakers, give them the same name.") }));
     }
 
     if (note.status === "recording") {
