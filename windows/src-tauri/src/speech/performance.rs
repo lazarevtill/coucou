@@ -140,6 +140,22 @@ pub fn retune() {
     let _ = std::fs::remove_file(cache_path());
 }
 
+/// Keep a bounded, energetic part of a successful transcription. A call may
+/// begin with silence; benchmarking only its first seconds would decode no
+/// words even though the full recording was transcribed successfully.
+fn calibration_window(samples: &[f32], limit: usize) -> &[f32] {
+    let width = samples.len().min(limit);
+    if width == 0 { return &samples[..0]; }
+    let energy = |sample: f32| if sample.is_finite() { (sample as f64).powi(2) } else { 0.0 };
+    let mut sum: f64 = samples[..width].iter().map(|&s| energy(s)).sum();
+    let mut best = (sum, 0);
+    for end in width..samples.len() {
+        sum += energy(samples[end]) - energy(samples[end - width]);
+        if sum > best.0 { best = (sum, end + 1 - width); }
+    }
+    &samples[best.1..best.1 + width]
+}
+
 /// Calibration uses a bounded copy of a successful dictation, after its result
 /// is available. It never changes that transcript. Manual changes invalidate it.
 pub fn consider(samples: &[f32]) {
@@ -152,7 +168,7 @@ pub fn consider(samples: &[f32]) {
         state.attempted = true;
         state.generation
     };
-    let sample = samples[..samples.len().min(super::SAMPLE_RATE as usize * 6)].to_vec();
+    let sample = calibration_window(samples, super::SAMPLE_RATE as usize * 6).to_vec();
     *worker = Some(std::thread::spawn(move || {
         let mut measurements = Vec::new();
         let mut reference: Option<String> = None;
@@ -224,5 +240,22 @@ mod tests {
         let state = Runtime { manual: 1, cache: Some(Cache { key: String::new(),
             measurements: vec![Measurement { threads: 4, milliseconds: 1.0 }] }), ..Default::default() };
         assert_eq!(selected(&state), 1);
+    }
+
+    #[test]
+    fn calibration_uses_audio_between_leading_and_trailing_silence() {
+        let mut samples = vec![0.0; 10];
+        samples.extend([0.25; 8]);
+        samples.extend([0.0; 10]);
+        assert_eq!(calibration_window(&samples, 6), &[0.25; 6]);
+        assert_eq!(samples.len(), 28, "the source recording is unchanged");
+    }
+
+    #[test]
+    fn calibration_is_bounded_for_short_empty_and_nonfinite_inputs() {
+        assert!(calibration_window(&[], 6).is_empty());
+        assert!(calibration_window(&[1.0], 0).is_empty());
+        assert_eq!(calibration_window(&[0.1, -0.2], 6), &[0.1, -0.2]);
+        assert_eq!(calibration_window(&[f32::NAN, 0.0, 0.5, -0.5, 0.0], 2), &[0.5, -0.5]);
     }
 }

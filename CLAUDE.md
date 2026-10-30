@@ -31,6 +31,8 @@ Public crypto quotes and read-only portfolios use `windows/src-tauri/src/markets
 
 Speech and call recording use `windows/src-tauri/src/speech/` and `notes/`. Flow Settings selects text providers, audio devices and automatic or manual CPU threads. Source recovery runs independently of transcription; lost-audio warnings remain in the note. See `windows/docs/windows-parity.md` for feature coverage and hardware verification limits.
 
+Parakeet calibration uses at most six seconds from the most energetic window of a successful transcription. Leading silence must not invalidate tuning. Every candidate must produce a stable, matching transcript before its timing can win; the source transcript is unchanged and no calibration audio is saved.
+
 The Flow toolbar uses `windows/src/pill/surface.ts` to retain its capsule and controls. Tooltips sit outside the capsule layout, toward the screen interior. Keep native input regions and frontend hover geometry aligned through animations and DPI changes.
 
 `flow_status` awaits native setup before returning listener availability. Notetaker saves final source diagnostics in each note: used device names, audio receipt, peak level and warnings survive transcription and audio deletion. Received packets do not prove speech, and a WASAPI discontinuity does not prove a device disconnect.
