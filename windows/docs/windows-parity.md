@@ -31,6 +31,8 @@ Flow Settings selects the dictation key and the bottom, left or right screen edg
 
 The idle island can remain off while explicit shortcuts and tray commands open chat, wardrobe, recap and update views. Background alerts continue to respect the island preference.
 
+The main window draws its animated logo, page characters and backgrounds on first open. Its initial visibility read waits for the native UI queue; hiding or minimizing the window stops the canvas animation, and restoring it resumes drawing.
+
 Windows offers **Copilot** for keyboards that emit **Win + Shift + F23**, alongside Right Ctrl, Right Alt, Right Shift and Ctrl + Win. Selecting Copilot assigns that chord to dictation while Flow is enabled; other shortcuts pass through. A Copilot key remapped by Windows to Right Ctrl requires selecting Right Ctrl instead. Hardware that emits Win + C is not handled by the Copilot option. Synthetic key injection is ignored. The settings status reports a failed keyboard-listener startup instead of claiming the key is ready. Physical key presses and paste in the target application remain necessary hardware checks.
 
 ## Dictionary, snippets and styles

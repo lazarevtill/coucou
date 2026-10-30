@@ -39,6 +39,8 @@ The Flow toolbar uses `windows/src/pill/surface.ts` to retain its capsule and co
 
 User requests from shortcuts and tray commands use `Island.openExplicit`, so chat, wardrobe, recap and update cards remain available with the idle island off. `Island.alert` is for background events and respects that setting.
 
+`hub_shown` takes its initial visibility snapshot on the native UI queue. WebView2 can process page commands during setup before queued event listeners are installed; reading the startup atomic immediately can leave visible canvases stopped. Keep the initial snapshot ordered after native setup and retain the hidden-window animation gate.
+
 `flow_status` awaits native setup before returning listener availability. Notetaker saves final source diagnostics in each note: used device names, audio receipt, peak level and warnings survive transcription and audio deletion. Received packets do not prove speech, and a WASAPI discontinuity does not prove a device disconnect.
 
 `speech/source.rs` shares audio health and reconnection between Notetaker and the no-file Settings test. `speech/routing.rs` follows the active call application's Windows audio sessions before system defaults. Manual microphone and playback choices remain independent; ambiguous app routes must be visible. Hardware diagnostics are ignored tests that require explicit live-test authorization.
