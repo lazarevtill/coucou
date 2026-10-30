@@ -143,3 +143,43 @@ test("an export failure is visible and a successful retry reports the selected p
   assert.doesNotMatch(fixture.detail().textContent, /Destination is not writable/);
   assert.match(fixture.detail().textContent, /Saved as C:\\chosen\\Synthetic call\.md/);
 });
+
+test("processing keeps live lines mounted while native stage progress and elapsed time update", async t => {
+  const fixture = await recordingPage(t);
+  fixture.state.recording = null;
+  fixture.state.notes[0].status = "processing";
+  fixture.state.working = ["synthetic"];
+  const progress = { stage: "microphone", completedSeconds: 30, totalSeconds: 60, startedAt: Date.now() - 65_000, updatedAt: Date.now() };
+  fixture.state.progress = { synthetic: progress };
+  emit("notes-changed", "synthetic");
+  await flush();
+  const detail = fixture.page.querySelector(".hub-note-detail");
+  const line = detail.querySelector(".hub-line");
+  assert.match(line.textContent, /Test/);
+  assert.match(detail.textContent, /Live transcript — still being finalized/);
+  assert.match(detail.textContent, /Transcribing Microphone/);
+  assert.equal(detail.find("div").find(node => node.getAttribute("role") === "progressbar").getAttribute("aria-valuenow"), "50");
+  emit("notes-progress", { id: "synthetic", progress: { ...progress, stage: "playback", completedSeconds: 45 } });
+  assert.match(detail.textContent, /Transcribing Call playback/);
+  assert.equal(detail.find("div").find(node => node.getAttribute("role") === "progressbar").getAttribute("aria-valuenow"), "75");
+  fixture.tick();
+  assert.equal(detail.querySelector(".hub-line"), line);
+  assert.match(detail.textContent, /Processing for 1:05/);
+  emit("notes-progress", { id: "synthetic", progress: { ...progress, stage: "speakers", totalSeconds: null } });
+  assert.match(detail.textContent, /Identifying speakers/);
+  assert.equal(detail.find("div").find(node => node.getAttribute("role") === "progressbar"), undefined, "speaker work has no invented percentage");
+  assert.equal(detail.querySelector(".hub-line"), line);
+});
+
+test("failed final processing retains the live transcript alongside Retry", async t => {
+  const fixture = await recordingPage(t);
+  fixture.state.recording = null;
+  fixture.state.notes[0].status = "failed";
+  fixture.state.notes[0].error = "Could not save call notes";
+  emit("notes-changed", "synthetic");
+  await flush();
+  const detail = fixture.page.querySelector(".hub-note-detail");
+  assert.match(detail.textContent, /Could not save call notes/);
+  assert.match(detail.querySelector(".hub-line").textContent, /Test/);
+  assert.ok(detail.find("button").some(button => button.textContent === "Retry"));
+});

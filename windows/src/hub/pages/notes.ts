@@ -4,7 +4,7 @@
 import { h, clear } from "../../views/dom";
 import { t } from "../../i18n/i18n";
 import { onEvent } from "../../core/bridge";
-import { FlowBridge, clock, speakerColor, type Note, type NotesState } from "../../core/flow";
+import { FlowBridge, clock, speakerColor, type Note, type NotesState, type NoteProgress } from "../../core/flow";
 import { audioMeters, audioReport } from "../audio";
 import type { HubContext } from "../shell";
 import { emptyState, glowCard } from "../hero";
@@ -26,6 +26,7 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
   let recordingBusy = false;
   let left = false;
   let exporting = false;
+  let progressElement: HTMLElement | null = null;
   let exportResult: { id: string; path?: string; error?: string } | null = null;
 
   page.append(ctx.hero("notes", t("Notetaker"), t("Your calls transcribed person by person, with a summary and the to-dos. No bot in the meeting."), [], true));
@@ -127,6 +128,7 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
   }
 
   function drawDetail() {
+    progressElement = null;
     clear(detail);
     const note = state.notes.find((n) => n.id === selected);
     if (!note) {
@@ -238,12 +240,19 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
       return;
     }
     if (note.status === "processing" || state.working.includes(note.id) && note.lines.length === 0) {
-      detail.append(emptyState(t("Coucou is writing the transcript, person by person…"), "working", "#3B9EFF"));
+      progressElement = h("div", { class: "hub-note-progress", role: "status", style: "display:grid;gap:8px" });
+      detail.append(progressElement);
+      updateProgress();
+      if (note.lines.length) {
+        detail.append(h("div", { class: "hub-note", text: t("Live transcript — still being finalized.") }));
+        detail.append(transcript(note, ""));
+      }
       return;
     }
     if (note.status === "failed") {
       detail.append(h("div", { class: "hub-warn", text: `${t("The transcript could not be written.")} ${note.error ?? ""}` }));
       detail.append(button(t("Retry"), () => void FlowBridge.retryNote(note.id)));
+      if (note.lines.length) detail.append(transcript(note, ""));
       return;
     }
     if (note.lines.length === 0) {
@@ -256,6 +265,25 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
     });
     detail.append(h("div", {}, tabs));
     detail.append(tab === "summary" ? summary(note) : transcript(note, ""));
+  }
+
+  function updateProgress() {
+    if (!progressElement || !selected) return;
+    clear(progressElement);
+    const progress = state.progress?.[selected];
+    const label = !progress ? t("Coucou is writing the transcript, person by person…")
+      : progress.stage === "microphone" ? t("Transcribing {0}", { 0: t("Microphone") })
+      : progress.stage === "playback" ? t("Transcribing {0}", { 0: t("Call playback") })
+      : progress.stage === "speakers" ? t("Identifying speakers…") : t("Saving transcript…");
+    progressElement.append(h("b", { text: label }));
+    if (!progress) return;
+    if (progress.totalSeconds !== null && progress.totalSeconds > 0) {
+      const percent = Math.max(0, Math.min(100, progress.completedSeconds / progress.totalSeconds * 100));
+      progressElement.append(h("div", { class: "hub-note", text: `${clock(progress.completedSeconds)} / ${clock(progress.totalSeconds)} · ${Math.floor(percent)}%` }),
+        h("div", { class: "hub-progress", role: "progressbar", "aria-label": label, "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.floor(percent)), style: "width:100%;height:7px" },
+          h("i", { style: `width:${percent}%` })));
+    }
+    progressElement.append(h("div", { class: "hub-note", text: t("Processing for {0}", { 0: clock(Math.max(0, Date.now() - progress.startedAt) / 1000) }) }));
   }
 
   function summary(note: Note): HTMLElement {
@@ -304,8 +332,13 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
   drawList();
   drawDetail();
   const unlisten = await onEvent<string>("notes-changed", () => void reload());
+  const unlistenProgress = await onEvent<{ id: string; progress: NoteProgress }>("notes-progress", ({ id, progress }) => {
+    (state.progress ??= {})[id] = progress;
+    if (id === selected) updateProgress();
+  });
   // The recording's clock in the list.
   const timer = window.setInterval(() => {
+    updateProgress();
     if (!state.recording) return;
     void FlowBridge.audioStatus().then(sources => { if (sources && page.isConnected) meters.update(sources); });
     updateRecordControl();
@@ -313,6 +346,7 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
   ctx.onLeave = () => {
     left = true;
     unlisten();
+    unlistenProgress();
     window.clearInterval(timer);
   };
 }

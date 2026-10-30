@@ -368,18 +368,39 @@ const MAX_CHUNK_SECONDS: f64 = 28.0;
 
 /// Transcribes 16 kHz mono audio.
 pub fn transcribe(samples: &[f32]) -> Option<Transcript> {
+    transcribe_with_progress(samples, |_, _| {})
+}
+
+/// Progress counts audio examined, including digital silence, never guessed time.
+pub fn transcribe_with_progress(samples: &[f32], progress: impl FnMut(usize, usize)) -> Option<Transcript> {
     let rec = recognizer()?;
-    let mut out = Transcript::default();
-    for (offset, chunk) in audio::split_for_model(samples, SAMPLE_RATE, MAX_CHUNK_SECONDS) {
-        if chunk.len() < (SAMPLE_RATE as usize) / 4 {
-            continue;
-        }
+    let out = decode_chunks(samples, |offset, chunk| {
         let stream = rec.create_stream();
         stream.accept_waveform(SAMPLE_RATE as i32, chunk);
         rec.decode(&stream);
-        let Some(result) = stream.get_result() else { continue };
+        let result = stream.get_result()?;
         let start = offset as f64 / SAMPLE_RATE as f64;
-        let words = words_from_tokens(&result.tokens, result.timestamps.as_deref().unwrap_or(&[]), start, chunk.len() as f64 / SAMPLE_RATE as f64);
+        Some(Transcript {
+            text: result.text.trim().to_string(),
+            words: words_from_tokens(&result.tokens, result.timestamps.as_deref().unwrap_or(&[]), start, chunk.len() as f64 / SAMPLE_RATE as f64),
+        })
+    }, progress)?;
+    if !out.text.is_empty() { performance::consider(samples); }
+    Some(out)
+}
+
+fn decode_chunks(samples: &[f32], mut decode: impl FnMut(usize, &[f32]) -> Option<Transcript>, mut progress: impl FnMut(usize, usize)) -> Option<Transcript> {
+    let mut out = Transcript::default();
+    progress(0, samples.len());
+    for (offset, chunk) in audio::split_for_model(samples, SAMPLE_RATE, MAX_CHUNK_SECONDS) {
+        // Only exact digital silence is skipped. A threshold would also erase
+        // quiet speech; offsets must remain on the original call timeline.
+        if chunk.len() < (SAMPLE_RATE as usize) / 4 || chunk.iter().all(|&sample| sample == 0.0) {
+            progress(offset + chunk.len(), samples.len());
+            continue;
+        }
+        // A failed chunk must not silently become a successful partial transcript.
+        let result = decode(offset, chunk)?;
         let text = result.text.trim();
         if !text.is_empty() {
             if !out.text.is_empty() {
@@ -387,9 +408,9 @@ pub fn transcribe(samples: &[f32]) -> Option<Transcript> {
             }
             out.text.push_str(text);
         }
-        out.words.extend(words);
+        out.words.extend(result.words);
+        progress(offset + chunk.len(), samples.len());
     }
-    if !out.text.is_empty() { performance::consider(samples); }
     Some(out)
 }
 
@@ -453,6 +474,42 @@ pub fn diarize(samples: &[f32]) -> Vec<Turn> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn chunk_progress_skips_only_digital_silence_and_keeps_original_offsets() {
+        let mut samples = vec![0.0; super::SAMPLE_RATE as usize * 80];
+        // Quiet audio at the very end must still reach the recognizer.
+        let tail = samples.len() - super::SAMPLE_RATE as usize;
+        samples[tail..].fill(0.00001);
+        let mut decoded = Vec::new();
+        let mut progress = Vec::new();
+        let result = super::decode_chunks(&samples, |offset, chunk| {
+            assert!(chunk.iter().any(|&sample| sample != 0.0));
+            decoded.push(offset);
+            Some(super::Transcript { text: "quiet".into(), words: vec![super::TimedWord {
+                text: "quiet".into(), start: offset as f64 / super::SAMPLE_RATE as f64, end: 80.0,
+            }] })
+        }, |done, total| progress.push((done, total))).unwrap();
+        assert_eq!(decoded.len(), 1);
+        assert!(decoded[0] > super::SAMPLE_RATE as usize * 40);
+        assert_eq!(result.words[0].start, decoded[0] as f64 / super::SAMPLE_RATE as f64);
+        assert_eq!(progress.first(), Some(&(0, samples.len())));
+        assert_eq!(progress.last(), Some(&(samples.len(), samples.len())));
+        assert!(progress.windows(2).all(|w| w[0].0 <= w[1].0));
+    }
+
+    #[test]
+    fn a_failed_chunk_does_not_report_partial_transcription_as_complete() {
+        let samples = vec![0.1; super::SAMPLE_RATE as usize * 60];
+        let mut calls = 0;
+        let mut completed = 0;
+        let result = super::decode_chunks(&samples, |_, _| {
+            calls += 1;
+            (calls == 1).then(|| super::Transcript { text: "first".into(), words: vec![] })
+        }, |done, _| completed = done);
+        assert!(result.is_none());
+        assert_eq!(calls, 2);
+        assert!(completed < samples.len());
+    }
     use super::*;
 
     fn toks(list: &[&str]) -> Vec<String> {

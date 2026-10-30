@@ -26,13 +26,17 @@ export function audioReport(sources: AudioSourceStatus[]): HTMLElement {
   for (const source of sources) {
     const devices = [...new Set([...(source.devices ?? []), source.device].filter(Boolean))];
     const warnings = [...new Set([...(source.warnings ?? []), source.error].filter(Boolean))];
+    const events = h("details", {}, h("summary", { text: t("Events during recording") }),
+      ...warnings.map(text => h("div", { class: "hub-warn", text: text! })));
+    if (source.error || !source.connected) events.setAttribute("open", "");
     report.append(h("div", { style: "display:grid;gap:6px;margin:12px 0" },
       h("b", { text: source.source === "microphone" ? t("Microphone") : t("Call playback") }),
       ...devices.map(text => h("div", { class: "hub-note", text })),
       h("div", { class: source.received ? "hub-note" : "hub-warn", text: source.received ? t("Audio received") : t("No audio received") }),
+      source.connected && !source.error ? h("div", { class: "hub-note", text: t("Source available when recording stopped.") }) : null,
       source.peakSeen !== undefined ? h("div", { class: "hub-note", text: t("Peak level: {0} dBFS", { 0: Math.round(levelDb(source.peakSeen)) }) }) : null,
       source.sampleRate ? h("div", { class: "hub-note", text: t("Last format: {0} Hz · {1} channels", { 0: source.sampleRate.toLocaleString(), 1: source.channels }) }) : null,
-      ...warnings.map(text => h("div", { class: "hub-warn", text: text! })),
+      warnings.length ? events : null,
     ));
   }
   if (sources.some(source => source.error || source.warnings?.length || !source.received)) report.setAttribute("open", "");

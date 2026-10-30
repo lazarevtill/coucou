@@ -38,3 +38,18 @@ test("device names and errors remain text even if a driver returns markup", () =
   assert.equal(report.querySelector("img"), null);
   assert.equal(report.querySelector("script"), null);
 });
+
+test("a recovered source separates historical warnings from its final availability", () => {
+  const report = audioReport([{ ...source, warnings: ["Device reconfigured"], error: null }]);
+  assert.match(report.textContent, /Source available when recording stopped/);
+  assert.match(report.textContent, /Events during recording/);
+  const history = report.find("details")[0];
+  assert.equal(history.getAttribute("open"), null);
+  assert.match(history.textContent, /Device reconfigured/);
+});
+
+test("an unresolved error remains expanded without claiming final availability", () => {
+  const report = audioReport([{ ...source, connected: false, error: "Device missing" }]);
+  assert.doesNotMatch(report.textContent, /Source available when recording stopped/);
+  assert.equal(report.find("details")[0].getAttribute("open"), "");
+});

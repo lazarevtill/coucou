@@ -189,6 +189,15 @@ export interface NotesState {
   recording: string | null;
   working: string[];
   audio: AudioSourceStatus[];
+  progress?: Record<string, NoteProgress>;
+}
+
+export interface NoteProgress {
+  stage: "microphone" | "playback" | "speakers" | "saving";
+  completedSeconds: number;
+  totalSeconds: number | null;
+  startedAt: number;
+  updatedAt: number;
 }
 
 export interface Announcement {

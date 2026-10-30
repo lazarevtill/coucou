@@ -335,6 +335,21 @@ pub struct Capture {
 #[derive(Default)]
 struct CaptureHealth { error: Option<String>, warnings: Vec<String> }
 
+fn device_error(error: cpal::Error) -> String {
+    use cpal::ErrorKind;
+    match error.kind() {
+        ErrorKind::DeviceNotAvailable | ErrorKind::StreamInvalidated => {
+            let explanation = crate::i18n::t("Audio device became unavailable or was reconfigured.");
+            // Keep the native diagnostic for support, after a readable cause.
+            match error.message() {
+                Some(detail) => format!("{explanation} ({detail})"),
+                None => explanation,
+            }
+        }
+        _ => error.to_string(),
+    }
+}
+
 fn capture_error(health: &mut CaptureHealth, error: cpal::Error) {
     if error.kind() == cpal::ErrorKind::Xrun {
         // WASAPI continues delivering packets after DATA_DISCONTINUITY. Reopening
@@ -342,7 +357,7 @@ fn capture_error(health: &mut CaptureHealth, error: cpal::Error) {
         let warning = crate::i18n::t("Audio was interrupted. Some audio may be missing.");
         if !health.warnings.contains(&warning) { health.warnings.push(warning); }
     } else {
-        health.error = Some(error.to_string());
+        health.error = Some(device_error(error));
     }
 }
 
@@ -369,7 +384,7 @@ impl Capture {
                     }
                 };
                 if let Err(err) = stream.play() {
-                    let _ = ready_tx.send(Err(err.to_string()));
+                    let _ = ready_tx.send(Err(device_error(err)));
                     return;
                 }
                 let _ = ready_tx.send(Ok(info));
@@ -409,9 +424,9 @@ impl Drop for Capture {
 fn build_stream(source: &Source, origin: Instant, health: Arc<Mutex<CaptureHealth>>, mut sink: impl FnMut(&[f32], Duration) + Send + 'static) -> Result<(cpal::Stream, CaptureInfo), String> {
     let device = open_device(source).ok_or_else(|| crate::i18n::t(if matches!(source, Source::Mic(Some(_)) | Source::System(Some(_))) { "Selected device (disconnected)" } else { "No device" }))?;
     let supported = if matches!(source, Source::System(_)) && cfg!(windows) {
-        device.default_output_config().map_err(|e| e.to_string())?
+        device.default_output_config().map_err(device_error)?
     } else {
-        device.default_input_config().map_err(|e| e.to_string())?
+        device.default_input_config().map_err(device_error)?
     };
     let devices = if matches!(source, Source::Mic(_)) { input_devices() } else { output_devices() };
     let name = devices.into_iter().find(|d| d.id == device_id(&device)).map(|d| d.name).unwrap_or_else(|| device_name(&device));
@@ -482,7 +497,7 @@ fn build_stream(source: &Source, origin: Instant, health: Arc<Mutex<CaptureHealt
         ),
         other => return Err(format!("unsupported sample format {other:?}")),
     };
-    stream.map(|stream| (stream, info)).map_err(|e| e.to_string())
+    stream.map(|stream| (stream, info)).map_err(device_error)
 }
 
 // ── A recording in memory ─────────────────────────────────────────────────────
@@ -621,6 +636,17 @@ mod tests {
         capture_error(&mut health, cpal::ErrorKind::DeviceNotAvailable.into());
         assert!(health.error.is_some());
         assert_eq!(health.warnings.len(), 1);
+    }
+
+    #[test]
+    fn invalidated_devices_have_a_readable_cause_and_keep_native_evidence() {
+        let message = "OS Error -2004287484 (FormatMessageW() returned error 317)";
+        let error = cpal::Error::with_message(cpal::ErrorKind::DeviceNotAvailable, message);
+        let rendered = device_error(error);
+        assert!(rendered.starts_with("Audio device became unavailable or was reconfigured."));
+        assert!(rendered.contains(message));
+        let unknown = cpal::Error::with_message(cpal::ErrorKind::BackendError, "Unknown driver error");
+        assert_eq!(device_error(unknown), "Unknown driver error");
     }
 
     #[test]

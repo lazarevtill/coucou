@@ -11,6 +11,7 @@ pub mod builder;
 pub mod track;
 mod summary;
 mod storage;
+mod progress;
 #[cfg(windows)]
 mod export;
 
@@ -168,6 +169,7 @@ pub struct NoteTaker {
     recording: Mutex<Option<Recording>>,
     /// Notes whose transcript or summary is being written.
     working: Mutex<Vec<String>>,
+    progress: Mutex<std::collections::BTreeMap<String, progress::Progress>>,
     starting: AtomicBool,
 }
 
@@ -206,6 +208,26 @@ fn person_name(n: usize) -> String {
 }
 
 impl NoteTaker {
+    fn progress(&self, app: &AppHandle, id: &str, stage: progress::Stage, samples: Option<(usize, usize)>) {
+        let progress = {
+            let mut all = self.progress.lock().unwrap();
+            let old = all.get(id);
+            let now = now_ms();
+            if old.is_none_or(|old| old.stage != stage) {
+                crate::log::line(format!("notes: processing {stage:?}"));
+            }
+            let progress = progress::Progress {
+                stage,
+                completed_seconds: samples.map_or(0.0, |(done, _)| done as f64 / speech::SAMPLE_RATE as f64),
+                total_seconds: samples.map(|(_, total)| total as f64 / speech::SAMPLE_RATE as f64),
+                started_at: old.map_or(now, |old| old.started_at), updated_at: now,
+            };
+            all.insert(id.to_string(), progress.clone());
+            progress
+        };
+        let _ = app.emit_to(crate::HUB_LABEL, "notes-progress", progress::Changed { id, progress });
+    }
+
     fn note(&self, id: &str) -> Option<Note> {
         self.notes.lock().unwrap().iter().find(|n| n.id == id).cloned()
     }
@@ -255,6 +277,7 @@ pub fn setup(app: &AppHandle) {
         notes: Mutex::new(notes),
         recording: Mutex::new(None),
         working: Mutex::new(Vec::new()),
+        progress: Mutex::new(std::collections::BTreeMap::new()),
         starting: AtomicBool::new(false),
     });
     app.manage(taker.clone());
@@ -474,12 +497,12 @@ pub fn shutdown(app: &AppHandle) {
     });
 }
 
-fn words_in(path: &std::path::Path) -> Result<(Vec<TimedWord>, Vec<f32>), String> {
+fn words_in(path: &std::path::Path, progress: impl FnMut(usize, usize)) -> Result<(Vec<TimedWord>, Vec<f32>), String> {
     if !path.exists() {
         return Ok((Vec::new(), Vec::new()));
     }
     let samples = audio::read_wav(path).map_err(|e| e.to_string())?;
-    let transcript = speech::transcribe(&samples).ok_or_else(|| t("Download the voice model first, in Coucou → Settings → Recognition."))?;
+    let transcript = speech::transcribe_with_progress(&samples, progress).ok_or_else(|| t("The transcript could not be written."))?;
     Ok((transcript.words, samples))
 }
 
@@ -493,7 +516,9 @@ fn process(app: &AppHandle, id: &str) {
         }
         working.push(id.to_string());
     }
-    let _ = app.emit_to(crate::HUB_LABEL, "notes-changed", id);
+    taker.change(app, id, |n| { n.status = Status::Processing; n.error = None; });
+    taker.progress(app, id, progress::Stage::Microphone, None);
+    let started = Instant::now();
     let result = transcript(app, &taker, id);
     if let Err(err) = &result {
         crate::log::line(format!("notes: transcript failed: {err}"));
@@ -503,6 +528,8 @@ fn process(app: &AppHandle, id: &str) {
         });
     }
     taker.working.lock().unwrap().retain(|w| w != id);
+    taker.progress.lock().unwrap().remove(id);
+    crate::log::line(format!("notes: processing finished in {:.1}s; success={}", started.elapsed().as_secs_f64(), result.is_ok()));
     if result.is_ok() {
         let engine = crate::flow::get(app).map(|f| f.store.lock().unwrap().prefs.summary_engine).unwrap_or_default();
         if engine != SummaryEngine::Off {
@@ -529,8 +556,10 @@ fn transcript(app: &AppHandle, taker: &Arc<NoteTaker>, id: &str) -> Result<(), S
         return Err(t("The recording of this call is gone."));
     }
     let me = t("Me");
-    let (mine, mic_samples) = words_in(&mic_path)?;
-    let (theirs, system_samples) = words_in(&system_path)?;
+    let (mine, mic_samples) = words_in(&mic_path, |done, total| taker.progress(app, id, progress::Stage::Microphone, Some((done, total))))?;
+    taker.progress(app, id, progress::Stage::Playback, None);
+    let (theirs, system_samples) = words_in(&system_path, |done, total| taker.progress(app, id, progress::Stage::Playback, Some((done, total))))?;
+    taker.progress(app, id, progress::Stage::Speakers, None);
     let built = if theirs.len() >= 5 {
         // A call: you on the microphone, the others on the computer's sound.
         let turns = speech::diarize(&system_samples);
@@ -549,6 +578,7 @@ fn transcript(app: &AppHandle, taker: &Arc<NoteTaker>, id: &str) -> Result<(), S
     };
     let (speakers, lines) = built;
     let count = lines.len();
+    taker.progress(app, id, progress::Stage::Saving, None);
     {
         let mut notes = taker.notes.lock().unwrap();
         let note = notes.iter_mut().find(|n| n.id == id).ok_or_else(|| t("The recording of this call is gone."))?;
@@ -667,6 +697,7 @@ pub struct NotesState {
     recording: Option<String>,
     working: Vec<String>,
     audio: Vec<SourceStatus>,
+    progress: std::collections::BTreeMap<String, progress::Progress>,
 }
 
 #[tauri::command]
@@ -674,7 +705,8 @@ pub fn notes_state(taker: State<Arc<NoteTaker>>) -> NotesState {
     let notes = taker.notes.lock().unwrap().clone();
     let recording = taker.recording.lock().unwrap().as_ref().map(|r| r.id.clone());
     let working = taker.working.lock().unwrap().clone();
-    NotesState { notes, recording, working, audio: audio_status(&taker) }
+    let progress = taker.progress.lock().unwrap().clone();
+    NotesState { notes, recording, working, audio: audio_status(&taker), progress }
 }
 
 fn audio_status(taker: &NoteTaker) -> Vec<SourceStatus> {
