@@ -34,6 +34,7 @@ import { FLOW_PAGE_RENDERERS } from "../hub/pages";
 import { portfolioSection } from "./portfolio";
 import { marketsSection } from "./markets";
 import { connectionsSection } from "./connections";
+import { claudeModelControl } from "./claude-models";
 import { agentsSection } from "./agents";
 import { phoneSection } from "./phone";
 import { whatsappSection } from "./whatsapp";
@@ -412,12 +413,6 @@ function subscriptionsSection(): HTMLElement {
 
 // ── Claude API section ────────────────────────────────────────────────────────
 
-const MODELS: [string, string][] = [
-  ["claude-opus-5", "Claude Opus 5"],
-  ["claude-sonnet-5", "Claude Sonnet 5"],
-  ["claude-haiku-4-5", "Claude Haiku 4.5"],
-];
-
 function apiSection(hasKey: boolean): HTMLElement {
   const dot = statusDot(hasKey);
   const state = h("span", { class: "hint", text: hasKey ? t("Key saved in the {store}.", { store: KEY_STORE }) : t("No key yet — the chat needs one.") });
@@ -442,6 +437,7 @@ function apiSection(hasKey: boolean): HTMLElement {
       : t("No key yet — the chat needs one.");
     field.placeholder = present ? `••••••••••••  ${t("(stored)")}` : "sk-ant-...";
     clearBtn.style.display = present ? "" : "none";
+    void model.reload(present);
   }
 
   saveBtn.addEventListener("click", async () => {
@@ -469,16 +465,11 @@ function apiSection(hasKey: boolean): HTMLElement {
     }
   });
 
-  const model = h("select", {}) as HTMLSelectElement;
-  for (const [id, label] of MODELS) model.append(h("option", { value: id, text: label }));
-  if (!MODELS.some(([id]) => id === settings.model)) {
-    model.append(h("option", { value: settings.model, text: settings.model }));
-  }
-  model.value = settings.model;
-  model.addEventListener("change", () => {
-    settings.model = model.value;
-    void save();
+  const model = claudeModelControl(() => settings.model, async (value) => {
+    await Bridge.saveSettings({ ...settings, model: value });
+    settings.model = value;
   });
+  void model.reload(hasKey);
 
   clearBtn.style.display = hasKey ? "" : "none";
 
@@ -488,7 +479,7 @@ function apiSection(hasKey: boolean): HTMLElement {
     h("h2", {}, dot, h("span", { text: "Claude" })),
     state,
     h("div", { class: "row" }, h("label", { text: t("API key") }), field, saveBtn, clearBtn),
-    h("div", { class: "row" }, h("label", { text: t("Model") }), model),
+    model.element,
     feedback,
   );
 }

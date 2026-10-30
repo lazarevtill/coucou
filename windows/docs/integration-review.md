@@ -26,8 +26,8 @@ The integrated branch contains upstream 0.5.6 at `37e457ddae3cbe7be4a6539cc5b1cd
 
 | Check | Result |
 | --- | --- |
-| Frontend suite | 678 passed, zero failed |
-| Rust workspace suite | 813 passed: 764 app, 46 hook, 3 relay; 21 opt-in tests ignored |
+| Frontend suite | 683 passed, zero failed |
+| Rust workspace suite | 813 passed: 764 app, 46 hook, 3 relay; 22 opt-in tests ignored |
 | TypeScript and Vite production frontend | Passed; the large shared translation-chunk warning remains unsuppressed |
 | Rust compile | Passed without warnings |
 | Remote CI | Unverified for the latest source. GitHub rejects workflow dispatch with HTTP 422, “Actions has been disabled for this repository,” and supplies no GitHub Actions run for the latest commit |
@@ -48,6 +48,7 @@ The integrated branch contains upstream 0.5.6 at `37e457ddae3cbe7be4a6539cc5b1cd
 | Explicit-view regression | Five tests reproduce suppressed shortcut/recap/update requests with the island off; all pass with explicit opening. The installed chat shortcut expands the native window from 240 by 6 to 720 by 320 and focuses it. Visual and typing confirmation remains open because the desktop helper does not expose the floating window |
 | Installed speech models | All six files match the manifest sizes and SHA-256 hashes; an optimized native check passed transcription, automatic calibration and manual override |
 | Both official CLI subscriptions | Real text replies and structured text tasks passed |
+| Claude API models | The configured account listed Sonnet 5.5, Opus 5.5, Haiku 5.5 and Fable 5.1. A short synthetic Sonnet 5.5 request returned the expected answer. Five picker regressions cover API/CLI separation, saved choices, late responses, failures and retry; native picker interaction remains unverified |
 | Both CLI visual paths | Real image identification and both pages of a synthetic PDF passed |
 | Windows PDF and attachment handling | Native rendering, cancellation, limits, history separation and temporary-file cleanup passed |
 | Native Windows Share | Cross-thread file preparation and attachment readback passed |

@@ -13,6 +13,12 @@ The combined action changes provider choices only. Dictation cleanup and voice s
 
 API credentials are optional separate chat providers. A CLI signed in only with an API key is not shown as a subscription connection. Plan limits and model availability belong to the selected agent's account.
 
+### Claude API models
+
+In **Settings → Chat → Claude**, save an API key and choose **Model**. The list loads from the configured Anthropic account on opening Settings and after changing the key. **Refresh** checks it again. The initial choices include Sonnet 5.5, Opus 5.5, Haiku 5.5 and Fable 5.1 from [Anthropic's model catalog](https://platform.claude.com/docs/en/models/overview). Account discovery supplies the available choices; a refresh retains the saved model even if it is absent from the list.
+
+The selected model applies to Claude API chat and to Flow text tasks that select **Claude (your key)**, including call summaries. It does not change either official CLI's model or switch a subscription to API billing. Model-discovery errors are shown beside the picker; a failed settings save restores the saved choice and can be retried.
+
 ## Chat and project work
 
 Chat answers questions and accepts UTF-8 text attachments up to 200 KB, PNG/JPEG/GIF/WebP images up to 5 MiB, and PDFs up to 20 MiB and twenty pages on Windows. It retains conversation context and offers a Stop control. The displayed provider identifies which account is answering. The native CLI chooses its default model; Coucou does not pin a model ID. Chat has no shell, project-editing, MCP or web-search tools.
