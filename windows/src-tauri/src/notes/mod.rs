@@ -10,6 +10,7 @@
 pub mod builder;
 pub mod track;
 mod summary;
+mod storage;
 #[cfg(windows)]
 mod export;
 
@@ -205,19 +206,6 @@ fn person_name(n: usize) -> String {
 }
 
 impl NoteTaker {
-    fn save(&self, note: &Note) {
-        let dir = note_dir(&note.id);
-        if crate::platform::ensure_private_dir(&dir).is_err() {
-            return;
-        }
-        if let Ok(text) = serde_json::to_string_pretty(note) {
-            let tmp = dir.join("note.json.tmp");
-            if std::fs::write(&tmp, text).is_ok() {
-                let _ = std::fs::rename(tmp, dir.join("note.json"));
-            }
-        }
-    }
-
     fn note(&self, id: &str) -> Option<Note> {
         self.notes.lock().unwrap().iter().find(|n| n.id == id).cloned()
     }
@@ -228,9 +216,14 @@ impl NoteTaker {
             let mut notes = self.notes.lock().unwrap();
             let note = notes.iter_mut().find(|n| n.id == id)?;
             f(note);
+            // Serialize writes under the same lock so a live chunk cannot
+            // overwrite a newer rename, stop or completed transcript.
+            if let Err(error) = storage::save(&note_dir(id), note) {
+                crate::log::line(format!("notes: {error}"));
+                note.error = Some(error);
+            }
             note.clone()
         };
-        self.save(&updated);
         let _ = app.emit_to(crate::HUB_LABEL, "notes-changed", &updated.id);
         Some(updated)
     }
@@ -341,8 +334,8 @@ fn start_inner(app: &AppHandle, taker: &Arc<NoteTaker>) -> Result<String, String
     }
     let system = Some(system);
     let stop_live = Arc::new(AtomicBool::new(false));
+    storage::save(&dir, &note)?;
     taker.notes.lock().unwrap().insert(0, note.clone());
-    taker.save(&note);
     *taker.recording.lock().unwrap() = Some(Recording {
         id: id.clone(),
         mic,
@@ -556,14 +549,12 @@ fn transcript(app: &AppHandle, taker: &Arc<NoteTaker>, id: &str) -> Result<(), S
     };
     let (speakers, lines) = built;
     let count = lines.len();
-    taker.change(app, id, |n| {
-        n.speakers = speakers;
-        n.lines = lines;
-        n.status = Status::Ready;
-        n.error = None;
-    });
-    let _ = std::fs::remove_file(&mic_path);
-    let _ = std::fs::remove_file(&system_path);
+    {
+        let mut notes = taker.notes.lock().unwrap();
+        let note = notes.iter_mut().find(|n| n.id == id).ok_or_else(|| t("The recording of this call is gone."))?;
+        storage::finish(&dir, note, speakers, lines)?;
+    }
+    let _ = app.emit_to(crate::HUB_LABEL, "notes-changed", id);
     crate::log::line(format!("notes: transcript of {count} lines"));
     Ok(())
 }
