@@ -180,7 +180,7 @@ export async function flowSettingsPage(page: HTMLElement, ctx: HubContext) {
     row(t("Summaries"), null, select(textEngines(), prefs.summaryEngine, (engine) => void ctx.setPrefs((p) => (p.summaryEngine = engine)))),
     h("div", { class: "hub-note", text: t("Only the transcript goes to the provider you choose. Claude Code and Codex use your existing sign-in. Model servers use the address and model configured in Settings → Chat.") }),
     divider(),
-    h("div", { class: "hub-note", text: t("Everything stays on this computer. Tell the people in the call that you are recording.") }),
+    h("div", { class: "hub-note", text: t("Audio and transcripts are stored on this computer. Summaries send text to the provider selected in Flow Settings. Tell the people in the call that you are recording.") }),
   ));
 
   // ── App ──

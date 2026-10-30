@@ -5029,21 +5029,6 @@
       "th": "เสียงของคุณไม่ออกจากคอมพิวเตอร์นี้: Parakeet แปลงเป็นข้อความในเครื่อง และทิ้งเสียงทันทีที่วางข้อความ",
       "zh-Hant": "你的聲音不會離開這臺電腦：Parakeet 在本機把它轉成文字，貼上后錄音即被丟棄。"
     },
-    "Everything stays on this computer. Tell the people in the call that you are recording.": {
-      "zh-Hans": "所有内容都留在这台电脑上。请告知通话中的人你正在录音。",
-      "hi": "सब कुछ इसी कंप्यूटर पर रहता है। कॉल में मौजूद लोगों को बताएँ कि आप रिकॉर्ड कर रहे हैं।",
-      "es": "Todo se queda en este ordenador. Avisa a las personas de la llamada de que estás grabando.",
-      "ar": "يبقى كل شيء على هذا الحاسوب. أخبر المشاركين في المكالمة أنك تسجّل.",
-      "fr": "Tout reste sur cet ordinateur. Préviens les personnes de l'appel que tu enregistres.",
-      "bn": "সবকিছু এই কম্পিউটারেই থাকে। কলে থাকা মানুষদের জানান যে আপনি রেকর্ড করছেন।",
-      "pt-BR": "Tudo fica neste computador. Avise as pessoas da chamada que você está gravando.",
-      "ru": "Всё остаётся на этом компьютере. Предупредите участников звонка, что вы ведёте запись.",
-      "id": "Semuanya tetap di komputer ini. Beri tahu orang di panggilan bahwa kamu merekam.",
-      "de": "Alles bleibt auf diesem Computer. Informiere die Gesprächsteilnehmer über die Aufnahme.",
-      "tr": "Her şey bu bilgisayarda kalır. Görüşmedeki kişilere kayıt yaptığını söyle.",
-      "th": "ทุกอย่างอยู่บนคอมพิวเตอร์นี้ แจ้งผู้ร่วมสายว่าคุณกำลังบันทึก",
-      "zh-Hant": "所有內容都留在這臺電腦上。請告知通話中的人你正在錄音。"
-    },
     "Not when Coucou starts with the computer.": {
       "zh-Hans": "Coucou 随电脑启动时不会打开。",
       "hi": "जब Coucou कंप्यूटर के साथ शुरू होता है तब नहीं।",
