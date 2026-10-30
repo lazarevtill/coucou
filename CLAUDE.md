@@ -51,6 +51,8 @@ Audio-route process grouping uses title-free window ownership. Never call `GetWi
 
 Notetaker retains one Record/Stop button across timer and note updates. Pending actions disable it; failed start/stop commands leave the error visible and permit retry. The stop bridge must propagate failures.
 
+Hub pages use the available window width. Notetaker uses flexible call-list and detail columns, with a container query to stack them in narrow windows. The compact history scrolls independently with Record/Stop pinned at its top. Audio details use two columns when they fit; text and action rows wrap. CSS resizing must preserve mounted controls and input drafts.
+
 Final transcription retains existing text on screen and emits `notes-progress` by source. Progress counts examined audio; speaker analysis has a stage and elapsed time, without a fabricated percentage. Only exact digital silence skips model inference. A failed model chunk fails the operation instead of saving a partial result as complete. Note writes are serialized; `notes/storage.rs` saves and syncs the final transcript before removing source audio. Failed commits retain recordings and the prior transcript for retry.
 
 Windows uses the Mac's short-speaker-fragment rules with temporal matching because Sherpa does not expose per-turn embeddings. Giving two remote speakers the same name combines their lines; microphone identity stays separate. Automatic speaker labels are estimates, not verified identities.

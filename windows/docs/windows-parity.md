@@ -43,6 +43,8 @@ Deleting a dictation keeps the entry visible until the history file is updated. 
 
 ## Call audio
 
+Notetaker fills the available width in maximized and restored windows. Its call list and note stay side by side when space permits; narrow windows place a scrollable call list above the note and keep Record/Stop at the top of that list. Capture details use two columns when they fit. Long text, speaker names and export controls wrap within the window.
+
 Choose microphone and playback independently under Flow Settings. A laptop microphone with Bluetooth earbuds is a supported combination. Automatic mode inspects active Windows audio sessions to follow the call application's devices, including selections made inside Zoom or browser calls. If no call is identified, it uses the Windows communications endpoints and then system defaults. Manual choices retain their device identity and never silently switch to speakers. The picker refreshes when devices connect or disconnect.
 
 Automatic detection groups audio processes by their owning application. Multiple microphone applications or multiple outputs within one browser can be ambiguous; Coucou reports this and asks for explicit device choices. It does not read browser tabs or claim to distinguish Google Meet from another audio tab in the same browser. The source meters identify the actual device and the application supplying an automatic route.
