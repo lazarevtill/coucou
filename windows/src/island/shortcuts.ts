@@ -18,7 +18,8 @@ let shortcutRequest = 0;
 
 /** What the shortcuts need from the island. */
 export interface ShortcutHost {
-  alert(view: IslandViewName): void;
+  /** Explicit key presses open views even with the idle island switched off. */
+  openExplicit(view: IslandViewName): void;
   setView(view: IslandViewName): void;
   collapse(): void;
   emote(name: BotEmoteName): void;
@@ -43,7 +44,7 @@ function focusPill(host: ShortcutHost, id: string | null, open: boolean) {
   State.setFocus(id);
   State.cardSelection = null;
   Sound.play("blip");
-  if (open) host.alert("overview");
+  if (open) host.openExplicit("overview");
   else host.setView("overview");
 }
 
@@ -58,14 +59,14 @@ export function runGlobalShortcut(host: ShortcutHost, action: string, resume: ()
       } else {
         resume();
         // A waiting card is what the island opens on (State.defaultView).
-        host.alert(State.defaultView());
+        host.openExplicit(State.defaultView());
         host.takeKeyboard();
       }
       break;
 
     case "openChat":
       resume();
-      host.alert("prompt");
+      host.openExplicit("prompt");
       break;
 
     case "attachFrontWindow":
@@ -79,14 +80,14 @@ export function runGlobalShortcut(host: ShortcutHost, action: string, resume: ()
           ...(context.url ? { url: context.url } : {}) };
         State.chatHistory = [];
         resume();
-        host.alert("prompt");
+        host.openExplicit("prompt");
         host.takeKeyboard();
         State.notify();
       }).catch(error => {
         if (request !== shortcutRequest) return;
         State.noteMessage = String(error).replace(/^Error:\s*/, "");
         resume();
-        host.alert("note");
+        host.openExplicit("note");
       });
       break;
 
@@ -98,12 +99,12 @@ export function runGlobalShortcut(host: ShortcutHost, action: string, resume: ()
         // its card (permission or question) up. Nothing is answered from here.
         resume();
         State.setFocus(pending.pillId);
-        host.alert(pending.questions ? "question" : "approval");
+        host.openExplicit(pending.questions ? "question" : "approval");
         host.takeKeyboard();
       } else if (asking) {
         resume();
         State.setFocus(asking.id);
-        host.alert("question");
+        host.openExplicit("question");
         host.takeKeyboard();
       } else {
         // Nothing is waiting: Mochi says so.

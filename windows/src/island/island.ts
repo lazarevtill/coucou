@@ -619,7 +619,7 @@ export class Island {
       return;
     }
     if (State.paused) return;
-    this.alert("wardrobe");
+    this.openExplicit("wardrobe");
   }
 
   /** An alert stopped waiting for an answer: let the island auto-close again. */

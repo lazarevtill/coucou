@@ -19,6 +19,7 @@ import {
 /** What the recap needs from the island. */
 export interface RecapHost {
   alert(view: IslandViewName): void;
+  openExplicit(view: IslandViewName): void;
 }
 
 /** Views the Monday card may replace; anything else is the user busy with something. */
@@ -49,7 +50,7 @@ class RecapController {
   /** Tray → Weekly recap. Shows the card even for an empty week. */
   async open(host: RecapHost) {
     await this.load();
-    host.alert("recap");
+    host.openExplicit("recap");
   }
 
   /** Monday ≥ 8 am, not shown yet this week, something to show, nobody interrupted. */

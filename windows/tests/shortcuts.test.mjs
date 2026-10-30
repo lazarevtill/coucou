@@ -278,6 +278,7 @@ test("Ctrl+↓ ↑ walk a card's list, Ctrl+O opens, Ctrl+E is the overview's di
 let did;
 const host = {
   alert: (v) => did.push(`alert:${v}`),
+  openExplicit: (v) => did.push(`alert:${v}`),
   setView: (v) => did.push(`setView:${v}`),
   collapse: () => did.push("collapse"),
   emote: (e) => did.push(`emote:${e}`),

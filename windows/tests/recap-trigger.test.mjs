@@ -14,7 +14,7 @@ const original = internals.invoke;
 let prefs;
 let history;
 let shown;
-const host = { alert: (view) => shown.push(view) };
+const host = { alert: (view) => shown.push(view), openExplicit: (view) => shown.push(view) };
 
 beforeEach(() => {
   mock.timers.enable({ apis: ["setTimeout"] });

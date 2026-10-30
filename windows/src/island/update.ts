@@ -41,6 +41,7 @@ function writeLater(later: Later) {
 /** What the update card needs from the island. */
 export interface UpdateHost {
   alert(view: IslandViewName): void;
+  openExplicit(view: IslandViewName): void;
   collapse(): void;
   emote(name: BotEmoteName): void;
 }
@@ -100,7 +101,8 @@ class UpdateController {
     // Rust offers only a version that is out; the status may just be a moment behind.
     if (!this.status.latest && offer === "announce") return;
     this.asking = false;
-    host.alert("update");
+    if (offer === "show") host.openExplicit("update");
+    else host.alert("update");
     if (offer === "announce") {
       void Bridge.updateShown("announce");
       host.emote("surprised");

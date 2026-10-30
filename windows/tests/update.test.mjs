@@ -60,6 +60,7 @@ let emotes;
 let collapsed;
 const host = {
   alert: (view) => shown.push(view),
+  openExplicit: (view) => shown.push(view),
   collapse: () => collapsed++,
   emote: (name) => emotes.push(name),
 };
