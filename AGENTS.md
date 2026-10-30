@@ -12,6 +12,7 @@ Read [CLAUDE.md](CLAUDE.md) for the repository structure and product rules. macO
 - Explicit shortcut and tray requests open their views even when the idle island is off. Keep automatic alerts subject to that preference.
 - Keep Notetaker's Record/Stop control mounted through clock ticks and note updates. Prevent duplicate pending actions and show start/stop failures so the user can retry.
 - Windows note export uses the native Save As dialog on a dedicated COM apartment. Cancellation writes nothing; retain native overwrite confirmation and show export failures without losing the note.
+- Dictionary, snippet and app-style edits must reach disk before replacing live values. Keep drafts and saved lists on failure, show the error and prevent overlapping submissions.
 - Wait for Flow setup before reporting keyboard-listener availability. Saved call diagnostics retain devices, received audio, peak levels and warnings; never infer speech or a disconnect from a discontinuity alone.
 - Windows dictation may consume only the explicitly selected Copilot chord while enabled. Ignore injected keys, preserve ordinary modifier shortcuts, and keep physical-key verification distinct from event-sequence tests.
 - Market integrations remain read-only, run only for enabled pills, and show unavailable prices as unknown. Keep credentials in the OS credential store.

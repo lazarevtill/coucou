@@ -33,6 +33,10 @@ The idle island can remain off while explicit shortcuts and tray commands open c
 
 Windows offers **Copilot** for keyboards that emit **Win + Shift + F23**, alongside Right Ctrl, Right Alt, Right Shift and Ctrl + Win. Selecting Copilot assigns that chord to dictation while Flow is enabled; other shortcuts pass through. A Copilot key remapped by Windows to Right Ctrl requires selecting Right Ctrl instead. Hardware that emits Win + C is not handled by the Copilot option. Synthetic key injection is ignored. The settings status reports a failed keyboard-listener startup instead of claiming the key is ready. Physical key presses and paste in the target application remain necessary hardware checks.
 
+## Dictionary, snippets and styles
+
+These editors save locally before applying changes to dictation. If the file cannot be written or replaced, the saved entries remain active, the error stays visible and entered text is retained for retry. App-style choices return to the saved selection after a failed write. Controls wait for the current save before accepting another edit.
+
 ## Call audio
 
 Choose microphone and playback independently under Flow Settings. A laptop microphone with Bluetooth earbuds is a supported combination. Automatic mode inspects active Windows audio sessions to follow the call application's devices, including selections made inside Zoom or browser calls. If no call is identified, it uses the Windows communications endpoints and then system defaults. Manual choices retain their device identity and never silently switch to speakers. The picker refreshes when devices connect or disconnect.

@@ -132,7 +132,7 @@ impl Default for Prefs {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Words {
     pub words: Vec<String>,
     pub replacements: Vec<Replacement>,
@@ -234,14 +234,20 @@ impl Store {
         self.prefs = prefs;
         Ok(())
     }
-    pub fn save_words(&self) {
-        self.save(&self.words, "words.json");
+    pub fn set_words(&mut self, words: Words) -> Result<(), String> {
+        self.write(&words, "words.json").map_err(|e| format!("Could not save dictionary: {e}"))?;
+        self.words = words;
+        Ok(())
     }
-    pub fn save_snippets(&self) {
-        self.save(&self.snippets, "snippets.json");
+    pub fn set_snippets(&mut self, snippets: Vec<Snippet>) -> Result<(), String> {
+        self.write(&snippets, "snippets.json").map_err(|e| format!("Could not save snippets: {e}"))?;
+        self.snippets = snippets;
+        Ok(())
     }
-    pub fn save_styles(&self) {
-        self.save(&self.app_styles, "styles.json");
+    pub fn set_styles(&mut self, styles: Vec<AppStyle>) -> Result<(), String> {
+        self.write(&styles, "styles.json").map_err(|e| format!("Could not save app styles: {e}"))?;
+        self.app_styles = styles;
+        Ok(())
     }
     fn save_history(&self) {
         self.save(&self.history, "history.json");
@@ -366,6 +372,94 @@ mod tests {
         assert!(store.set_prefs(prefs).is_err());
         assert_eq!(store.prefs, before);
         std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn dictionary_edits_are_durable_and_failed_writes_keep_the_live_and_saved_words() {
+        let (mut store, path) = temp_store();
+        let words = Words { words: vec!["Coucou".into()], replacements: vec![
+            Replacement { id: "one".into(), from: "cloud code".into(), to: "Claude Code".into() },
+        ] };
+        store.set_words(words.clone()).unwrap();
+        assert_eq!(Store::load_from(path.clone()).words, words);
+        let before = std::fs::read(path.join("words.json")).unwrap();
+        std::fs::create_dir(path.join("words.json.tmp")).unwrap();
+        assert!(store.set_words(Words::default()).is_err());
+        assert_eq!(store.words, words);
+        assert_eq!(std::fs::read(path.join("words.json")).unwrap(), before);
+        assert_eq!(store.prepare("coucou cloud code").text, "Coucou Claude Code");
+        std::fs::remove_dir(path.join("words.json.tmp")).unwrap();
+        store.set_words(Words::default()).unwrap();
+        assert_eq!(Store::load_from(path.clone()).words, Words::default());
+        std::fs::remove_file(path.join("words.json")).unwrap();
+        std::fs::remove_dir(path).unwrap();
+    }
+
+    #[test]
+    fn snippet_edits_are_durable_and_failed_writes_keep_the_live_and_saved_snippets() {
+        let (mut store, path) = temp_store();
+        let snippets = vec![Snippet { id: "one".into(), trigger: "signature".into(), text: "Hello world".into() }];
+        store.set_snippets(snippets.clone()).unwrap();
+        assert_eq!(Store::load_from(path.clone()).snippets, snippets);
+        let before = std::fs::read(path.join("snippets.json")).unwrap();
+        std::fs::create_dir(path.join("snippets.json.tmp")).unwrap();
+        assert!(store.set_snippets(vec![]).is_err());
+        assert_eq!(store.snippets, snippets);
+        assert_eq!(std::fs::read(path.join("snippets.json")).unwrap(), before);
+        assert_eq!(store.prepare("signature").snippets.values().next().unwrap(), "Hello world");
+        std::fs::remove_dir(path.join("snippets.json.tmp")).unwrap();
+        store.set_snippets(vec![]).unwrap();
+        assert!(Store::load_from(path.clone()).snippets.is_empty());
+        std::fs::remove_file(path.join("snippets.json")).unwrap();
+        std::fs::remove_dir(path).unwrap();
+    }
+
+    #[test]
+    fn style_edits_are_durable_and_failed_writes_keep_the_live_and_saved_styles() {
+        let (mut store, path) = temp_store();
+        let styles = vec![AppStyle { id: "mail".into(), name: "Mail".into(), style: Style::Polished }];
+        store.set_styles(styles.clone()).unwrap();
+        assert_eq!(Store::load_from(path.clone()).app_styles, styles);
+        let before = std::fs::read(path.join("styles.json")).unwrap();
+        std::fs::create_dir(path.join("styles.json.tmp")).unwrap();
+        assert!(store.set_styles(vec![]).is_err());
+        assert_eq!(store.app_styles, styles);
+        assert_eq!(std::fs::read(path.join("styles.json")).unwrap(), before);
+        assert_eq!(store.style_for(Some("mail")), Style::Polished);
+        std::fs::remove_dir(path.join("styles.json.tmp")).unwrap();
+        store.set_styles(vec![]).unwrap();
+        assert!(Store::load_from(path.clone()).app_styles.is_empty());
+        std::fs::remove_file(path.join("styles.json")).unwrap();
+        std::fs::remove_dir(path).unwrap();
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn locked_editor_files_reject_replacement_without_changing_live_values() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let (mut store, path) = temp_store();
+        store.set_words(Words::default()).unwrap();
+        store.set_snippets(vec![]).unwrap();
+        store.set_styles(vec![]).unwrap();
+        let locks: Vec<_> = ["words", "snippets", "styles"].iter().map(|name|
+            std::fs::OpenOptions::new().read(true).share_mode(0).open(path.join(format!("{name}.json"))).unwrap()
+        ).collect();
+        assert!(store.set_words(Words { words: vec!["unsaved".into()], replacements: vec![] }).is_err());
+        assert!(store.set_snippets(vec![Snippet { id: "one".into(), trigger: "unsaved".into(), text: "unsaved".into() }]).is_err());
+        assert!(store.set_styles(default_app_styles()).is_err());
+        assert!(store.words.words.is_empty());
+        assert!(store.snippets.is_empty());
+        assert!(store.app_styles.is_empty());
+        drop(locks);
+        let again = Store::load_from(path.clone());
+        assert!(again.words.words.is_empty());
+        assert!(again.snippets.is_empty());
+        assert!(again.app_styles.is_empty());
+        for name in ["words", "snippets", "styles"] {
+            std::fs::remove_file(path.join(format!("{name}.json"))).unwrap();
+            std::fs::remove_file(path.join(format!("{name}.json.tmp"))).unwrap();
+        }
+        std::fs::remove_dir(path).unwrap();
     }
 
     #[test]
