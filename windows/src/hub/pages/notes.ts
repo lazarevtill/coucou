@@ -23,6 +23,8 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
   let selected: string | null = state.recording ?? state.notes[0]?.id ?? null;
   let tab: "summary" | "transcript" = "summary";
   let startError = "";
+  let recordingBusy = false;
+  let left = false;
 
   page.append(ctx.hero("notes", t("Notetaker"), t("Your calls transcribed person by person, with a summary and the to-dos. No bot in the meeting."), [], true));
   if (ctx.status.models.parakeet.state !== "ready") {
@@ -38,46 +40,63 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
   page.append(meters.element);
   meters.update(state.audio);
   const listEl = h("div", { class: "hub-notes-list" });
+  const entries = h("div", { style: "display:contents" });
+  const recordError = h("div", { class: "hub-warn" });
+  const recordLabel = h("span");
+  const recordIcon = h("span", { class: "hub-rec", style: "background:#170c04;box-shadow:none;margin-inline-end:8px" });
+  const recordControl = button("", () => void changeRecording(), "primary");
+  recordControl.style.width = "100%";
+  recordControl.append(recordIcon, recordLabel);
+  listEl.append(recordControl, recordError, entries);
   const detail = h("div", { class: "hub-note-detail" });
   page.append(h("div", { class: "hub-notes" }, listEl, detail));
 
   const reload = async () => {
-    state = (await FlowBridge.notes()) ?? state;
+    const next = await FlowBridge.notes();
+    if (left) return;
+    state = next ?? state;
     meters.update(state.audio);
     if (selected && !state.notes.some((n) => n.id === selected)) selected = state.notes[0]?.id ?? null;
     drawList();
     drawDetail();
   };
 
-  function recordButton(): HTMLElement {
+  function updateRecordControl() {
+    recordControl.disabled = recordingBusy;
+    recordControl.className = state.recording ? "hub-btn danger" : "hub-btn primary";
+    recordIcon.hidden = Boolean(state.recording);
+    recordError.hidden = !startError;
+    recordError.textContent = startError;
     if (state.recording) {
       const rec = state.notes.find((n) => n.id === state.recording);
-      const b = button(`■  ${t("Stop")} · ${clock((Date.now() - (rec?.start ?? Date.now())) / 1000)}`, () => void FlowBridge.stopNote(), "danger");
-      b.dataset.ticking = "1";
-      return b;
+      recordLabel.textContent = `■  ${t("Stop")} · ${clock((Date.now() - (rec?.start ?? Date.now())) / 1000)}`;
+    } else {
+      recordLabel.textContent = t("Record a call");
     }
-    const b = button(t("Record a call"), () => {
-      startError = "";
-      FlowBridge.startNote().then((id) => {
-        selected = id;
-        void reload();
-      }, (err) => {
-        startError = String(err);
-        drawList();
-      });
-    }, "primary");
-    b.prepend(h("span", { class: "hub-rec", style: "background:#170c04;box-shadow:none;margin-inline-end:8px" }));
-    return b;
+  }
+
+  async function changeRecording() {
+    if (recordingBusy || left) return;
+    recordingBusy = true;
+    startError = "";
+    updateRecordControl();
+    try {
+      if (state.recording) await FlowBridge.stopNote();
+      else selected = await FlowBridge.startNote();
+      await reload();
+    } catch (err) {
+      startError = String(err).replace(/^Error:\s*/, "");
+    } finally {
+      recordingBusy = false;
+      if (!left) updateRecordControl();
+    }
   }
 
   function drawList() {
-    clear(listEl);
-    const rb = recordButton();
-    rb.style.width = "100%";
-    listEl.append(rb);
-    if (startError) listEl.append(h("div", { class: "hub-warn", text: startError }));
+    updateRecordControl();
+    clear(entries);
     if (state.notes.length === 0) {
-      listEl.append(h("div", { class: "hub-note", style: "padding:14px 4px", text: t("Your calls will show here. Click Record a call when one starts.") }));
+      entries.append(h("div", { class: "hub-note", style: "padding:14px 4px", text: t("Your calls will show here. Click Record a call when one starts.") }));
     }
     let day = "";
     for (const n of state.notes) {
@@ -85,7 +104,7 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
       if (d !== day) {
         day = d;
         const isToday = d === new Date().toDateString();
-        listEl.append(h("div", { class: "hub-group", style: "padding:10px 6px 2px", text: isToday ? t("Today") : new Date(n.start).toLocaleDateString(lang(), { day: "numeric", month: "long" }) }));
+        entries.append(h("div", { class: "hub-group", style: "padding:10px 6px 2px", text: isToday ? t("Today") : new Date(n.start).toLocaleDateString(lang(), { day: "numeric", month: "long" }) }));
       }
       const meta = n.status === "recording"
         ? t("Recording…")
@@ -100,9 +119,9 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
         drawDetail();
       } }, h("span", { class: "t", text: n.title }), h("span", { class: "m", text: meta }));
       if (n.status === "recording") item.querySelector(".m")!.prepend(h("span", { class: "hub-rec", style: "margin-inline-end:6px" }));
-      listEl.append(item);
+      entries.append(item);
     }
-    listEl.append(h("div", { style: "flex:1" }), h("div", { class: "hub-note", style: "padding:10px;border-radius:10px;background:rgba(255,255,255,0.04)", text: t("Audio and transcripts are stored on this computer. Summaries send text to the provider selected in Flow Settings. Tell the people in the call that you are recording.") }));
+    entries.append(h("div", { style: "flex:1" }), h("div", { class: "hub-note", style: "padding:10px;border-radius:10px;background:rgba(255,255,255,0.04)", text: t("Audio and transcripts are stored on this computer. Summaries send text to the provider selected in Flow Settings. Tell the people in the call that you are recording.") }));
   }
 
   function drawDetail() {
@@ -261,13 +280,10 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
   const timer = window.setInterval(() => {
     if (!state.recording) return;
     void FlowBridge.audioStatus().then(sources => { if (sources && page.isConnected) meters.update(sources); });
-    const b = listEl.querySelector<HTMLElement>("[data-ticking]");
-    if (!b) return;
-    const next = recordButton();
-    next.style.width = "100%";
-    b.replaceWith(next);
+    updateRecordControl();
   }, 1000);
   ctx.onLeave = () => {
+    left = true;
     unlisten();
     window.clearInterval(timer);
   };

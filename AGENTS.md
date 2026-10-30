@@ -7,6 +7,7 @@ Read [CLAUDE.md](CLAUDE.md) for the repository structure and product rules. macO
 - Automatic call audio follows observed application routes before Windows defaults; manual microphone and playback choices stay independent and fixed. Use the same recovery path for Settings meters and recording. Report ambiguous browser/app routes instead of guessing.
 - Audio-route discovery reads process ownership only, never window titles or UI messages. Open and stop capture off the UI thread; never hold recording locks across calls into that thread.
 - Keep floating toolbar buttons mounted during tooltip updates. Tooltips open inward without changing the capsule's position; native click-through and hover must use the rendered geometry.
+- Keep Notetaker's Record/Stop control mounted through clock ticks and note updates. Prevent duplicate pending actions and show start/stop failures so the user can retry.
 - Wait for Flow setup before reporting keyboard-listener availability. Saved call diagnostics retain devices, received audio, peak levels and warnings; never infer speech or a disconnect from a discontinuity alone.
 - Windows dictation may consume only the explicitly selected Copilot chord while enabled. Ignore injected keys, preserve ordinary modifier shortcuts, and keep physical-key verification distinct from event-sequence tests.
 - Market integrations remain read-only, run only for enabled pills, and show unavailable prices as unknown. Keep credentials in the OS credential store.

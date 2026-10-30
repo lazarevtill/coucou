@@ -248,7 +248,7 @@ export const FlowBridge = {
 
   notes: () => call<NotesState>("notes_state"),
   startNote: () => callOrThrow<string>("notes_start"),
-  stopNote: () => call<void>("notes_stop"),
+  stopNote: () => callOrThrow<void>("notes_stop"),
   renameNote: (id: string, title: string) => call<void>("notes_rename", { id, title }),
   renameSpeaker: (id: string, speaker: string, name: string) => call<void>("notes_rename_speaker", { id, speaker, name }),
   toggleTodo: (id: string, todo: string) => call<void>("notes_toggle_todo", { id, todo }),
