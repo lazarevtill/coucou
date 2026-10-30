@@ -735,8 +735,13 @@ pub fn pill_action(app: AppHandle, flow: State<Arc<Flow>>, action: String, id: O
         }
         "finish" => flow.send(KeyEvent::Finish),
         "cancel" => flow.send(KeyEvent::Cancel),
-        "note" => crate::notes::toggle(&app),
-        "stopNote" => crate::notes::stop(&app),
+        "note" | "stopNote" => {
+            // Device opening, recovery and writer draining must not block the UI.
+            tauri::async_runtime::spawn_blocking(move || {
+                if action == "note" { crate::notes::toggle(&app); }
+                else { crate::notes::stop(&app); }
+            });
+        }
         "hub" => crate::show_hub(&app, None),
         "announcement" | "dismiss" => {
             let state = pill::get(&app).map(|p| p.state());

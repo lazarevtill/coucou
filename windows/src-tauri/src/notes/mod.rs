@@ -703,8 +703,9 @@ pub async fn notes_start(app: AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn notes_stop(app: AppHandle) {
-    stop(&app);
+pub async fn notes_stop(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || stop(&app))
+        .await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

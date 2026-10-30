@@ -399,7 +399,7 @@ pub fn process_ancestors(pid: u32) -> Vec<u32> {
 /// by their owning application, without reading titles, pages or window content.
 pub fn audio_process_families(pids: &[u32]) -> HashMap<u32, (u32, String)> {
     let processes = process_table();
-    let owners: std::collections::HashSet<_> = top_windows().into_iter().map(|(_, pid, _)| pid).collect();
+    let owners = top_window_processes();
     pids.iter().filter_map(|&pid| {
         let ancestors = session_window::ancestors(&processes, pid);
         if pid == std::process::id() || ancestors.contains(&std::process::id()) { return None; }
@@ -409,6 +409,65 @@ pub fn audio_process_families(pids: &[u32]) -> HashMap<u32, (u32, String)> {
         let process = processes.get(&family)?;
         Some((pid, (family, process.exe.trim_end_matches(".exe").to_string())))
     }).collect()
+}
+
+/// Audio routing needs only ownership. In particular, GetWindowTextW sends a
+/// synchronous message for our own windows and would deadlock against a UI
+/// command waiting for the recording lock held by the audio monitor.
+fn top_window_processes() -> std::collections::HashSet<u32> {
+    unsafe extern "system" fn collect(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let owners = unsafe { &mut *(lparam.0 as *mut std::collections::HashSet<u32>) };
+        unsafe {
+            if IsWindowVisible(hwnd).as_bool() && GetWindow(hwnd, GW_OWNER).is_err() {
+                let mut pid = 0;
+                GetWindowThreadProcessId(hwnd, Some(&mut pid));
+                if pid != 0 { owners.insert(pid); }
+            }
+        }
+        true.into()
+    }
+    let mut owners = std::collections::HashSet::new();
+    unsafe { let _ = EnumWindows(Some(collect), LPARAM(&mut owners as *mut _ as isize)); }
+    owners
+}
+
+#[cfg(test)]
+mod audio_window_tests {
+    use super::*;
+    use std::{sync::mpsc, time::Duration};
+    use ::windows::Win32::UI::WindowsAndMessaging::{CreateWindowExW, DestroyWindow,
+        PeekMessageW, MSG, PM_NOREMOVE, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE};
+
+    #[test]
+    fn audio_routes_and_context_enumeration_do_not_wait_for_our_ui_thread() {
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        // A real same-process window whose UI thread cannot answer WM_GETTEXT.
+        // This reproduces recording's monitor/Stop lock inversion without audio.
+        let owner = std::thread::spawn(move || unsafe {
+            let window = CreateWindowExW(WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+                w!("STATIC"), w!("Coucou route test"), WS_POPUP | WS_VISIBLE,
+                -32000, -32000, 1, 1, None, None, None, None).unwrap();
+            ready_tx.send(()).unwrap();
+            let _ = release_rx.recv();
+            let mut message = MSG::default();
+            let _ = PeekMessageW(&mut message, None, 0, 0, PM_NOREMOVE);
+            DestroyWindow(window).unwrap();
+        });
+        ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let (done_tx, done_rx) = mpsc::channel();
+        let enumerator = std::thread::spawn(move || {
+            let own = std::process::id();
+            let families = audio_process_families(&[own]);
+            let windows = context_windows();
+            done_tx.send(families.is_empty() && windows.iter().all(|(_, pid, _, _)| *pid != own)).unwrap();
+        });
+        let result = done_rx.recv_timeout(Duration::from_secs(2));
+        release_tx.send(()).unwrap();
+        owner.join().unwrap();
+        enumerator.join().unwrap();
+        assert_eq!(result.ok(), Some(true), "window enumeration waited for Coucou's UI thread");
+    }
 }
 
 /// Visible top-level windows that are nobody's dialog and have a title:
@@ -422,6 +481,9 @@ fn top_windows() -> Vec<(isize, u32, String)> {
             }
             let mut pid = 0u32;
             GetWindowThreadProcessId(hwnd, Some(&mut pid as *mut u32));
+            // Session focus and explicit attachments only target other apps.
+            // Skip our UI before GetWindowTextW can send it a blocking message.
+            if pid == std::process::id() { return true.into(); }
             let mut text = [0u16; 512];
             let len = GetWindowTextW(hwnd, &mut text);
             if len > 0 {

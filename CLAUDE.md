@@ -33,6 +33,8 @@ The Flow toolbar uses `windows/src/pill/surface.ts` to retain its capsule and co
 
 `speech/source.rs` shares audio health and reconnection between Notetaker and the no-file Settings test. `speech/routing.rs` follows the active call application's Windows audio sessions before system defaults. Manual microphone and playback choices remain independent; ambiguous app routes must be visible. Hardware diagnostics are ignored tests that require explicit live-test authorization.
 
+Audio-route process grouping uses title-free window ownership. Never call `GetWindowTextW` on Coucou's windows from a recording worker: it synchronously waits for the UI thread. Capture start/stop and writer draining run off the UI thread, including floating-toolbar actions.
+
 `windows/src-tauri/src/local_chat.rs` owns model-server chat. Settings migration must retain Windows preferences and plugin trust, preserve explicit current values, and back up a migrated settings file before replacing it. Generic settings saves cannot grant plugin trust.
 
 `windows/src-tauri/src/file_share.rs` opens Windows Share for a copied inbox file. Its native attachment is prepared off the UI thread and marshalled through an agile reference. Only explicit clicks open the chooser; the user selects the mail application and sends the draft.
