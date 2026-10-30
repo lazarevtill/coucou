@@ -47,6 +47,8 @@ Audio-route process grouping uses title-free window ownership. Never call `GetWi
 
 Notetaker retains one Record/Stop button across timer and note updates. Pending actions disable it; failed start/stop commands leave the error visible and permit retry. The stop bridge must propagate failures.
 
+Windows note exports use `notes/export.rs` and the native Save As dialog. Its dedicated COM apartment keeps the main UI responsive and preserves Windows overwrite confirmation. Cancellation writes no file; the page prevents duplicate dialogs and reports write failures and the chosen saved path. Export must not alter the stored note.
+
 `windows/src-tauri/src/local_chat.rs` owns model-server chat. Settings migration must retain Windows preferences and plugin trust, preserve explicit current values, and back up a migrated settings file before replacing it. Generic settings saves cannot grant plugin trust.
 
 `windows/src-tauri/src/file_share.rs` opens Windows Share for a copied inbox file. Its native attachment is prepared off the UI thread and marshalled through an agile reference. Only explicit clicks open the chooser; the user selects the mail application and sends the draft.

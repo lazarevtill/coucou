@@ -25,6 +25,8 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
   let startError = "";
   let recordingBusy = false;
   let left = false;
+  let exporting = false;
+  let exportResult: { id: string; path?: string; error?: string } | null = null;
 
   page.append(ctx.hero("notes", t("Notetaker"), t("Your calls transcribed person by person, with a summary and the to-dos. No bot in the meeting."), [], true));
   if (ctx.status.models.parakeet.state !== "ready") {
@@ -151,6 +153,7 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
     const tools = h("div", { class: "hub-row", style: "gap:8px" });
     const confirm = h("div", {});
     if (note.status === "ready") {
+      const noteId = note.id;
       tools.append(button(t("Copy as Markdown"), async () => {
         const md = await FlowBridge.markdown(note.id);
         if (md && (await FlowBridge.copy(md))) {
@@ -158,7 +161,24 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
           setTimeout(() => (copied.textContent = ""), 1500);
         }
       }, "", true));
-      tools.append(button(t("Export as Markdown…"), () => void FlowBridge.exportNote(note.id).catch(() => {}), "", true));
+      const exportControl = button(t("Export as Markdown…"), () => void exportNote(), "", true);
+      exportControl.disabled = exporting;
+      tools.append(exportControl);
+      async function exportNote() {
+        if (exporting || left) return;
+        exporting = true;
+        exportResult = null;
+        exportControl.disabled = true;
+        try {
+          const path = await FlowBridge.exportNote(noteId);
+          if (path) exportResult = { id: noteId, path };
+        } catch (error) {
+          exportResult = { id: noteId, error: String(error).replace(/^Error:\s*/, "") };
+        } finally {
+          exporting = false;
+          if (!left) drawDetail();
+        }
+      }
     }
     if (note.status !== "recording") {
       tools.append(iconButton("trash", t("Delete"), () => {
@@ -176,6 +196,14 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
       tools,
       confirm,
     );
+    if (exportResult?.id === note.id) {
+      detail.append(h("div", {
+        class: exportResult.error ? "hub-warn" : "hub-note",
+        role: exportResult.error ? "alert" : "status",
+        style: "overflow-wrap:anywhere",
+        text: exportResult.error ?? t("Saved as {name}", { name: exportResult.path ?? "" }),
+      }));
+    }
 
     if (note.audioSources?.length && note.status !== "recording") detail.append(audioReport(note.audioSources));
     else if (note.captureWarning) detail.append(h("div", { class: "hub-warn", text: note.captureWarning }));
