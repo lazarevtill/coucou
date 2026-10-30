@@ -26,18 +26,23 @@ The integrated branch contains upstream 0.5.6 at `37e457ddae3cbe7be4a6539cc5b1cd
 
 | Check | Result |
 | --- | --- |
-| Frontend suite | 660 passed, zero failed |
-| Rust workspace suite | 795 passed: 746 app, 46 hook, 3 relay; 21 opt-in tests ignored |
+| Frontend suite | 674 passed, zero failed |
+| Rust workspace suite | 805 passed: 756 app, 46 hook, 3 relay; 21 opt-in tests ignored |
 | TypeScript and Vite production frontend | Passed; the large shared translation-chunk warning remains unsuppressed |
 | Rust compile | Passed without warnings |
 | Remote CI | Unverified for the latest source. GitHub rejects workflow dispatch with HTTP 422, “Actions has been disabled for this repository,” and supplies no GitHub Actions run for the latest commit |
-| Windows installer | NSIS 0.5.6 from source `6acaa22326bd81cc469e9fa8c3811d4c7d199bee` built and installed successfully; complete executable matches the compiled release with Tauri's NSIS bundle marker |
+| Windows installer | NSIS 0.5.6 from source `c9760543e9f4a32d094a0cc7c10ad092ad1f3dc2` built and installed successfully; complete executable matches the compiled release with Tauri's NSIS bundle marker |
 | Installed startup | Native GUI shows 0.5.6 and Ready with the selected Right Alt listener. The process remains responsive; Parakeet loaded in about 1.8 seconds |
 | Installation preservation | Twenty-one checked files unchanged immediately after installation, including notes, models, preferences and both CLI configurations |
 | Native provider controls | Both Use for all text buttons completed successfully; all four targets changed correctly and unrelated preferences were retained. Original choices were restored after testing |
+| Native summaries | Both Claude Code and Codex generated the expected summary, key points and Friday task from a synthetic call through the installed GUI. Original provider preferences were restored |
+| Native Markdown export | Windows Save As cancellation wrote nothing; a subsequent save produced the complete 551-byte synthetic note export at the chosen path. The stored note was unchanged |
+| Native dictionary, snippets and styles | Injected write failures showed errors and retained the draft or saved selection. Each succeeded after removing the failure and retrying. Original data and preferences were restored |
+| History deletion and erasure | Four frontend regressions and four native store tests passed, including Windows file locks, retry, duplicate submissions, incoming dictations and partial statistics-erasure failure. Checks use isolated synthetic data |
+| Hub artwork | Native startup, minimize/restore and close/reopen checks showed the animated logo, page characters and backgrounds. The initial visibility snapshot runs on the UI queue; existing hidden-window animation checks pass |
 | Native Notetaker | Start, live transcript, Stop and saved Capture details passed with quiet synthetic speech. Stop retained its UI identity across clock/transcript updates, the full expected sentence was saved and the app remained responsive |
 | UI deadlock regression | An unpumped native window reproduces the synchronous window-title wait before the fix; the title-free audio-route scan passes |
-| Explicit-view regression | Five tests reproduce suppressed shortcut/recap/update requests with the island off; all pass with explicit opening. The installed shortcut reaches the app; visual confirmation remains open because the desktop helper does not expose the floating window |
+| Explicit-view regression | Five tests reproduce suppressed shortcut/recap/update requests with the island off; all pass with explicit opening. The installed chat shortcut expands the native window from 240 by 6 to 720 by 320 and focuses it. Visual and typing confirmation remains open because the desktop helper does not expose the floating window |
 | Installed speech models | All six files match the manifest sizes and SHA-256 hashes; an optimized native check passed transcription, automatic calibration and manual override |
 | Both official CLI subscriptions | Real text replies and structured text tasks passed |
 | Both CLI visual paths | Real image identification and both pages of a synthetic PDF passed |
