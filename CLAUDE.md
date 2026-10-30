@@ -29,6 +29,8 @@ The connections view's Use for all text action selects chat and uses `flow_use_a
 
 Public crypto quotes and read-only portfolios use `windows/src-tauri/src/markets/`, with request limits and service origins in its `defaults.json`. They must remain read-only and inactive until the user enables the pill. Portfolio keys stay in the OS credential store; unavailable balances and prices must remain visibly incomplete.
 
+Music state includes the native session's `canSeek` capability (Windows media controls or MPRIS CanSeek). A disabled seek bar remains read-only; native Windows commands also recheck that capability before changing position. Apple Music and Spotify retain separate state and commands.
+
 Speech and call recording use `windows/src-tauri/src/speech/` and `notes/`. Flow Settings selects text providers, audio devices and automatic or manual CPU threads. Source recovery runs independently of transcription; lost-audio warnings remain in the note. See `windows/docs/windows-parity.md` for feature coverage and hardware verification limits.
 
 Parakeet calibration uses at most six seconds from the most energetic window of a successful transcription. Leading silence must not invalidate tuning. Every candidate must produce a stable, matching transcript before its timing can win; the source transcript is unchanged and no calibration audio is saved.

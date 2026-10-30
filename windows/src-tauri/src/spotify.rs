@@ -143,6 +143,9 @@ impl PlayerState {
                         self.shuffle = *on;
                     }
                 }
+                "CanSeek" => {
+                    if let Value::Bool(on) = value { self.can_seek = *on; }
+                }
                 "LoopStatus" => {
                     if let Some(s) = value.str() {
                         self.repeat = s != "None";
@@ -1405,6 +1408,19 @@ mod tests {
         // 2023-11-14T22:13:20Z, as Windows and as Unix counts it.
         assert_eq!(windows_time_to_unix_ms(133_444_736_000_000_000), Some(1_700_000_000_000.0));
         assert_eq!(windows_time_to_unix_ms(0), None);
+    }
+
+    #[test]
+    fn mpris_seeking_follows_the_session_capability() {
+        let mut state = PlayerState::default();
+        assert!(!state.can_seek);
+        state.apply(&[("CanSeek".into(), Value::Bool(true))], 0.0);
+        assert!(state.can_seek);
+        state.apply(&[("Volume".into(), Value::Float(0.5))], 1.0);
+        assert!(state.can_seek);
+        state.apply(&[("CanSeek".into(), Value::Bool(false))], 2.0);
+        assert!(!state.can_seek);
+        assert_eq!(serde_json::to_value(&state).unwrap()["canSeek"], false);
     }
 
     #[test]

@@ -30,6 +30,8 @@ pub struct PlayerState {
     pub installed: bool,
     pub track: Option<Track>,
     pub playing: bool,
+    /// The current native session supports changing the playback position.
+    pub can_seek: bool,
     /// Seconds at `position_at`; while playing, the real position runs on from there.
     pub position: f64,
     /// Unix milliseconds.
@@ -48,6 +50,7 @@ impl Default for PlayerState {
             installed: false,
             track: None,
             playing: false,
+            can_seek: false,
             position: 0.0,
             position_at: 0.0,
             shuffle: false,

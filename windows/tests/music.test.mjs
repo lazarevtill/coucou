@@ -11,6 +11,11 @@ import { buildAppleMusicCard, buildAppleMusicPill } from "../src/views/apple-mus
 import { registerMusicHandlers } from "../src/island/music.ts";
 
 installFakeDom();
+function point(element, type, clientX) {
+  for (const listener of element.listeners.get(type) ?? []) {
+    listener({ type, button: 0, pointerId: 1, clientX, stopPropagation() {} });
+  }
+}
 const track = { id: "apple-music:track:1", title: "Song", artist: "Artist", album: "Album", duration: 180, artUrl: "apple-art" };
 beforeEach(() => {
   calls.length = 0;
@@ -55,4 +60,28 @@ test("Apple Music events name only their pill and drive the shared dance", async
   const pill = buildAppleMusicPill(task, () => {});
   pill.el.find(".np-pill-btn")[1].fire("click");
   assert.deepEqual(sent("apple_music_control").at(-1), { action: "next", value: null });
+});
+
+test("an unsupported seek stays read-only and does not change the playback position", () => {
+  Music.state = { ...Music.state, canSeek: false, playing: false, position: 12, positionAt: Date.now() };
+  const card = buildAppleMusicCard();
+  card.sync();
+  const progress = card.el.querySelector(".np-progress").querySelector(".np-bar");
+  point(progress, "pointerdown", 1);
+  point(progress, "pointerup", 1);
+  assert.deepEqual(sent("apple_music_control"), []);
+  assert.equal(Music.state.position, 12);
+  assert.equal(progress.getAttribute("aria-disabled"), "true");
+});
+
+test("seeking becomes available when the selected player advertises it", () => {
+  Music.state = { ...Music.state, canSeek: true, playing: false };
+  const card = buildAppleMusicCard();
+  card.sync();
+  const progress = card.el.querySelector(".np-progress").querySelector(".np-bar");
+  point(progress, "pointerdown", 0.5);
+  point(progress, "pointerup", 0.5);
+  assert.deepEqual(sent("apple_music_control"), [{ action: "seek", value: 90 }]);
+  assert.deepEqual(sent("spotify_control"), []);
+  assert.equal(progress.getAttribute("aria-disabled"), "false");
 });

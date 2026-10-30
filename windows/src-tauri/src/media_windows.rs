@@ -240,6 +240,7 @@ fn find_session(manager: &Manager, player: Player) -> Option<Session> {
 struct Snapshot {
     track: Option<Track>,
     playing: bool,
+    can_seek: bool,
     position: f64,
     /// When Windows last updated the position (Unix ms), if it says.
     updated_at: Option<f64>,
@@ -262,6 +263,7 @@ fn snapshot(session: &Session, player: Player) -> windows::core::Result<(Snapsho
     let info = session.GetPlaybackInfo()?;
     let snapshot = Snapshot {
         playing: info.PlaybackStatus()? == Status::Playing && track.is_some(),
+        can_seek: info.Controls().and_then(|c| c.IsPlaybackPositionEnabled()).unwrap_or(false),
         track,
         position: ticks_to_secs(timeline.Position()?.Duration - start),
         updated_at: windows_time_to_unix_ms(timeline.LastUpdatedTime()?.UniversalTime),
@@ -289,6 +291,7 @@ fn read_and_emit(app: &AppHandle, generation: u64, session: Option<&Session>, pl
                 s.state.installed = true;
                 s.state.track = snap.track;
                 s.state.playing = snap.playing;
+                s.state.can_seek = snap.can_seek;
                 // The position was true when Windows last updated it; while
                 // playing, the page runs it on from there.
                 let at = snap.updated_at.filter(|&t| t <= now).unwrap_or(now);
@@ -487,6 +490,12 @@ fn execute(session: &Session, action: &str, v: f64, seek_to: Option<f64>, player
         "previous" => asked!(session.TrySkipPreviousAsync()),
         "seek" => match (seek_to, session.GetTimelineProperties().and_then(|t| t.StartTime())) {
             (Some(target), Ok(start)) => {
+                // Some players accept the request even while advertising that
+                // seeking is unavailable. Do not show an invented new position.
+                if !session.GetPlaybackInfo().and_then(|i| i.Controls())
+                    .and_then(|c| c.IsPlaybackPositionEnabled()).unwrap_or(false) {
+                    return false;
+                }
                 asked!(session.TryChangePlaybackPositionAsync(start.Duration + (target * 10_000_000.0) as i64))
             }
             _ => false,
@@ -551,6 +560,9 @@ pub fn probe_apple_music() -> Result<bool, String> {
         let info = session.GetPlaybackInfo().map_err(|e| e.to_string())?;
         let props = session.TryGetMediaPropertiesAsync().and_then(|op| op.get()).map_err(|e| e.to_string())?;
         println!("Apple Music session {index}: status={} title_chars={}", info.PlaybackStatus().map_err(|e| e.to_string())?.0, props.Title().map_err(|e| e.to_string())?.len());
+        let controls = info.Controls().map_err(|e| e.to_string())?;
+        println!("Apple Music native controls: play={:?} pause={:?} toggle={:?} seek={:?}",
+            controls.IsPlayEnabled(), controls.IsPauseEnabled(), controls.IsPlayPauseToggleEnabled(), controls.IsPlaybackPositionEnabled());
     }
     if let Some(session) = find_session(&manager, Player::AppleMusic) {
         let (state, _) = snapshot(&session, Player::AppleMusic).map_err(|e| e.to_string())?;

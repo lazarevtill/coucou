@@ -38,7 +38,7 @@ export function togglePlay(player: MediaPlayer) {
 function seek(seconds: number, player: MediaPlayer) {
   const s = player.store.state;
   const track = s.track;
-  if (!s.running || !track || isAd(track)) return;
+  if (!s.running || !s.canSeek || !track || isAd(track)) return;
   const target = Math.min(Math.max(0, seconds), Math.max(0, track.duration - 1));
   player.store.state = { ...s, position: target, positionAt: Date.now() };
   State.notify();
@@ -376,7 +376,10 @@ export function buildMediaCard(player: MediaPlayer): MediaCardHost {
       artImg.removeAttribute("src");
     }
 
-    progress.enabled = !isAd(track) && track.duration > 0;
+    progress.enabled = s.canSeek && !isAd(track) && track.duration > 0;
+    progress.el.setAttribute("aria-disabled", String(!progress.enabled));
+    progress.el.title = progress.enabled ? "" : t("Not available");
+    progress.el.style.cursor = progress.enabled ? "pointer" : "default";
     paintProgress();
 
     shuffle.style.color = s.shuffle ? green : "#6B7079";

@@ -19,6 +19,8 @@ export interface MediaState {
   installed: boolean;
   track: MediaTrack | null;
   playing: boolean;
+  /** Whether the native player currently supports seeking. */
+  canSeek: boolean;
   /** Seconds at `positionAt` (Unix ms); while playing it runs on from there. */
   position: number;
   positionAt: number;
@@ -29,7 +31,7 @@ export interface MediaState {
 }
 
 export const IDLE_MEDIA: MediaState = {
-  running: false, installed: false, track: null, playing: false,
+  running: false, installed: false, track: null, playing: false, canSeek: false,
   position: 0, positionAt: 0, shuffle: false, repeat: false, volume: 50,
 };
 
