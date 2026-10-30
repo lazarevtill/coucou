@@ -4,30 +4,32 @@ The Windows app uses native Windows services where the Mac uses Apple APIs. The 
 
 | Workflow | Windows implementation | Verification still needed |
 | --- | --- | --- |
-| Claude Code and Codex sign-in, chat, projects | Official installed CLIs and existing sign-ins; equal connection controls | Native click-through and hook approval round trip |
+| Claude Code and Codex sign-in, chat, projects | Official installed CLIs and existing sign-ins; both native Use for all text controls verified | Native chat and hook approval round trip |
 | CLI image and PDF chat | Same visual content for both agents; Windows renders complete PDFs locally with limits | Native file drop and chat click-through; signed-in image/PDF checks use synthetic fixtures |
 | Agent activity, diffs, permissions, questions, terminal focus | Hooks, tray, island and native Windows focus | End-to-end session approval on installed build |
 | Cloud and local model chat | API providers, Ollama, LM Studio, configured model servers | Real accounts and local servers beyond CLI checks |
 | Flow dictation, dictionary, snippets, styles and statistics | Parakeet, Windows keyboard handling, local history and selectable cleanup provider | Native microphone and paste in third-party apps |
 | Parakeet performance | Measured CPU thread selection and manual override; bundled runtime is CPU-only | GPU/NPU runtime support is not implemented |
-| Notetaker Record a call | Separate microphone and WASAPI playback sources; device selection, live meters, timestamp alignment, speaker separation, summaries and export | Real-call and Bluetooth/wired/USB device matrix |
+| Notetaker Record a call | Separate microphone and WASAPI playback sources; device selection, live meters, timestamp alignment, speaker separation, summaries and export; native synthetic start/transcribe/stop verified | Real-call and Bluetooth/wired/USB device matrix |
 | Voice assistant | Local recognition and system speech; Claude API, Claude Code, Codex or model-server brain; explicit mail drafts | Microphone, playback and spoken action round trip |
 | Service pills | Stripe, n8n, GitHub, GitLab, Gitea, Vercel, Resend, Notion, Cal.com and WhatsApp; Cal.com month/day/booking details | Configured service accounts |
 | Spotify | Windows system media controls | Installed Spotify playback |
 | Wardrobe, desktop Mochi, sounds, shortcuts, displays, recap | Existing Windows frontend and native integration | Native visual and interaction checks |
 | Phone approval and chat | Android phone link with device authentication | Live Android pairing and remote flow |
-| Apple Music | Dedicated native integration, commands, state, artwork, per-app volume, pill and voice actions | Playback controls and artwork on a playing track; discovery and 5% volume verified on the installed app |
+| Apple Music | Dedicated integration, commands, state, artwork, per-app volume, pill and voice actions; native track/artwork, play/pause and 5% volume verified | Sustained audible playback and seeking in a session that supports it |
 | Crypto prices | Coinbase and OKX public quotes, 24-hour charts, currency selection and opt-in movement alerts | Native settings and pill interaction |
 | Portfolio | Read-only exchange balances, 16 native wallet networks, USD valuation and partial-data indicators | Real exchange accounts and each public wallet service |
 | Chat microphone and window context | Local dictation fills the editable prompt; selected app/window title and an exposed browser address accompany a new chat | Native microphone, browser navigation-bar detection and window picker click-through |
 | Screenshots and annotation | Open native Windows Snipping Tool, capture and annotate there, then explicitly paste a PNG into chat; preview and remove before Send | Installed Snipping Tool discovery is verified; capture, annotation and paste need GUI testing |
 | Dropped-file email | Native Windows Share attaches the copied inbox file; the user chooses a mail app and sends there | Mail-client selection and draft attachment on the installed build; native attachment packaging is tested |
-| Traditional Chinese and Thai | Complete Windows catalogs and fourteen-language picker; native locale and plural rules | Native linguistic and layout review |
+| Sixteen languages, including Korean, Japanese, Traditional Chinese and Thai | Complete Windows catalogs, language picker and native locale/plural rules | Native linguistic and layout review |
 | Apple iPhone/iCloud features | Windows has Android pairing; no iPhone transport equivalent yet | Cross-platform phone protocol and iPhone implementation |
 
 ## Floating toolbar and dictation key
 
 Flow Settings selects the dictation key and the bottom, left or right screen edge. The floating toolbar keeps its buttons in place when tooltips appear; side tooltips open toward the screen interior. Its microphone starts hands-free dictation, the record button toggles Notetaker, and the window button opens Coucou.
+
+The idle island can remain off while explicit shortcuts and tray commands open chat, wardrobe, recap and update views. Background alerts continue to respect the island preference.
 
 Windows offers **Copilot** for keyboards that emit **Win + Shift + F23**, alongside Right Ctrl, Right Alt, Right Shift and Ctrl + Win. Selecting Copilot assigns that chord to dictation while Flow is enabled; other shortcuts pass through. A Copilot key remapped by Windows to Right Ctrl requires selecting Right Ctrl instead. Hardware that emits Win + C is not handled by the Copilot option. Synthetic key injection is ignored. The settings status reports a failed keyboard-listener startup instead of claiming the key is ready. Physical key presses and paste in the target application remain necessary hardware checks.
 
@@ -49,7 +51,9 @@ Microphone and playback are stored separately at the 16 kHz mono rate required b
 
 ## Performance evidence
 
-A release-profile check using the installed models on the development laptop completed synthetic transcription and automatic calibration, then produced the same transcript with the manual one-thread setting. The six-second calibration sample took about 534 ms at one thread, 336 ms at two, 247 ms at four, 675 ms at eight and 1,071 ms at sixteen. These measurements describe that machine and fixture, not a universal performance guarantee. Automatic mode measures the user's machine and stores timings, never calibration audio.
+A native check using the installed models completed transcription and automatic calibration with ten seconds of leading and trailing silence, then produced the same original transcript with a manual one-thread setting. Its six-second calibration segment took about 430 ms at one thread, 314 ms at two, 234 ms at four, 653 ms at eight and 1,283 ms at sixteen. A separate call on the installed build selected two threads for its sample. These measurements describe that machine and those recordings, not a universal performance guarantee.
+
+Automatic mode selects a bounded segment containing audio from a successful transcription; leading silence does not prevent measurement. A thread count can win only after repeated matching transcripts. The source transcript stays unchanged. Settings shows the measured choice and retains a manual override. Only timings are stored, never calibration audio.
 
 ## Public crypto prices
 
@@ -68,6 +72,8 @@ Refresh runs only while the pill is enabled and Coucou is not paused. Each accou
 Apple Music and Spotify have separate pills, commands, event streams and player state. Each talks directly to its own native application and keeps sign-in in that application. Shared code handles only Windows media APIs and the common player layout.
 
 Apple Music volume targets its own Core Audio sessions, including its packaged library agent, across active speaker and headphone outputs. Other players and the system volume are not changed. Playback actions use the selected song or queue in Apple Music. If the application has no playable selection, open Apple Music and choose a song.
+
+Seeking follows the player's advertised capability. The Windows backend rechecks [whether playback-position changes are supported](https://learn.microsoft.com/en-us/uwp/api/windows.media.control.globalsystemmediatransportcontrolssessionplaybackcontrols.isplaybackpositionenabled) before sending a seek. Unsupported sessions show a read-only progress bar; Coucou does not invent a new position when the player cannot seek. The development laptop's Apple Music session currently reports seeking unavailable.
 
 ## Calendar
 
