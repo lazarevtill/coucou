@@ -11,7 +11,7 @@ import { DEFAULT_SETTINGS } from "../src/core/state.ts";
 const settings = (over = {}) => ({ ...DEFAULT_SETTINGS, ...over });
 
 test("the ids and key names match the Rust side and the Mac", () => {
-  assert.deepEqual(PROVIDERS.map((p) => p.id), ["claude-code", "codex", "anthropic", "google", "openai", "openrouter", "ollama", "lmstudio", "custom"]);
+  assert.deepEqual(PROVIDERS.map((p) => p.id), ["claude-code", "codex", "anthropic", "google", "openai", "openrouter", "ollama", "lmstudio", "custom", "cursor", "copilot"]);
   for (const id of ["claude-code", "codex"]) {
     assert.equal(providerDef(id).key, null);
     assert.equal(providerDef(id).urlField, null);
@@ -44,6 +44,13 @@ test("model servers show in the picker once connected, or while in use", () => {
   assert.deepEqual(ids(settings()), ["claude-code", "codex", "anthropic", "google", "openai", "openrouter"]);
   assert.deepEqual(ids(settings({ ollamaUrl: "http://127.0.0.1:11434" })), ["claude-code", "codex", "anthropic", "google", "openai", "openrouter", "ollama"]);
   assert.deepEqual(ids(settings({ chatProvider: "custom" })), ["claude-code", "codex", "anthropic", "google", "openai", "openrouter", "custom"]);
+});
+
+test("Cursor and Copilot show once their subscription is on, or while in use", () => {
+  const ids = (s, on) => visibleProviders(s, on).map((p) => p.id);
+  assert.deepEqual(ids(settings(), new Set(["cursor"])), ["claude-code", "codex", "anthropic", "google", "openai", "openrouter", "cursor"]);
+  assert.deepEqual(ids(settings({ chatSubscriptions: { copilot: true } })), ["claude-code", "codex", "anthropic", "google", "openai", "openrouter", "copilot"]);
+  assert.deepEqual(ids(settings({ chatProvider: "copilot" })), ["claude-code", "codex", "anthropic", "google", "openai", "openrouter", "copilot"]);
 });
 
 test("the saved model is kept when offered, else a sensible one is picked", () => {

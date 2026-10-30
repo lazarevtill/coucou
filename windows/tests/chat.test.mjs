@@ -10,6 +10,7 @@ import { calls, emit, internals, sent } from "./tauri.mjs";
 installFakeDom();
 const { buildPrompt } = await import("../src/views/chat.ts");
 const { DEFAULT_SETTINGS, State } = await import("../src/core/state.ts");
+const { setSubscriptions } = await import("../src/core/subscriptions.ts");
 
 /** What the mocked Rust side answers, by command. */
 let answers;
@@ -289,6 +290,38 @@ test("plain text paste is untouched and oversized or multiple images are rejecte
   assert.equal(sent("chat_image_attach").length, 0);
   assert.match($(".chat-image-status").textContent, /too large/);
 });
+
+for (const [id, tool] of [["anthropic", "Claude Code"], ["openai", "Codex CLI"]]) {
+  test(`${tool} subscription alias preserves API models and exposes Stop without an API key`, async () => {
+    answers.subscription_status = [{ provider: id, tool, on: true, installed: true }];
+    setSubscriptions(answers.subscription_status);
+    try {
+      State.settings = { ...State.settings, chatProvider: id, model: "saved-claude", chatModels: { openai: "saved-openai" } };
+      answers.chat_models = [{ id: "default", label: `${tool} default` }];
+      view.sync();
+      $(".model-btn").fire("click");
+      await flush();
+      assert.deepEqual(sent("secret_present"), []);
+      assert.deepEqual(sent("chat_models"), [{ provider: id }]);
+      view.el.find(".picker-model")[0].fire("click");
+      assert.equal(State.settings.model, "saved-claude");
+      assert.equal(State.settings.chatModels.openai, "saved-openai");
+      assert.equal(sent("save_settings").length, 0);
+      let fail;
+      answers.chat_send = () => new Promise((_, reject) => { fail = reject; });
+      answers.agent_chat_cancel = () => { fail(new Error("Reply stopped.")); };
+      $(".chat-input").value = "hello";
+      $(".send-btn").fire("click");
+      await flush();
+      assert.equal($(".send-btn").title, "Stop");
+      assert.equal($(".send-btn").disabled, false);
+      $(".send-btn").fire("click");
+      await flush();
+      assert.equal(sent("agent_chat_cancel").length, 1);
+      assert.equal(State.chatHistory.filter(m => m.role === "assistant").length, 0);
+    } finally { setSubscriptions([]); }
+  });
+}
 
 test("leaving chat discards an image that finishes attaching later", async () => {
   let finish;

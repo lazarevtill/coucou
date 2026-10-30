@@ -14,9 +14,20 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 
 use crate::settings::Settings;
-use crate::{claude, local_chat, openai_compat, secrets};
+use crate::{claude, cli_relay, local_chat, openai_compat, secrets};
 
 pub const ANTHROPIC: &str = "anthropic";
+
+fn subscription_agent(settings: &Settings, provider: &str) -> Option<crate::cli_agents::Agent> {
+    crate::cli_agents::Agent::parse(provider).ok().or_else(|| {
+        if !cli_relay::uses_subscription(settings, provider) { return None; }
+        match provider {
+            ANTHROPIC => Some(crate::cli_agents::Agent::Claude),
+            "openai" => Some(crate::cli_agents::Agent::Codex),
+            _ => None,
+        }
+    })
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -208,8 +219,11 @@ pub async fn send(
     let context = context.map(checked_context).transpose()?;
     let provider = settings.chat_provider.as_str();
     let model = model_for(settings, provider);
-    if let Ok(agent) = crate::cli_agents::Agent::parse(provider) {
+    if let Some(agent) = subscription_agent(settings, provider) {
         return crate::cli_agents::send(&app.state::<crate::cli_agents::CliChat>(), chat, agent, query, context).await;
+    }
+    if cli_relay::uses_subscription(settings, provider) {
+        return cli_relay::send(&app.state::<crate::cli_agents::CliChat>(), chat, provider, &model, query, context).await;
     }
     if provider == ANTHROPIC || provider.is_empty() {
         return claude::send(chat, &model, query, context).await;
@@ -234,9 +248,13 @@ pub async fn send_for_phone(
     query: String,
     on_delta: impl FnMut(String),
 ) -> Result<ChatReply, String> {
-    if let Ok(agent) = crate::cli_agents::Agent::parse(provider) {
+    if let Some(agent) = subscription_agent(settings, provider) {
         let runtime = crate::cli_agents::CliChat::default();
         return crate::cli_agents::send(&runtime, chat, agent, query, None).await;
+    }
+    if cli_relay::uses_subscription(settings, provider) {
+        let runtime = crate::cli_agents::CliChat::default();
+        return cli_relay::send(&runtime, chat, provider, model, query, None).await;
     }
     if provider == ANTHROPIC {
         return claude::send(chat, model, query, None).await;
@@ -254,10 +272,13 @@ pub async fn send_for_phone(
 /// that provider, and only once it has a key (or, for a local server, an
 /// address): nothing is sent anywhere before that.
 pub async fn models(settings: &Settings, provider: &str) -> Result<Vec<ModelInfo>, String> {
-    if let Ok(agent) = crate::cli_agents::Agent::parse(provider) {
+    if let Some(agent) = subscription_agent(settings, provider) {
         return Ok(crate::cli_agents::models(agent));
     }
     let no_key = || crate::i18n::t("No API key — add it in Settings.");
+    if cli_relay::uses_subscription(settings, provider) {
+        return Ok(cli_relay::models(provider));
+    }
     if provider == ANTHROPIC {
         let key = secrets::get(claude::KEY).ok_or_else(no_key)?;
         return claude::models(&key).await;
@@ -397,5 +418,20 @@ mod tests {
             assert!(!is_inside(&inbox, &inbox.join("link.txt")));
         }
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn subscription_aliases_share_both_explicit_agent_routes() {
+        use crate::cli_agents::Agent;
+        let mut settings = Settings::default();
+        for (explicit, alias, agent) in [("claude-code", "anthropic", Agent::Claude), ("codex", "openai", Agent::Codex)] {
+            assert_eq!(subscription_agent(&settings, explicit), Some(agent));
+            assert_eq!(subscription_agent(&settings, alias), None);
+            settings.chat_subscriptions.insert(alias.into(), true);
+            assert_eq!(subscription_agent(&settings, alias), Some(agent));
+            settings.chat_subscriptions.insert(alias.into(), false);
+            assert_eq!(subscription_agent(&settings, alias), None);
+            assert_eq!(subscription_agent(&settings, explicit), Some(agent));
+        }
     }
 }

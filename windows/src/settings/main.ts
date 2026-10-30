@@ -15,7 +15,7 @@ const APPROVAL_LABEL: Record<PluginInfo["approval"], [string, string]> = {
 // island's settings are drawn here, one Notch page at a time.
 
 import "./settings.css";
-import { Bridge, onEvent, type PluginInfo, type LaunchInfo, type HookPreview, type HookStatus, type ShortcutsReport } from "../core/bridge";
+import { Bridge, onEvent, type PluginInfo, type LaunchInfo, type HookPreview, type HookStatus, type ShortcutsReport, type SubscriptionStatus } from "../core/bridge";
 import { CUSTOM_SERVER_KEY, providerDef, urlExposure } from "../core/providers";
 import {
   ISLAND_SHORTCUTS, SHORTCUTS, SHORTCUT_TEXT, activeKeys, displayKeys, duplicates, effective,
@@ -341,6 +341,73 @@ function planSection(status: HookStatus): HTMLElement {
 
   draw();
   return section;
+}
+
+// ── Your AI subscriptions ─────────────────────────────────────────────────────
+
+/** The plan people know, by provider. */
+const SUBSCRIPTION_NAMES: Record<string, string> = {
+  anthropic: "Claude", google: "Google Gemini", openai: "ChatGPT", cursor: "Cursor", copilot: "GitHub Copilot",
+};
+
+/**
+ * One switch per provider (cli_relay.rs): on, the chat goes through its
+ * official terminal tool, signed in with the user's own account; off, through
+ * its API key. Says whether the tool is installed and how to sign in.
+ */
+function subscriptionsSection(): HTMLElement {
+  const list = h("div", { style: "display:flex;flex-direction:column;gap:12px" });
+  const feedback = h("div", { class: "hint" });
+  const draw = (rows: SubscriptionStatus[]) => {
+    clear(list);
+    for (const row of rows) {
+      const p = providerDef(row.provider);
+      const sw = toggle(row.on, (on) => {
+        void Bridge.subscriptionSet(row.provider, on).then((next) => {
+          feedback.textContent = "";
+          if (next) draw(next);
+        }).catch((error) => {
+          feedback.textContent = String(error);
+          draw(rows);
+        });
+      });
+      const lines: HTMLElement[] = [];
+      if (row.installed) {
+        lines.push(h("div", { class: "hint", style: "color:#22c55e", text: t("{tool} found ✓", { tool: row.tool }) }));
+        lines.push(h("div", {
+          class: "hint",
+          text: t("Not signed in yet? Run this once in a terminal: {command}", { command: row.signIn }),
+        }));
+      } else {
+        lines.push(h("div", { class: "row" },
+          h("span", { class: "hint", text: t("{tool} not found.", { tool: row.tool }) }),
+          h("button", { text: t("Install it"), onclick: () => void Bridge.openUrl(row.installUrl) }),
+        ));
+      }
+      if (!row.subscriptionOnly && !row.on) {
+        lines.push(h("div", { class: "hint", text: t("Off: the chat uses your API key below.") }));
+      }
+      list.append(h("div", {},
+        h("div", { class: "row" },
+          h("i", { class: "dot", style: `background:${p.accent}` }),
+          h("label", { text: SUBSCRIPTION_NAMES[row.provider] ?? p.name }),
+          sw,
+        ),
+        ...lines,
+      ));
+    }
+  };
+  void Bridge.subscriptionStatus().then((rows) => draw(rows ?? []));
+  return h(
+    "section",
+    {},
+    h("h2", { text: t("Your AI subscriptions") }),
+    h("div", {
+      class: "hint",
+      text: t("Chat on the plan you already pay for. Coucou asks your AI's official terminal tool, signed in with your own account: it never sees your password or your key."),
+    }),
+    list, feedback,
+  );
 }
 
 // ── Claude API section ────────────────────────────────────────────────────────
@@ -1419,7 +1486,7 @@ async function render() {
     general: () => [generalSection(), shellSection(), openInSection(launch)],
     pills: () => [activePillsSection(connected)],
     agents: () => [connectionsSection(() => settings.chatProvider, async (id) => { const next = { ...settings, chatProvider: id }; await Bridge.saveSettings(next); settings = next; }), claudeSection(status), agentsSection(agents), planSection(status)],
-    chat: () => [connectionsSection(() => settings.chatProvider, async (id) => { const next = { ...settings, chatProvider: id }; await Bridge.saveSettings(next); settings = next; }), apiSection(hasKey), chatProvidersSection(chatKeys, keyChanged), localSection(customKey)],
+    chat: () => [connectionsSection(() => settings.chatProvider, async (id) => { const next = { ...settings, chatProvider: id }; await Bridge.saveSettings(next); settings = next; }), subscriptionsSection(), apiSection(hasKey), chatProvidersSection(chatKeys, keyChanged), localSection(customKey)],
     integrations: () => [integrationsSection(present), marketsSection(), portfolioSection(), ...whatsappSections(), pluginsSection()],
     phone: () => [phoneSection(settings.phoneLink ?? false, toggle, settings)],
     shortcuts: () => [shortcutsSection(shortcutReport)],

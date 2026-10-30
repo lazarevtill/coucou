@@ -1,4 +1,4 @@
-// Interface language — the same fourteen languages as the Mac.
+// Interface language — the same sixteen languages as the Mac.
 //
 // Strings are looked up by their English text, like the Mac's catalog:
 // `t("Allow")`, `t("Uploading {name}", { name })`. Two tables, both keyed by
@@ -18,7 +18,7 @@
 import MAC from "./strings.json";
 import EXTRA from "./extra.json";
 
-export const LANGUAGE_CODES = ["en", "zh-Hans", "hi", "es", "ar", "fr", "bn", "pt-BR", "ru", "id", "de", "tr", "th", "zh-Hant"] as const;
+export const LANGUAGE_CODES = ["en", "zh-Hans", "hi", "es", "ar", "fr", "bn", "pt-BR", "ru", "id", "de", "tr", "th", "zh-Hant", "ko", "ja"] as const;
 export type Language = (typeof LANGUAGE_CODES)[number];
 
 /** The picker's entries, each in its own language, in the Mac's order. */
@@ -37,6 +37,8 @@ export const LANGUAGES: readonly { code: Language; name: string }[] = [
   { code: "tr", name: "Türkçe" },
   { code: "th", name: "ไทย" },
   { code: "zh-Hant", name: "繁體中文" },
+  { code: "ko", name: "한국어" },
+  { code: "ja", name: "日本語" },
 ];
 
 export type Vars = Record<string, string | number>;

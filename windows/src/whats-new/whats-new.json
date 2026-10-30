@@ -1,6 +1,89 @@
 {
-  "about": "What's new, shown once in the island after Coucou updates itself (src/whats-new/). Every Windows and Linux release adds its entry here, in the 14 languages: 1 to 4 items, a short title and one line each, an icon from scripts/test-whats-new.py. python3 scripts/test-whats-new.py checks it.",
+  "about": "What's new, shown once in the island after Coucou updates itself (src/whats-new/). Every Windows and Linux release adds its entry here, in the 16 languages: 1 to 4 items, a short title and one line each, an icon from scripts/test-whats-new.py. python3 scripts/test-whats-new.py checks it.",
   "releases": [
+    {
+      "version": "0.5.6",
+      "items": [
+        {
+          "icon": "chat",
+          "title": {
+            "en": "Chat on your AI subscription",
+            "zh-Hans": "用你的 AI 订阅聊天",
+            "hi": "अपनी AI सदस्यता से चैट",
+            "es": "Chat con tu suscripción de IA",
+            "ar": "دردشة باشتراكك في الذكاء الاصطناعي",
+            "fr": "Le chat sur ton abonnement IA",
+            "bn": "আপনার AI সাবস্ক্রিপশনে চ্যাট",
+            "pt-BR": "Chat com sua assinatura de IA",
+            "ru": "Чат по вашей подписке на ИИ",
+            "id": "Chat dengan langganan AI-mu",
+            "de": "Chat mit deinem KI-Abo",
+            "tr": "Yapay zekâ aboneliğinizle sohbet",
+            "ko": "내 AI 구독으로 채팅",
+            "ja": "AI サブスクリプションでチャット",
+            "th": "แชตด้วยการสมัครสมาชิก AI ของคุณ",
+            "zh-Hant": "使用你的 AI 訂閱聊天"
+          },
+          "detail": {
+            "en": "Claude, Gemini, ChatGPT, Cursor or Copilot, no key: turn it on in Settings → Chat.",
+            "zh-Hans": "Claude、Gemini、ChatGPT、Cursor 或 Copilot，无需密钥：在 设置 → 聊天 中开启。",
+            "hi": "Claude, Gemini, ChatGPT, Cursor या Copilot, बिना कुंजी: सेटिंग्स → चैट में चालू करें।",
+            "es": "Claude, Gemini, ChatGPT, Cursor o Copilot, sin clave: actívalo en Ajustes → Chat.",
+            "ar": "Claude وGemini وChatGPT وCursor وCopilot دون مفتاح: فعّله من الإعدادات ← الدردشة.",
+            "fr": "Claude, Gemini, ChatGPT, Cursor ou Copilot, sans clé : active-le dans Réglages → Chat.",
+            "bn": "Claude, Gemini, ChatGPT, Cursor বা Copilot, কী ছাড়াই: সেটিংস → চ্যাট-এ চালু করুন।",
+            "pt-BR": "Claude, Gemini, ChatGPT, Cursor ou Copilot, sem chave: ative em Ajustes → Chat.",
+            "ru": "Claude, Gemini, ChatGPT, Cursor или Copilot без ключа: включите в Настройки → Чат.",
+            "id": "Claude, Gemini, ChatGPT, Cursor, atau Copilot, tanpa kunci: nyalakan di Pengaturan → Chat.",
+            "de": "Claude, Gemini, ChatGPT, Cursor oder Copilot ohne Schlüssel: in Einstellungen → Chat einschalten.",
+            "tr": "Claude, Gemini, ChatGPT, Cursor veya Copilot, anahtarsız: Ayarlar → Sohbet'ten açın.",
+            "ko": "Claude, Gemini, ChatGPT, Cursor, Copilot을 키 없이: 설정 → 채팅에서 켜세요.",
+            "ja": "Claude、Gemini、ChatGPT、Cursor、Copilot をキーなしで：設定 → チャットでオンに。",
+            "th": "Claude, Gemini, ChatGPT, Cursor หรือ Copilot โดยไม่ใช้คีย์: เปิดในการตั้งค่า → แชต",
+            "zh-Hant": "Claude、Gemini、ChatGPT、Cursor 或 Copilot，無需金鑰：在「設定 → 聊天」開啟。"
+          }
+        },
+        {
+          "icon": "languages",
+          "title": {
+            "en": "Korean and Japanese",
+            "zh-Hans": "韩语和日语",
+            "hi": "कोरियाई और जापानी",
+            "es": "Coreano y japonés",
+            "ar": "الكورية واليابانية",
+            "fr": "Coréen et japonais",
+            "bn": "কোরিয়ান ও জাপানি",
+            "pt-BR": "Coreano e japonês",
+            "ru": "Корейский и японский",
+            "id": "Bahasa Korea dan Jepang",
+            "de": "Koreanisch und Japanisch",
+            "tr": "Korece ve Japonca",
+            "ko": "한국어와 일본어",
+            "ja": "韓国語と日本語",
+            "th": "ภาษาเกาหลีและญี่ปุ่น",
+            "zh-Hant": "韓文與日文"
+          },
+          "detail": {
+            "en": "Coucou now speaks 16 languages. Korean thanks to @lovyestar.",
+            "zh-Hans": "Coucou 现在支持 16 种语言。韩语由 @lovyestar 贡献。",
+            "hi": "Coucou अब 16 भाषाएँ बोलता है। कोरियाई @lovyestar की बदौलत।",
+            "es": "Coucou ya habla 16 idiomas. El coreano gracias a @lovyestar.",
+            "ar": "يتحدث Coucou الآن 16 لغة. الكورية بفضل @lovyestar.",
+            "fr": "Coucou parle maintenant 16 langues. Le coréen grâce à @lovyestar.",
+            "bn": "Coucou এখন 16টি ভাষায় কথা বলে। কোরিয়ান @lovyestar-এর সৌজন্যে।",
+            "pt-BR": "O Coucou agora fala 16 idiomas. O coreano graças a @lovyestar.",
+            "ru": "Coucou теперь говорит на 16 языках. Корейский — благодаря @lovyestar.",
+            "id": "Coucou kini berbicara 16 bahasa. Bahasa Korea berkat @lovyestar.",
+            "de": "Coucou spricht jetzt 16 Sprachen. Koreanisch dank @lovyestar.",
+            "tr": "Coucou artık 16 dil konuşuyor. Korece @lovyestar sayesinde.",
+            "ko": "Coucou가 이제 16개 언어를 지원합니다. 한국어는 @lovyestar 덕분이에요.",
+            "ja": "Coucou は 16 言語に対応しました。韓国語は @lovyestar のおかげです。",
+            "th": "Coucou รองรับ 16 ภาษาแล้ว ขอบคุณ @lovyestar สำหรับภาษาเกาหลี",
+            "zh-Hant": "Coucou 現已支援 16 種語言。感謝 @lovyestar 提供韓文翻譯。"
+          }
+        }
+      ]
+    },
     {
       "version": "0.5.5",
       "items": [
@@ -19,6 +102,8 @@
             "id": "Chat tanpa kunci API",
             "de": "Chat ohne API-Schlüssel",
             "tr": "API anahtarı olmadan sohbet",
+            "ko": "API 키 없이 채팅",
+            "ja": "API キーなしでチャット",
             "th": "แชตโดยไม่ใช้คีย์ API",
             "zh-Hant": "無需 API 金鑰即可聊天"
           },
@@ -94,6 +179,7 @@
             "id": "Coucou terus mendengarkan",
             "de": "Coucou hört weiter zu",
             "tr": "Coucou dinlemeye devam eder",
+            "ja": "Coucou は聞き続けます",
             "th": "Coucou รับฟังต่อเนื่อง",
             "zh-Hant": "Coucou 持續聆聽"
           },
@@ -111,7 +197,8 @@
             "de": "Eine fehlgeschlagene Verbindung trennt Claude Code nicht mehr; die Karte geht, wenn das Terminal übernimmt.",
             "tr": "Tek bir başarısız bağlantı artık Claude Code’u koparmıyor; terminal devraldığında kart kapanır.",
             "th": "การเชื่อมต่อที่ล้มเหลวไม่ตัด Claude Code และการ์ดจะปิดเมื่อเทอร์มินัลรับช่วงต่อ",
-            "zh-Hant": "連線失敗不再中斷 Claude Code，終端機接手後卡片會關閉。"
+            "zh-Hant": "連線失敗不再中斷 Claude Code，終端機接手後卡片會關閉。",
+            "ja": "1 回接続に失敗しても Claude Code が途切れず、ターミナルが引き継ぐとカードは消えます。"
           }
         },
         {
@@ -129,6 +216,7 @@
             "id": "25 perbaikan dari komunitas",
             "de": "25 Fixes aus der Community",
             "tr": "Topluluktan 25 düzeltme",
+            "ja": "コミュニティによる 25 の修正",
             "th": "การแก้ไขจากชุมชน 25 รายการ",
             "zh-Hant": "25 項社群修正"
           },
@@ -146,7 +234,8 @@
             "de": "Die Flow-Pill nimmt Klicks an, WhatsApp-Gruppen zeigen ihre Namen, und genauere Dienst-Pills.",
             "tr": "Flow hapı tıklamaları alıyor, WhatsApp grupları adlarını gösteriyor, servis hapları daha doğru.",
             "th": "แถบ Flow รับการคลิก แสดงชื่อกลุ่ม WhatsApp และปรับข้อมูลบริการให้แม่นยำ",
-            "zh-Hant": "Flow 面板可接收點擊，WhatsApp 群組顯示名稱，服務資訊更準確。"
+            "zh-Hant": "Flow 面板可接收點擊，WhatsApp 群組顯示名稱，服務資訊更準確。",
+            "ja": "Flow のピルがクリックに反応し、WhatsApp のグループ名が表示され、サービスのピルがより正確に。"
           }
         }
       ]
@@ -169,6 +258,8 @@
             "id": "WhatsApp di pulau",
             "de": "WhatsApp in der Insel",
             "tr": "Adada WhatsApp",
+            "ko": "아일랜드에서 WhatsApp",
+            "ja": "アイランドに WhatsApp",
             "th": "WhatsApp ในไอส์แลนด์",
             "zh-Hant": "島中的 WhatsApp"
           },
@@ -186,7 +277,9 @@
             "de": "Deine Chats in der Insel und Antworten, ohne WhatsApp zu öffnen. Experimentell.",
             "tr": "Sohbetlerin adada; WhatsApp’ı açmadan yanıtla. Deneysel.",
             "th": "ดูแชทและตอบกลับจากไอส์แลนด์โดยไม่เปิด WhatsApp ฟีเจอร์ทดลอง",
-            "zh-Hant": "在島中查看聊天，不打開 WhatsApp 也能回復。實驗性功能。"
+            "zh-Hant": "在島中查看聊天，不打開 WhatsApp 也能回復。實驗性功能。",
+            "ko": "채팅을 아일랜드에서 보고, WhatsApp을 열지 않고도 답장할 수 있어요. 실험적 기능이에요.",
+            "ja": "チャットをアイランドに表示し、WhatsApp を開かずに返信できます。実験的機能。"
           }
         },
         {
@@ -204,6 +297,8 @@
             "id": "Siap dalam sekali klik",
             "de": "Eingerichtet mit einem Klick",
             "tr": "Tek tıkla kurulum",
+            "ko": "클릭 한 번으로 설정",
+            "ja": "1 クリックで設定",
             "th": "ตั้งค่าในคลิกเดียว",
             "zh-Hant": "一鍵設置"
           },
@@ -221,7 +316,9 @@
             "de": "Coucou installiert das Gateway, prüft es und zeigt den QR-Code.",
             "tr": "Coucou ağ geçidini kurar, doğrular ve taranacak QR kodunu gösterir.",
             "th": "Coucou ติดตั้งและตรวจสอบเกตเวย์ แล้วแสดงรหัส QR ให้สแกน",
-            "zh-Hant": "Coucou 安裝網關、進行校驗，并顯示要掃描的二維碼。"
+            "zh-Hant": "Coucou 安裝網關、進行校驗，并顯示要掃描的二維碼。",
+            "ko": "Coucou가 게이트웨이를 설치하고 확인한 다음, 스캔할 QR 코드까지 보여 줘요.",
+            "ja": "Coucou がゲートウェイをインストールして確認し、読み取る QR コードを表示します。"
           }
         },
         {
@@ -239,6 +336,8 @@
             "id": "Tak ada yang keluar dari komputermu",
             "de": "Nichts verlässt deinen Computer",
             "tr": "Hiçbir şey bilgisayarından çıkmaz",
+            "ko": "내용은 컴퓨터 밖으로 나가지 않아요",
+            "ja": "何もパソコンの外に出ません",
             "th": "ข้อมูลอยู่บนคอมพิวเตอร์ของคุณ",
             "zh-Hant": "數據不離開你的電腦"
           },
@@ -256,7 +355,9 @@
             "de": "Nachrichten bleiben im Speicher und sind weg, wenn Coucou beendet wird.",
             "tr": "Mesajlar bellekte kalır, Coucou kapanınca silinir.",
             "th": "ข้อความอยู่ในหน่วยความจำและหายไปเมื่อปิด Coucou",
-            "zh-Hant": "消息只保存在記憶體中，退出 Coucou 后即消失。"
+            "zh-Hant": "消息只保存在記憶體中，退出 Coucou 后即消失。",
+            "ko": "메시지는 메모리에만 남고, Coucou를 끄면 사라져요.",
+            "ja": "メッセージはメモリ上にだけあり、Coucou を終了すると消えます。"
           }
         }
       ]
@@ -279,6 +380,8 @@
             "id": "Mochi biru saat ada pembaruan",
             "de": "Mochi wird blau bei Updates",
             "tr": "Güncellemede Mochi maviye döner",
+            "ko": "업데이트가 있으면 모찌가 파랗게 돼요",
+            "ja": "アップデートで Mochi が青に",
             "th": "Mochi เปลี่ยนเป็นสีฟ้าเมื่อมีอัปเดต",
             "zh-Hant": "有更新時 Mochi 變藍"
           },
@@ -296,7 +399,9 @@
             "de": "Eine neue Version macht ihn blau, in der Insel und im Infobereich. Unter Windows reicht ein Klick.",
             "tr": "Yeni sürüm onu adada ve sistem tepsisinde maviye çevirir. Windows’ta tek tıkla kurulur.",
             "th": "รุ่นใหม่ทำให้ Mochi เป็นสีฟ้าในไอส์แลนด์และถาดระบบ บน Windows คลิกเดียวเพื่อติดตั้ง",
-            "zh-Hant": "有新版本時，島和系統托盤中的它會變藍。在 Windows 上一鍵安裝。"
+            "zh-Hant": "有新版本時，島和系統托盤中的它會變藍。在 Windows 上一鍵安裝。",
+            "ko": "새 버전이 나오면 모찌가 아일랜드와 트레이에서 파랗게 변해요. Windows에서는 클릭 한 번이면 설치돼요.",
+            "ja": "新しいバージョンが出るとアイランドとトレイで青くなります。Windows では 1 クリックでインストール。"
           }
         },
         {
@@ -314,6 +419,8 @@
             "id": "Yang baru, langsung di sini",
             "de": "Neuigkeiten, direkt hier",
             "tr": "Yenilikler, tam burada",
+            "ko": "새 소식을 여기서 바로",
+            "ja": "新機能をここで",
             "th": "มีอะไรใหม่ ดูได้ที่นี่",
             "zh-Hant": "更新內容，就在這里"
           },
@@ -331,7 +438,9 @@
             "de": "Nach jedem Update: was es bringt, dann dein Coucou bisher.",
             "tr": "Her güncellemeden sonra: getirdikleri, ardından şimdiye kadar Coucou’n.",
             "th": "หลังอัปเดต: ดูสิ่งที่เพิ่มเข้ามาและสรุปการใช้ Coucou ของคุณ",
-            "zh-Hant": "每次更新后：先看新內容，再看你的 Coucou 至今。"
+            "zh-Hant": "每次更新后：先看新內容，再看你的 Coucou 至今。",
+            "ko": "업데이트할 때마다 새로 뭐가 생겼는지 보여 주고, 지금까지의 Coucou도 알려 줘요.",
+            "ja": "アップデートのたびに、新しい内容とこれまでのあなたの Coucou を表示します。"
           }
         },
         {
@@ -349,6 +458,8 @@
             "id": "GitLab dan Gitea",
             "de": "GitLab und Gitea",
             "tr": "GitLab ve Gitea",
+            "ko": "GitLab과 Gitea",
+            "ja": "GitLab と Gitea",
             "th": "GitLab และ Gitea",
             "zh-Hant": "GitLab 和 Gitea"
           },
@@ -366,7 +477,9 @@
             "de": "Zwei neue Pills mit der Aktivität deiner Projekte, wie bei GitHub.",
             "tr": "Projelerinin etkinliğini gösteren iki yeni araç, GitHub’ınki gibi.",
             "th": "สองพิลใหม่แสดงกิจกรรมโปรเจกต์ของคุณ เหมือน GitHub",
-            "zh-Hant": "兩個新膠囊，顯示你項目的動態，和 GitHub 的一樣。"
+            "zh-Hant": "兩個新膠囊，顯示你項目的動態，和 GitHub 的一樣。",
+            "ko": "GitHub처럼 프로젝트 활동을 보여 주는 모찌가 두 개 더 생겼어요.",
+            "ja": "プロジェクトのアクティビティを表示する 2 つの新しいピル。GitHub と同じように。"
           }
         },
         {
@@ -384,6 +497,8 @@
             "id": "Rekap mingguan di Android",
             "de": "Wochenrückblick auf Android",
             "tr": "Android’de haftalık özet",
+            "ko": "Android 주간 리캡",
+            "ja": "Android で週間まとめ",
             "th": "สรุปรายสัปดาห์บน Android",
             "zh-Hant": "Android 上的每周回顧"
           },
@@ -401,7 +516,9 @@
             "de": "Die Zahlen der letzten Woche auf deinem Android-Handy, wenn du es einschaltest.",
             "tr": "Geçen haftanın sayıları Android telefonunda, açarsan.",
             "th": "ดูตัวเลขสัปดาห์ก่อนบนโทรศัพท์ Android เมื่อเปิดใช้งาน",
-            "zh-Hant": "上周的數據顯示在你的 Android 手機上（需開啟）。"
+            "zh-Hant": "上周的數據顯示在你的 Android 手機上（需開啟）。",
+            "ko": "켜 두면 지난주 숫자를 Android 폰에서 볼 수 있어요.",
+            "ja": "オンにすると、先週の数字を Android スマートフォンで見られます。"
           }
         }
       ]
@@ -424,6 +541,7 @@
             "id": "Versi baru di pulau",
             "de": "Neue Version in der Insel",
             "tr": "Adada yeni sürüm",
+            "ja": "アイランドに新バージョン",
             "th": "เวอร์ชันใหม่ในไอส์แลนด์",
             "zh-Hant": "島中的新版本"
           },
@@ -441,7 +559,8 @@
             "de": "Coucou sagt dir, wenn eine neue Version da ist. Unter Windows installiert sie ein Klick.",
             "tr": "Yeni sürüm çıkınca Coucou haber verir. Windows'ta tek tıkla kurulur.",
             "th": "Coucou แจ้งเมื่อมีเวอร์ชันใหม่ บน Windows คลิกเดียวเพื่อติดตั้ง",
-            "zh-Hant": "有新版本時 Coucou 會告訴你。在 Windows 上一鍵即可安裝。"
+            "zh-Hant": "有新版本時 Coucou 會告訴你。在 Windows 上一鍵即可安裝。",
+            "ja": "新しいバージョンが出ると Coucou が知らせます。Windows では 1 クリックでインストール。"
           }
         },
         {
@@ -459,6 +578,7 @@
             "id": "Jerman dan Turki",
             "de": "Deutsch und Türkisch",
             "tr": "Almanca ve Türkçe",
+            "ja": "ドイツ語とトルコ語",
             "th": "ภาษาเยอรมันและตุรกี",
             "zh-Hant": "德語和土耳其語"
           },
@@ -476,7 +596,8 @@
             "de": "Coucou spricht jetzt 12 Sprachen.",
             "tr": "Coucou artık 12 dil konuşuyor.",
             "th": "Coucou รองรับ 12 ภาษาแล้ว",
-            "zh-Hant": "Coucou 現在支持 12 種語言。"
+            "zh-Hant": "Coucou 現在支持 12 種語言。",
+            "ja": "Coucou は 12 言語を話せるようになりました。"
           }
         },
         {
@@ -494,6 +615,7 @@
             "id": "Jam di pulau",
             "de": "Eine Uhr in der Insel",
             "tr": "Adada saat",
+            "ja": "アイランドに時計",
             "th": "นาฬิกาในไอส์แลนด์",
             "zh-Hant": "島中的時鐘"
           },
@@ -511,7 +633,8 @@
             "de": "Optional, in der Mitte der kompakten Insel.",
             "tr": "İsteğe bağlı, kompakt adanın ortasında.",
             "th": "เลือกแสดงตรงกลางไอส์แลนด์แบบกะทัดรัดได้",
-            "zh-Hant": "可選，顯示在緊湊島的中間。"
+            "zh-Hant": "可選，顯示在緊湊島的中間。",
+            "ja": "コンパクトなアイランドの中央に、オプションで。"
           }
         },
         {
@@ -529,6 +652,7 @@
             "id": "Lebih ringan di Linux",
             "de": "Leichter unter Linux",
             "tr": "Linux'ta daha hafif",
+            "ja": "Linux でより軽く",
             "th": "เบาขึ้นบน Linux",
             "zh-Hant": "Linux 上更輕快"
           },
@@ -546,7 +670,8 @@
             "de": "Das geschlossene Fenster hält unter KDE keinen Prozessorkern mehr beschäftigt.",
             "tr": "Kapalı pencere KDE'de artık bir işlemci çekirdeğini meşgul etmiyor.",
             "th": "หน้าต่างที่ปิดแล้วจะไม่ใช้คอร์ประมวลผลค้างไว้บน KDE",
-            "zh-Hant": "在 KDE 上，關閉的窗口不再占用一個處理器核心。"
+            "zh-Hant": "在 KDE 上，關閉的窗口不再占用一個處理器核心。",
+            "ja": "KDE で閉じたウインドウがプロセッサのコアを占有しなくなりました。"
           }
         }
       ]

@@ -16,6 +16,7 @@ import {
   activeModel, pickModel, providerDef, visibleProviders, withModel, type ProviderDef,
 } from "../core/providers";
 import { Sound } from "../core/sound";
+import { chipLabel, loadSubscriptions, subscribedProviders, subscription } from "../core/subscriptions";
 import { State, type ChatMessage } from "../core/state";
 import type { ViewHost } from "./views";
 import { N_, t, tl } from "../i18n/i18n";
@@ -87,7 +88,7 @@ function buildPicker(onChange: () => void): Picker {
 
   function drawChips() {
     clear(chips);
-    for (const p of visibleProviders(State.settings)) {
+    for (const p of visibleProviders(State.settings, subscribedProviders())) {
       const on = p.id === State.settings.chatProvider;
       const chip = h(
         "button",
@@ -125,7 +126,9 @@ function buildPicker(onChange: () => void): Picker {
 
   function drawModels(p: ProviderDef, models: ModelInfo[]) {
     clear(list);
-    const current = activeModel(State.settings);
+    // Through a subscription, a tool other than Claude Code uses its own model ("").
+    const ownModel = subscription(p.id)?.on;
+    const current = ownModel ? (models[0]?.id ?? "") : activeModel(State.settings);
     for (const m of models) {
       const on = m.id === current;
       const row = h(
@@ -135,6 +138,7 @@ function buildPicker(onChange: () => void): Picker {
         on ? svg(ICONS.check, 11, { stroke: 2.2 }) : null,
       );
       row.addEventListener("click", () => {
+        if (ownModel || !m.id) return close();
         State.settings = withModel(State.settings, p.id, m.id);
         saveSettings();
         Sound.play("blip");
@@ -148,13 +152,15 @@ function buildPicker(onChange: () => void): Picker {
   async function loadModels() {
     const p = providerDef(State.settings.chatProvider);
     const ticket = ++request;
-    const cached = p.urlField ? undefined : cache.get(p.id);
+    const subscribed = subscription(p.id)?.on ?? false;
+    const cacheKey = `${p.id}:${subscribed}`;
+    const cached = p.urlField ? undefined : cache.get(cacheKey);
     if (cached) {
       drawModels(p, cached);
       return;
     }
     // Nothing is asked of a provider that has no key yet.
-    if (p.key && !(await Bridge.secretPresent(p.key))) {
+    if (!subscribed && p.key && !(await Bridge.secretPresent(p.key))) {
       if (ticket === request) status(t(STRINGS.noKey), true);
       return;
     }
@@ -163,8 +169,8 @@ function buildPicker(onChange: () => void): Picker {
     try {
       const models = await Bridge.chatModels(p.id);
       if (ticket !== request) return;
-      if (!p.urlField) cache.set(p.id, models);
-      const keep = pickModel(p, models.map((m) => m.id), activeModel(State.settings));
+      if (!p.urlField) cache.set(cacheKey, models);
+      const keep = subscribed ? null : pickModel(p, models.map((m) => m.id), activeModel(State.settings));
       if (keep && keep !== activeModel(State.settings)) {
         State.settings = withModel(State.settings, p.id, keep);
         saveSettings();
@@ -181,7 +187,13 @@ function buildPicker(onChange: () => void): Picker {
     el.classList.add("on");
     drawChips();
     onChange();
-    void loadModels();
+    // Which subscriptions are on may have changed in Settings: ask, then list.
+    void loadSubscriptions().then(() => {
+      if (!isOpen) return;
+      drawChips();
+      onChange();
+      void loadModels();
+    });
   }
 
   function close() {
@@ -260,6 +272,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     drawModelButton();
   });
   body.append(chipRow, images.preview, log, picker.el, modelRow, bar, tools.details, images.status);
+  void loadSubscriptions().then(() => drawModelButton());
 
   const el = h("div", { class: "view" }, h("div", { class: "card wash chat-card" }, body));
   (el.querySelector(".card") as HTMLElement).style.setProperty("--wash", "rgba(99,102,241,0.5)");
@@ -275,7 +288,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     const p = providerDef(State.settings.chatProvider);
     modelDot.style.background = p.accent;
     const cli = p.id === "claude-code" || p.id === "codex";
-    modelName.textContent = cli ? `${p.name} · default` : activeModel(State.settings) || t(STRINGS.noModel);
+    modelName.textContent = cli ? `${p.name} · default` : chipLabel(State.settings, subscription(p.id)?.on ? "" : activeModel(State.settings)) || t(STRINGS.noModel);
     send.disabled = sending ? (!cancellable || stopping) : tools.active || images.active;
     send.title = sending && cancellable ? t("Stop") : t(STRINGS.send);
     send.setAttribute("aria-label", send.title);
@@ -308,7 +321,8 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     if (picker.isOpen) picker.close();
     input.value = "";
     sending = true;
-    cancellable = ["claude-code", "codex"].includes(State.settings.chatProvider);
+    cancellable = ["claude-code", "codex"].includes(State.settings.chatProvider)
+      || Boolean(subscription(State.settings.chatProvider)?.on);
     stopping = false;
     drawModelButton();
     Sound.play("send");

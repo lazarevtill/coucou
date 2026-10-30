@@ -1,10 +1,14 @@
 # Chat sources
 
-The chat model picker offers Claude Code, Codex, Anthropic, Google, OpenAI, OpenRouter, and configured model servers. It shows the selected provider/model above the message field. Provider changes retain the plain-text conversation; provider-specific tool blocks are not forwarded between services.
+The chat model picker offers Claude Code, Codex, Anthropic, Google, OpenAI, OpenRouter, opted-in Cursor/Copilot subscriptions, and configured model servers. It shows the selected provider/model above the message field. Provider changes retain the plain-text conversation; provider-specific tool blocks are not forwarded between services.
 
 ## Existing agent sign-ins
 
 **Settings → Agents → Use for chat** selects Claude Code or Codex without an API key. Both also offer **Open project** for native coding sessions. See [coding-agents.md](coding-agents.md) for setup, permissions, limits and verification.
+
+**Settings → Chat → Your AI subscriptions** routes a provider through its installed official terminal tool after an explicit opt-in. Anthropic uses Claude Code; OpenAI uses Codex. Both share the same supervised runner and image/PDF support as the explicit connections, with tools disabled. The CLI chooses its default model; the saved API model remains unchanged. **Use for all text** on either explicit connection also configures Flow text tasks.
+
+Google uses Antigravity CLI or Gemini CLI; Cursor and Copilot use their respective CLIs. These upstream relays use plan/ask or restricted tool modes in a private working folder. They may inherit the CLI's configuration; these modes are not an OS sandbox. They support inline text attachments, with a size limit, and remain opt-in. All relays have bounded input/output, a deadline and Stop control. Installing a CLI does not change an API provider to subscription billing.
 
 ## API providers
 

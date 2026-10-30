@@ -186,7 +186,23 @@ impl Drop for Finished<'_> {
     }
 }
 
-struct Captured { success: bool, stdout: Vec<u8>, stderr: Vec<u8> }
+pub(crate) struct Captured {
+    pub success: bool,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+}
+
+/// Other official subscription CLIs share chat cancellation, process containment
+/// and finite input/output; Claude Code and Codex also use their checked parsers.
+pub(crate) async fn run_command(runtime: &CliChat, command: Command, input: Option<String>, timeout: Duration) -> Result<Captured, String> {
+    if input.as_ref().is_some_and(|text| text.len() > MAX_PROMPT) {
+        return Err("This conversation is too large. Start a new chat.".into());
+    }
+    let cancel = runtime.begin()?;
+    let _finished = Finished(runtime);
+    tauri::async_runtime::spawn_blocking(move || capture(command, input, timeout, &cancel))
+        .await.map_err(|_| "The agent chat process failed.".to_string())?
+}
 
 fn read_bounded(mut stream: impl Read) -> std::io::Result<Vec<u8>> {
     let mut bytes = Vec::new();

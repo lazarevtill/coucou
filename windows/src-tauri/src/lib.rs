@@ -7,6 +7,7 @@ mod chat_input;
 mod chat_images;
 mod claude;
 mod cli_agents;
+mod cli_relay;
 mod text_ai;
 mod codex_plan;
 mod config_file;
@@ -932,6 +933,26 @@ fn secret_present(key: String) -> bool {
 }
 
 #[tauri::command]
+fn subscription_status(shared: State<Shared>) -> Vec<cli_relay::Status> {
+    cli_relay::status(&shared.settings.lock().unwrap())
+}
+
+#[tauri::command]
+fn subscription_set(app: AppHandle, shared: State<Shared>, provider: String, on: bool) -> Result<Vec<cli_relay::Status>, String> {
+    if cli_relay::clis_for(&provider).is_empty() { return Err("Unknown subscription provider.".into()); }
+    let settings = {
+        let mut current = shared.settings.lock().unwrap();
+        let mut next = current.clone();
+        cli_relay::set(&mut next, &provider, on);
+        settings::save(&next).map_err(|e| e.to_string())?;
+        *current = next.clone();
+        next
+    };
+    let _ = app.emit("settings-changed", &settings);
+    Ok(cli_relay::status(&settings))
+}
+
+#[tauri::command]
 fn secret_set(app: AppHandle, key: String, value: String) -> Result<(), String> {
     // Bound to its server's address: only local_set_key may store it.
     if key == local_chat::CUSTOM_KEY {
@@ -1243,6 +1264,8 @@ pub fn run() {
             file_share::file_share_available,
             file_share::share_file,
             secret_present,
+            subscription_status,
+            subscription_set,
             secret_set,
             secret_clear,
             refresh_integration,
