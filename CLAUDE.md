@@ -53,6 +53,8 @@ Windows note exports use `notes/export.rs` and the native Save As dialog. Its de
 
 Dictionary, snippet and app-style commands commit their JSON file before updating the Flow store. Their pages use `hub/save.ts` to prevent overlapping edits and show native write errors. Keep entered text and the saved list on failure; only clear a submitted form after success. A failed style selection returns to its saved value.
 
+History deletion and erasure also await disk writes and propagate errors through the Flow bridge. Keep an entry visible until deletion succeeds, retain the erase confirmation on failure and prevent overlapping submissions. Erasing everything writes history first, then statistics; if the second write fails, the error explicitly states that history was erased and statistics remain. Live values follow each successful write so retry and reload agree.
+
 `windows/src-tauri/src/local_chat.rs` owns model-server chat. Settings migration must retain Windows preferences and plugin trust, preserve explicit current values, and back up a migrated settings file before replacing it. Generic settings saves cannot grant plugin trust.
 
 `windows/src-tauri/src/file_share.rs` opens Windows Share for a copied inbox file. Its native attachment is prepared off the UI thread and marshalled through an agile reference. Only explicit clicks open the chooser; the user selects the mail application and sends the draft.

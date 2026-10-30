@@ -296,23 +296,30 @@ impl Store {
         Some(entry)
     }
 
-    pub fn delete(&mut self, id: &str) {
-        self.history.retain(|e| e.id != id);
-        self.save_history();
+    fn set_history(&mut self, history: Vec<Entry>) -> Result<(), String> {
+        self.write(&history, "history.json").map_err(|e| format!("Could not update dictation history: {e}"))?;
+        self.history = history;
+        Ok(())
+    }
+
+    pub fn delete(&mut self, id: &str) -> Result<(), String> {
+        self.set_history(self.history.iter().filter(|e| e.id != id).cloned().collect())
     }
 
     /// Empties the history; the numbers stay.
-    pub fn clear_history(&mut self) {
-        self.history.clear();
+    pub fn clear_history(&mut self) -> Result<(), String> {
+        self.set_history(Vec::new())?;
         self.last_unkept = None;
-        self.save_history();
+        Ok(())
     }
 
     /// Empties the history and the numbers.
-    pub fn clear_everything(&mut self) {
-        self.clear_history();
-        self.stats = Stats::default();
-        self.save_stats();
+    pub fn clear_everything(&mut self) -> Result<(), String> {
+        self.clear_history()?;
+        let stats = Stats::default();
+        self.write(&stats, "stats.json").map_err(|e| format!("History erased; could not erase statistics: {e}"))?;
+        self.stats = stats;
+        Ok(())
     }
 
     pub fn prune(&mut self, now: u64) {
@@ -459,6 +466,95 @@ mod tests {
             std::fs::remove_file(path.join(format!("{name}.json"))).unwrap();
             std::fs::remove_file(path.join(format!("{name}.json.tmp"))).unwrap();
         }
+        std::fs::remove_dir(path).unwrap();
+    }
+
+    #[test]
+    fn failed_history_deletion_keeps_live_and_saved_entries_until_retry() {
+        let (mut store, path) = temp_store();
+        let entry = store.record("saved dictation", None, 1.0, today(), now_ms()).unwrap();
+        let before = std::fs::read(path.join("history.json")).unwrap();
+        std::fs::create_dir(path.join("history.json.tmp")).unwrap();
+        assert!(store.delete(&entry.id).is_err());
+        assert_eq!(store.history.len(), 1);
+        assert_eq!(store.history[0].id, entry.id);
+        assert_eq!(std::fs::read(path.join("history.json")).unwrap(), before);
+        std::fs::remove_dir(path.join("history.json.tmp")).unwrap();
+        store.delete(&entry.id).unwrap();
+        assert!(store.history.is_empty());
+        assert!(Store::load_from(path.clone()).history.is_empty());
+        assert_eq!(store.totals(None).0, 2);
+        for name in ["history.json", "stats.json"] { std::fs::remove_file(path.join(name)).unwrap(); }
+        std::fs::remove_dir(path).unwrap();
+    }
+
+    #[test]
+    fn failed_history_clear_keeps_the_last_dictation_and_statistics() {
+        let (mut store, path) = temp_store();
+        store.record("saved dictation", None, 1.0, today(), now_ms()).unwrap();
+        store.last_unkept = Some("memory dictation".into());
+        std::fs::create_dir(path.join("history.json.tmp")).unwrap();
+        assert!(store.clear_everything().is_err());
+        assert_eq!(store.history.len(), 1);
+        assert_eq!(store.last_unkept.as_deref(), Some("memory dictation"));
+        assert_eq!(store.totals(None).0, 2);
+        let again = Store::load_from(path.clone());
+        assert_eq!(again.history.len(), 1);
+        assert_eq!(again.totals(None).0, 2);
+        std::fs::remove_dir(path.join("history.json.tmp")).unwrap();
+        store.clear_history().unwrap();
+        assert!(store.history.is_empty());
+        assert!(store.last_unkept.is_none());
+        assert_eq!(store.totals(None).0, 2);
+        for name in ["history.json", "stats.json"] { std::fs::remove_file(path.join(name)).unwrap(); }
+        std::fs::remove_dir(path).unwrap();
+    }
+
+    #[test]
+    fn a_failed_statistics_erase_keeps_live_and_saved_counts_and_can_be_retried() {
+        let (mut store, path) = temp_store();
+        store.record("saved dictation", None, 1.0, today(), now_ms()).unwrap();
+        std::fs::create_dir(path.join("stats.json.tmp")).unwrap();
+        assert!(store.clear_everything().unwrap_err().contains("History erased; could not erase statistics"));
+        // History is already durably erased; the statistics remain until their write succeeds.
+        assert!(store.history.is_empty());
+        assert_eq!(store.totals(None).0, 2);
+        let again = Store::load_from(path.clone());
+        assert!(again.history.is_empty());
+        assert_eq!(again.totals(None).0, 2);
+        std::fs::remove_dir(path.join("stats.json.tmp")).unwrap();
+        store.clear_everything().unwrap();
+        assert_eq!(store.totals(None).0, 0);
+        assert_eq!(Store::load_from(path.clone()).totals(None).0, 0);
+        for name in ["history.json", "stats.json"] { std::fs::remove_file(path.join(name)).unwrap(); }
+        std::fs::remove_dir(path).unwrap();
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn locked_history_and_statistics_files_report_failed_replacements() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let (mut store, path) = temp_store();
+        let entry = store.record("saved dictation", None, 1.0, today(), now_ms()).unwrap();
+        let history_lock = std::fs::OpenOptions::new().read(true).share_mode(0).open(path.join("history.json")).unwrap();
+        assert!(store.delete(&entry.id).is_err());
+        assert!(store.clear_everything().is_err());
+        assert_eq!(store.history.len(), 1);
+        assert_eq!(store.totals(None).0, 2);
+        drop(history_lock);
+        assert_eq!(Store::load_from(path.clone()).history.len(), 1);
+
+        let stats_lock = std::fs::OpenOptions::new().read(true).share_mode(0).open(path.join("stats.json")).unwrap();
+        assert!(store.clear_everything().unwrap_err().contains("History erased; could not erase statistics"));
+        assert!(store.history.is_empty());
+        assert_eq!(store.totals(None).0, 2);
+        drop(stats_lock);
+        assert_eq!(Store::load_from(path.clone()).totals(None).0, 2);
+        store.clear_everything().unwrap();
+        let again = Store::load_from(path.clone());
+        assert!(again.history.is_empty());
+        assert_eq!(again.totals(None).0, 0);
+        for name in ["history.json", "stats.json"] { std::fs::remove_file(path.join(name)).unwrap(); }
         std::fs::remove_dir(path).unwrap();
     }
 

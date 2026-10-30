@@ -39,6 +39,8 @@ Windows offers **Copilot** for keyboards that emit **Win + Shift + F23**, alongs
 
 These editors save locally before applying changes to dictation. If the file cannot be written or replaced, the saved entries remain active, the error stays visible and entered text is retained for retry. App-style choices return to the saved selection after a failed write. Controls wait for the current save before accepting another edit.
 
+Deleting a dictation keeps the entry visible until the history file is updated. History erasure failures remain visible and retryable. **Erase everything** retains its confirmation if the write fails; if history was erased but statistics could not be, the error identifies that partial result and the remaining statistics stay intact.
+
 ## Call audio
 
 Choose microphone and playback independently under Flow Settings. A laptop microphone with Bluetooth earbuds is a supported combination. Automatic mode inspects active Windows audio sessions to follow the call application's devices, including selections made inside Zoom or browser calls. If no call is identified, it uses the Windows communications endpoints and then system defaults. Manual choices retain their device identity and never silently switch to speakers. The picker refreshes when devices connect or disconnect.
