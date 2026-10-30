@@ -49,3 +49,13 @@ test("both CLI sign-ins are offered only after a successful sign-in probe", () =
   assert.deepEqual(offered({ "claude-code": false, codex: true }), ["codex"]);
   assert.deepEqual(offered({ "claude-code": true, codex: true }), ["claude-code", "codex"]);
 });
+
+test("opted-in subscriptions bypass API availability only while their CLI is ready", () => {
+  const settings = { ...DEFAULT_SETTINGS, chatSubscriptions: { anthropic: true, openai: true, cursor: true, copilot: false } };
+  const offered = ready => usableProviders(settings, { anthropic: true, openai: true }, {}, new Set(ready)).map(p => p.id);
+  assert.deepEqual(offered([]), []);
+  assert.deepEqual(offered(["anthropic"]), ["anthropic"]);
+  assert.deepEqual(offered(["openai"]), ["openai"]);
+  assert.deepEqual(offered(["anthropic", "openai", "cursor", "copilot"]), ["anthropic", "openai", "cursor"]);
+  assert.deepEqual(usableProviders(DEFAULT_SETTINGS, {}, {}, new Set(["anthropic", "openai", "cursor"])), []);
+});

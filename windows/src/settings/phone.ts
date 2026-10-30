@@ -449,7 +449,7 @@ function chatBlock(makeToggle: Toggle, settings: Settings): HTMLElement {
     button.addEventListener("click", () => {
       list.replaceChildren(h("div", { class: "hint", text: t("Loading models…") }));
       Bridge.chatModels(p.id).then(
-        (models) => show(models.map((m) => m.id)),
+        (models) => show(models.map((m) => m.id || "default")),
         (err) => list.replaceChildren(h("div", { class: "hint", text: String(err).replace(/^Error:\s*/, "") })),
       );
     });
@@ -460,10 +460,19 @@ function chatBlock(makeToggle: Toggle, settings: Settings): HTMLElement {
     allowed = status.models;
     body.replaceChildren();
     if (!status.enabled) return;
+    const subscriptions = (await Bridge.subscriptionStatus()) ?? [];
     const hasKey: Record<string, boolean> = {};
-    for (const p of usableProvidersCandidates()) hasKey[p.id] = (await Bridge.secretPresent(p.key!)) ?? false;
+    for (const p of usableProvidersCandidates()) {
+      if (!subscriptions.some(row => row.provider === p.id && row.on)) {
+        hasKey[p.id] = (await Bridge.secretPresent(p.key!)) ?? false;
+      }
+    }
     const connections = await Bridge.agentConnections().catch(() => []);
-    const providers = usableProviders(settings, hasKey, Object.fromEntries(connections.map(c => [c.id, c.signedIn])));
+    const signedIn = Object.fromEntries(connections.map(c => [c.id, c.signedIn]));
+    const ready = new Set(subscriptions.filter(row => row.on && row.installed
+      && (row.provider !== "anthropic" || signedIn["claude-code"])
+      && (row.provider !== "openai" || signedIn.codex)).map(row => row.provider));
+    const providers = usableProviders(settings, hasKey, signedIn, ready);
     body.append(h("div", { class: "hint", text: t("Models the phone may use") }));
     if (providers.length === 0) body.append(h("div", { class: "hint", text: t("Connect Claude Code, Codex, an API provider or a model server first.") }));
     for (const p of providers) body.append(providerRow(p));

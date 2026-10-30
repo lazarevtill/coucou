@@ -23,6 +23,8 @@ Claude Code and Codex connections are in `windows/src-tauri/src/cli_agents.rs` a
 
 `cli_relay.rs` adds opt-in subscription switches for the upstream providers. Anthropic and OpenAI subscription aliases must use the same `cli_agents` runtime, attachment handling and cancellation as explicit Claude Code/Codex. Keep API model choices and billing separate. Other relays use official CLI read-only modes with bounded process supervision; their inherited configuration is not an OS sandbox. A failed settings save must leave the subscription switch unchanged.
 
+Phone chat validates its enabled switch and model allowlist independently. Selected subscription routes do not require API credentials; the picker offers Claude Code/Codex aliases only after their sign-in probes succeed. Subscription-only providers expose the CLI's default model.
+
 The connections view's Use for all text action selects chat and uses `flow_use_agent` to patch the three Flow text providers under the store lock. It must retain audio, hotkey, performance and enabled switches, and report a failed Flow save without claiming complete setup.
 
 Public crypto quotes and read-only portfolios use `windows/src-tauri/src/markets/`, with request limits and service origins in its `defaults.json`. They must remain read-only and inactive until the user enables the pill. Portfolio keys stay in the OS credential store; unavailable balances and prices must remain visibly incomplete.

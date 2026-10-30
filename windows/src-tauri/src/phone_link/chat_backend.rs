@@ -13,13 +13,13 @@ use tokio::sync::mpsc::UnboundedSender;
 use super::chat::{BoxFuture, ChatBackend, ChatConfig, ChatFail, ModelOption};
 use crate::chat::Chat;
 use crate::settings::Settings;
-use crate::{chat, claude, log, openai_compat, secrets, Shared};
+use crate::{chat, claude, cli_relay, log, openai_compat, secrets, Shared};
 
 /// Most models the user can allow, and the longest model name taken.
 pub const MAX_ALLOWED: usize = 50;
 const MAX_MODEL_CHARS: usize = 200;
 
-const PROVIDERS: [&str; 9] = ["claude-code", "codex", "anthropic", "google", "openai", "openrouter", "ollama", "lmstudio", "custom"];
+const PROVIDERS: [&str; 11] = ["claude-code", "codex", "anthropic", "google", "openai", "openrouter", "ollama", "lmstudio", "custom", "cursor", "copilot"];
 
 pub struct AppChat {
     app: AppHandle,
@@ -48,7 +48,7 @@ impl ChatBackend for AppChat {
         let id = model_id.to_string();
         Box::pin(async move {
             let Some((provider, model)) = parse_model_id(&id) else { return Err(ChatFail::Internal) };
-            if let Some(key) = key_name(provider) {
+            if let Some(key) = required_key(&settings, provider) {
                 if secrets::get(key).is_none() {
                     return Err(ChatFail::NoKey);
                 }
@@ -88,6 +88,12 @@ fn key_name(provider: &str) -> Option<&'static str> {
     openai_compat::provider(provider).map(|p| p.key)
 }
 
+/// Subscription routing is selected on this computer. It must not be blocked
+/// by an unrelated API credential; the phone's model allowlist still applies.
+fn required_key(settings: &Settings, provider: &str) -> Option<&'static str> {
+    if cli_relay::uses_subscription(settings, provider) { None } else { key_name(provider) }
+}
+
 pub fn provider_name(provider: &str) -> String {
     match provider {
         "claude-code" => "Claude Code".into(),
@@ -96,6 +102,8 @@ pub fn provider_name(provider: &str) -> String {
         "google" => "Google".into(),
         "openai" => "OpenAI".into(),
         "openrouter" => "OpenRouter".into(),
+        "cursor" => "Cursor".into(),
+        "copilot" => "GitHub Copilot".into(),
         "ollama" => "Ollama".into(),
         "lmstudio" => "LM Studio".into(),
         _ => "Custom server".into(),
@@ -110,7 +118,7 @@ pub fn parse_model_id(id: &str) -> Option<(&str, &str)> {
     if !PROVIDERS.contains(&provider) || model.is_empty() || model.chars().count() > MAX_MODEL_CHARS || model.chars().any(char::is_control) {
         return None;
     }
-    if matches!(provider, "claude-code" | "codex") && model != "default" { return None; }
+    if matches!(provider, "claude-code" | "codex" | "cursor" | "copilot") && model != "default" { return None; }
     Some((provider, model))
 }
 
@@ -213,6 +221,23 @@ mod tests {
         for (provider, name) in [("claude-code", "Claude Code"), ("codex", "Codex")] {
             assert_eq!(key_name(provider), None);
             assert_eq!(provider_name(provider), name);
+            assert!(parse_model_id(&format!("{provider}/default")).is_some());
+            assert!(parse_model_id(&format!("{provider}/arbitrary")).is_none());
+        }
+    }
+
+    #[test]
+    fn phone_subscription_routes_require_no_api_key_without_changing_api_routes() {
+        let mut settings = Settings::default();
+        for provider in ["anthropic", "openai", "google"] {
+            assert!(required_key(&settings, provider).is_some());
+            settings.chat_subscriptions.insert(provider.into(), true);
+            assert_eq!(required_key(&settings, provider), None);
+            settings.chat_subscriptions.insert(provider.into(), false);
+            assert!(required_key(&settings, provider).is_some());
+        }
+        for provider in ["cursor", "copilot"] {
+            assert_eq!(key_name(provider), None);
             assert!(parse_model_id(&format!("{provider}/default")).is_some());
             assert!(parse_model_id(&format!("{provider}/arbitrary")).is_none());
         }
