@@ -26,14 +26,14 @@ The integrated branch contains upstream 0.5.6 at `37e457ddae3cbe7be4a6539cc5b1cd
 
 | Check | Result |
 | --- | --- |
-| Frontend suite | 674 passed, zero failed |
-| Rust workspace suite | 805 passed: 756 app, 46 hook, 3 relay; 21 opt-in tests ignored |
+| Frontend suite | 678 passed, zero failed |
+| Rust workspace suite | 813 passed: 764 app, 46 hook, 3 relay; 21 opt-in tests ignored |
 | TypeScript and Vite production frontend | Passed; the large shared translation-chunk warning remains unsuppressed |
 | Rust compile | Passed without warnings |
 | Remote CI | Unverified for the latest source. GitHub rejects workflow dispatch with HTTP 422, “Actions has been disabled for this repository,” and supplies no GitHub Actions run for the latest commit |
-| Windows installer | NSIS 0.5.6 from source `c9760543e9f4a32d094a0cc7c10ad092ad1f3dc2` built and installed successfully; complete executable matches the compiled release with Tauri's NSIS bundle marker |
-| Installed startup | Native GUI shows 0.5.6 and Ready with the selected Right Alt listener. The process remains responsive; Parakeet loaded in about 1.8 seconds |
-| Installation preservation | Twenty-one checked files unchanged immediately after installation, including notes, models, preferences and both CLI configurations |
+| Windows installer | NSIS 0.5.6 from source `9216aa826ba8882c78c6c9c605ab200fc8c8c8a1` built and installed successfully; complete executable matches the compiled release with Tauri's NSIS bundle marker |
+| Installed startup | Native accessibility state shows 0.5.6 and Ready with the selected Right Alt listener. The process remains responsive; Parakeet loaded in about 2.9 seconds. The desktop helper cannot activate the current Hub window, so the new progress view has no completed native click-through check |
+| Installation preservation | Twenty-two checked files unchanged immediately after installation, including notes, models, preferences and both CLI configurations |
 | Native provider controls | Both Use for all text buttons completed successfully; all four targets changed correctly and unrelated preferences were retained. Original choices were restored after testing |
 | Native summaries | Both Claude Code and Codex generated the expected summary, key points and Friday task from a synthetic call through the installed GUI. Original provider preferences were restored |
 | Native Markdown export | Windows Save As cancellation wrote nothing; a subsequent save produced the complete 551-byte synthetic note export at the chosen path. The stored note was unchanged |
@@ -41,6 +41,9 @@ The integrated branch contains upstream 0.5.6 at `37e457ddae3cbe7be4a6539cc5b1cd
 | History deletion and erasure | Four frontend regressions and four native store tests passed, including Windows file locks, retry, duplicate submissions, incoming dictations and partial statistics-erasure failure. Checks use isolated synthetic data |
 | Hub artwork | Native startup, minimize/restore and close/reopen checks showed the animated logo, page characters and backgrounds. The initial visibility snapshot runs on the UI queue; existing hidden-window animation checks pass |
 | Native Notetaker | Start, live transcript, Stop and saved Capture details passed with quiet synthetic speech. Stop retained its UI identity across clock/transcript updates, the full expected sentence was saved and the app remained responsive |
+| Final call processing | The installed build processed a synthetic fixture with 30 minutes of leading microphone silence and 280 seconds of playback in 56.9 seconds. All 21 expected speech repetitions survived; native logs covered microphone, playback, speaker analysis and saving. The saved final note loaded correctly and its audio was removed. The synthetic note was then removed; five existing user notes retained their exact hashes |
+| Processing UI and save failures | Frontend regressions retain transcript nodes across progress updates and display text after failure. Native write and atomic-replacement failures preserve source audio and the prior transcript; a successful retry commits before cleanup |
+| Speaker grouping | Three native regressions cover brief fragments, short-only calls, repeated brief speakers and rename-to-combine without changing text or microphone identity. Actual speaker identities are not verified by these tests |
 | UI deadlock regression | An unpumped native window reproduces the synchronous window-title wait before the fix; the title-free audio-route scan passes |
 | Explicit-view regression | Five tests reproduce suppressed shortcut/recap/update requests with the island off; all pass with explicit opening. The installed chat shortcut expands the native window from 240 by 6 to 720 by 320 and focuses it. Visual and typing confirmation remains open because the desktop helper does not expose the floating window |
 | Installed speech models | All six files match the manifest sizes and SHA-256 hashes; an optimized native check passed transcription, automatic calibration and manual override |
@@ -61,7 +64,8 @@ The opt-in tests require signed-in providers, native applications, model fixture
 ## Open verification gates
 
 - Native chat for both providers, floating-toolbar interaction, real project/hook approval round trips, screenshot capture/paste and mail-client drafts need further GUI verification. Generic upstream CLI accounts are not installed on the development laptop.
-- Real Zoom/Meet device changes, in-flight headset disconnection/reconnection, wired/USB hardware and actual call transcription need interactive verification. The latest endpoint probe exposes only the built-in microphone and speakers.
+- A real long Zoom call reached a saved transcript with device recovery evidence. Exact physical switch causes, lossless capture and speaker identities remain unverified. Controlled in-flight headset reconnection, Meet-specific changes and wired/USB hardware still need interactive verification. The latest native dual-capture test passed with built-in microphone and speakers at 48 kHz stereo; recoverable discontinuities remained visible.
+- The updated installed progress view and speaker-merge controls need native interaction verification. The desktop helper reports “coordinate input geometry is unavailable” and “failed to activate captured window” after fresh window selection and retry. Frontend behavior tests and the installed processing pipeline pass independently of that helper.
 - Apple Music's supported-seek path and sustained audible playback remain unverified. Native play/pause acceptance and artwork do not establish audio continuity. Private exchange accounts and other configured service accounts are not tested.
 - The Android phone protocol has a Windows implementation; Windows-to-iPhone transport is not implemented. The [NetBird note](netbird.md) describes integration options, not an implemented remote-management panel.
 - The installed build is a local validation build. No public release or upstream PR is published by these checks.
