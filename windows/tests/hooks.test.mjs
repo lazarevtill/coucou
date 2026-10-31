@@ -876,3 +876,24 @@ test("Antigravity questions without usable text still alert with a translated la
   assert.equal(asked.length, 5);
   assert.ok(asked.every((request) => request === "alert:overview"));
 });
+
+for (const agent of ["claude", "codex"]) {
+  test(`${agent}: queued permissions keep the session waiting until its last request is answered`, () => {
+    const session = `queued-${agent}`;
+    for (const request of ["first", "second"]) {
+      hook({ hook_event_name: "PermissionRequest", coucou_agent: agent,
+        session_id: session, request_id: `${session}-${request}`,
+        tool_name: "Bash", tool_input: { command: "echo check" } });
+    }
+    assert.equal(State.approvalQueue.length, 1);
+    State.endApproval();
+    assert.equal(State.pendingApproval.requestId, `${session}-second`);
+    assert.equal(State.isPinned, true);
+    assert.equal(State.sessions.get(session).state, "approval");
+    State.endApproval();
+    assert.equal(State.pendingApproval, null);
+    assert.equal(State.sessions.get(session).state, "working");
+    assert.equal(State.sessions.get(session).waitingFor, null);
+    State.sessions.remove(session);
+  });
+}

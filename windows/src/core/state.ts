@@ -340,6 +340,9 @@ class AppState {
   endApproval() {
     const req = this.pendingApproval;
     if (!req) return;
+    if (!this.approvalQueue.some(next => next.sessionId === req.sessionId)) {
+      this.sessions.resolveApproval(req.sessionId);
+    }
     this.pendingApproval = null;
     this.isPinned = false;
     this.updateTask(req.pillId, "working");
