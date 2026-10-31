@@ -24,7 +24,7 @@ The integrated branch contains upstream 0.5.8 at `b6a85f29719b5291651c092e33b3f9
 
 ## Observed verification
 
-Automated results describe the current source. Native interaction evidence below describes the installed 0.5.6 validation build; the desktop automation bridge is unavailable for a new GUI run.
+Automated results describe the current source. The installed 0.5.8 executable matches the verified NSIS payload and passes both MCP protocol checks. The native GUI evidence below is limited to the 0.5.6 validation build; it does not verify the current GUI while the desktop automation bridge is unavailable.
 
 | Check | Result |
 | --- | --- |
@@ -37,8 +37,8 @@ Automated results describe the current source. Native interaction evidence below
 | Dependency security | All three npm audits and the 218-coordinate Android app/test/build-plugin scan reported zero findings. Native Sherpa and Linux GLib findings remain open; see [dependency security](dependency-security.md) for exact coverage and limits |
 | Rust compile | One unused `RunError::Unsupported` warning in the upstream Outlook module; reproduced on unchanged parent main |
 | Remote CI | Unverified for the current integrated source. Repository and workflow settings report enabled, but GitHub rejects dispatch with HTTP 422, “Actions has been disabled for this repository,” and current main pushes have no workflow runs |
-| Windows installer | NSIS 0.5.8 from source `6eb6f00` builds successfully. Its extracted executable matches the complete compiled release after Tauri's NSIS marker change; the packaged hook matches the current hook build. The installed app remains the validated 0.5.6 build; installation and native GUI verification of 0.5.8 remain open |
-| Installed startup | Native accessibility state shows 0.5.6 and Ready with the selected Right Alt listener. The process remains responsive. Native model-picker, processing-progress and speaker-merge checks passed |
+| Windows installer | NSIS 0.5.8 from source `6eb6f00` builds successfully. The installed executable matches the extracted payload byte for byte; that payload matches the complete compiled release after Tauri's NSIS marker change. The packaged hook matches the current hook build. The installed executable passes current and legacy MCP discovery, search/fetch, denied access, live revocation and clean-exit checks with an isolated synthetic call. Native GUI verification of 0.5.8 remains open |
+| GUI startup reference (0.5.6) | Native accessibility state shows Ready with the selected Right Alt listener. The process remains responsive. Native model-picker, processing-progress and speaker-merge checks passed on that validation build |
 | Installation preservation | Twenty-three checked files unchanged immediately after installation, including notes, models, preferences and both CLI configurations |
 | Native provider controls | Both Use for all text buttons completed successfully; all four targets changed correctly and unrelated preferences were retained. Original choices were restored after testing |
 | Native summaries | Both Claude Code and Codex generated the expected summary, key points and Friday task from a synthetic call through the installed GUI. Original provider preferences were restored |
@@ -75,7 +75,7 @@ The opt-in tests require signed-in providers, native applications, model fixture
 - A real long Zoom call reached a saved transcript with device recovery evidence. Exact physical switch causes, lossless capture and speaker identities remain unverified. Controlled in-flight headset reconnection, Meet-specific changes and wired/USB hardware still need interactive verification. The latest native dual-capture test passed with built-in microphone and speakers at 48 kHz stereo; recoverable discontinuities remained visible.
 - Apple Music's supported-seek path and sustained audible playback remain unverified. Native play/pause acceptance and artwork do not establish audio continuity. Private exchange accounts and other configured service accounts are not tested.
 - The Android phone protocol has a Windows implementation; Windows-to-iPhone transport is not implemented. The [NetBird note](netbird.md) describes integration options, not an implemented remote-management panel.
-- The installed build is the 0.5.6 local validation build. The current 0.5.8 source has separate upstream PRs; these checks do not publish a release or replace the installed app.
+- The installed 0.5.8 build matches the verified local installer and passes the isolated MCP subprocess checks. Current native GUI interaction remains unverified. The fork's installed build does not establish readiness of the separate upstream PR branches or publish a release.
 - Linux builds and native macOS/iPhone behavior remain outside this validation. Full app production readiness is not established by the passing suites and unsigned CI builds.
 
 The sixteen-language catalogs pass completeness and placeholder checks; both platforms' 0.5.8 What's new entries pass. The macOS localization check passes with UTF-8 Python input. Native linguistic and layout review remains open. The proactive assistant in [agent-design.md](agent-design.md) is a specification.
