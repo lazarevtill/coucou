@@ -189,13 +189,14 @@ test("a failed app-style change restores the persisted choice and allows retry",
 
 test("adding and deleting app styles leaves the saved list intact when writing fails", async t => {
   const f = await fixture(t, stylesPage);
-  const add = f.page.find("select")[2];
+  const add = f.page.find("select").find(select => select.find("option").some(option => option.textContent === "+ Add an app"));
+  const initialSelects = f.page.find("select").length;
   f.write(async () => { throw new Error("Disk full"); });
   add.value = "editor\nEditor";
   add.fire("change");
   await flush();
   assert.equal(f.data.styles.length, 1);
-  assert.equal(f.page.find("select").length, 4);
+  assert.equal(f.page.find("select").length, initialSelects);
   f.write(async () => {});
   add.value = "editor\nEditor";
   add.fire("change");
@@ -204,7 +205,7 @@ test("adding and deleting app styles leaves the saved list intact when writing f
   f.write(async () => { throw new Error("Disk full"); });
   button(f.page, "Delete").fire("click");
   await flush();
-  assert.equal(f.page.find("select").length, 5);
+  assert.equal(f.page.find("select").length, initialSelects + 1);
   f.write(async () => {});
   button(f.page, "Delete").fire("click");
   await flush();

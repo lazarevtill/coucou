@@ -35,6 +35,8 @@ import { SPOTIFY_ID } from "../core/spotify";
 import { MUSIC_ID } from "../core/apple-music";
 import { buildWhatsAppCard } from "./whatsapp";
 import { WHATSAPP_ID } from "../core/whatsapp";
+import { MAIL_ID } from "../core/mail";
+import { buildMailCard } from "./mail";
 import type { Outfit, OutfitSelection } from "../mochi/wardrobe";
 import { language, t, tl, type Msg } from "../i18n/i18n";
 import type { ViewCommand } from "../island/shortcuts";
@@ -229,6 +231,8 @@ function buildOverview(actions: ViewActions): ViewHost {
   const musicCard = buildAppleMusicCard();
   let mediaPills: MediaPillHost[] = [];
   // WhatsApp's card too: its reply field keeps the draft and the keyboard while messages arrive.
+  // Mail's card too (classic Outlook): the search field keeps its text and the keyboard.
+  const mailCard = buildMailCard({ keyboard: (on) => actions.keyboard(on) });
   const whatsappCard = buildWhatsAppCard({
     openSettings: () => actions.openSettingsWindow(),
     keyboard: (on) => actions.keyboard(on),
@@ -243,7 +247,7 @@ function buildOverview(actions: ViewActions): ViewHost {
   let pillIds = "";
   let detailOpen = false;
   let lastFocus: string | null = null;
-  let mode: "ticker" | "card" | "plan" | "diff" | "spotify" | "music" | "whatsapp" | null = null;
+  let mode: "ticker" | "card" | "plan" | "diff" | "spotify" | "music" | "whatsapp" | "mail" | null = null;
   let cardKey = "";
   /** The list row highlighted at the last sync, to scroll only when it moves. */
   let shownSelection: number | null = null;
@@ -404,6 +408,14 @@ function buildOverview(actions: ViewActions): ViewHost {
           cardKey = "";
         }
         card.sync();
+      } else if (task && task.id === MAIL_ID) {
+        if (mode !== "mail") {
+          clear(leftBody);
+          leftBody.append(mailCard.el);
+          mode = "mail";
+          cardKey = "";
+        }
+        mailCard.sync();
       } else if (task && task.id === WHATSAPP_ID) {
         // Its own card in every state: not linked, no message, conversations, one open.
         if (mode !== "whatsapp") {

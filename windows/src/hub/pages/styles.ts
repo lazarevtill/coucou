@@ -45,7 +45,7 @@ export async function stylesPage(page: HTMLElement, ctx: HubContext) {
   };
 
   const defaultRow = row(t("Other apps"), null, select(styleOptions(), status.prefs.defaultStyle, (style) => void ctx.setPrefs((p) => (p.defaultStyle = style))));
-  page.append(card(
+  const stylesCard = card(
     row(t("Clean up dictation"), t("Removes the “um”, the repeats and the corrections you made while speaking, and fixes the punctuation."),
       toggle(status.prefs.cleanup, (on) => {
         void ctx.setPrefs((p) => (p.cleanup = on));
@@ -55,7 +55,9 @@ export async function stylesPage(page: HTMLElement, ctx: HubContext) {
     divider(),
     defaultRow,
     h("div", { class: "hub-note", text: t("Only the text goes to your selected provider. If it takes too long, your original words are pasted. Claude Code and Codex use your existing sign-in.") }),
-  ));
+  );
+  stylesCard.dataset.anchor = "flow.styles";
+  page.append(stylesCard);
 
   // "Add an app": the apps with a window right now.
   const add = h("select", { class: "hub-select" }) as HTMLSelectElement;

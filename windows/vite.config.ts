@@ -68,9 +68,12 @@ export default defineConfig({
         pill: resolve(__dirname, "pill.html"),
       },
       output: {
-        // The interface's strings in every language (src/i18n/*.json) make a
-        // chunk of their own, kept apart from the code that changes more often.
-        manualChunks: (id) => (/[\\/]src[\\/]i18n[\\/][^\\/]+\.json$/.test(id) ? "i18n" : undefined),
+        // Cache the generated shared catalog and platform-only catalog separately.
+        // Adding a platform label does not invalidate the larger shared catalog.
+        manualChunks: (id) => {
+          const catalog = /[\\/]src[\\/]i18n[\\/]([^\\/]+)\.json$/.exec(id)?.[1];
+          return catalog ? `i18n-${catalog}` : undefined;
+        },
       },
     },
   },

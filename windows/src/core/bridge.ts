@@ -411,8 +411,8 @@ export const Bridge = {
 
   // ── Chat, files, secrets ──────────────────────────────────────────────────
   /** One chat turn. The API key and any file bytes never leave Rust. */
-  chatSend: (query: string, context: ChatContext | null) =>
-    callOrThrow<{ text: string }>("chat_send", { query, context }),
+  chatSend: (query: string, context: ChatContext | null, mail = false) =>
+    callOrThrow<{ text: string }>("chat_send", { query, context, mail }),
   chatReset: () => call<void>("chat_reset"),
   portfolioSettings: () => call<PortfolioSettings>("portfolio_settings"),
   portfolioSaveWallets: (wallets: PortfolioWallet[]) => invoke<void>("portfolio_save_wallets", { wallets }),

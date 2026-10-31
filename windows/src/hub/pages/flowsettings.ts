@@ -9,7 +9,7 @@ import { FlowBridge, type Edge, type FlowKey, type ModelsStatus, type FlowPrefs,
 import { audioMeters, updateAudioDevices } from "../audio";
 import type { HubContext } from "../shell";
 import { pageSave } from "../save";
-import { button, card, divider, keyKeycap, keycap, label, number, row, segmented, select, toggle } from "../ui";
+import { anchor, button, card, divider, keyKeycap, keycap, label, number, row, segmented, select, toggle } from "../ui";
 
 export function textEngines(): [FlowPrefs["summaryEngine"], string][] {
   return [["claude-code", "Claude Code"], ["codex", "Codex"], ["claude", t("Claude (your key)")],
@@ -78,7 +78,7 @@ export async function flowSettingsPage(page: HTMLElement, ctx: HubContext) {
     ["right_shift", t("Right {0}", { 0: "Shift" })],
     ["left_ctrl_super", status.platform === "windows" ? "Ctrl + Win" : "Ctrl + Super"],
   ];
-  const edges: [Edge, string][] = [["bottom", t("Bottom")], ["left", t("Left")], ["right", t("Right")]];
+  const edges: [Edge, string][] = [["bottom", t("Bottom")], ["bottom-left", t("Bottom-left")], ["bottom-right", t("Bottom-right")], ["left", t("Left")], ["right", t("Right")]];
   page.append(label(t("Keys")));
   const keysCard = card(
     row(t("Hold a key to dictate anywhere"), null, toggle(prefs.enabled, (on) => void ctx.setPrefs((p) => (p.enabled = on)))),
@@ -104,7 +104,7 @@ export async function flowSettingsPage(page: HTMLElement, ctx: HubContext) {
   } else if (status.keys !== "ok") {
     keysCard.append(h("div", { class: "hub-warn", text: t("Coucou can't watch the keyboard here: use the pill's microphone to dictate.") }));
   }
-  page.append(keysCard);
+  page.append(anchor("flow.keys", keysCard));
 
   // ── Microphone ──
   page.append(label(t("Microphone")));
@@ -112,7 +112,7 @@ export async function flowSettingsPage(page: HTMLElement, ctx: HubContext) {
   const playbackSelect = select([], prefs.speakers, (device) => void ctx.setPrefs(p => (p.speakers = device))) as HTMLSelectElement;
   updateAudioDevices(micSelect, status.mics, prefs.mic, status.platform === "windows");
   updateAudioDevices(playbackSelect, status.speakers, prefs.speakers, status.platform === "windows");
-  page.append(card(row(t("Microphone"), t("The one Coucou listens to for dictation and calls."), micSelect)));
+  page.append(anchor("flow.permission", card(row(t("Microphone"), t("The one Coucou listens to for dictation and calls."), micSelect))));
   const meters = audioMeters();
   let testing = false;
   let visible = (await FlowBridge.hubShown()) !== false;
@@ -142,10 +142,10 @@ export async function flowSettingsPage(page: HTMLElement, ctx: HubContext) {
 
   // ── Recognition ──
   page.append(label(t("Recognition")));
-  page.append(card(
+  page.append(anchor("flow.recognition", card(
     row(t("Parakeet, on your computer"), t("The most accurate, offline, 25 languages. Downloaded once (about {0} MB).", { 0: number(status.models.downloadMb) }), modelsControl(ctx)),
     h("div", { class: "hub-note", text: t("Your voice never leaves this computer: Parakeet turns it into text here, and the recording is dropped as soon as it is pasted.") }),
-  ));
+  )));
 
   const performance = status.performance;
   const choices: [string, string][] = [["0", t("Automatic (measured on this computer)")]];
@@ -177,18 +177,18 @@ export async function flowSettingsPage(page: HTMLElement, ctx: HubContext) {
 
   // ── Notetaker ──
   page.append(label(t("Notetaker")));
-  page.append(card(
+  page.append(anchor("flow.summary", card(
     row(t("Summaries"), null, select(textEngines(), prefs.summaryEngine, (engine) => void ctx.setPrefs((p) => (p.summaryEngine = engine)))),
     h("div", { class: "hub-note", text: t("Only the transcript goes to the provider you choose. Claude Code and Codex use your existing sign-in. Model servers use the address and model configured in Settings → Chat.") }),
     divider(),
     h("div", { class: "hub-note", text: t("Audio and transcripts are stored on this computer. Summaries send text to the provider selected in Flow Settings. Tell the people in the call that you are recording.") }),
-  ));
+  )));
 
   // ── App ──
   page.append(label(t("App")));
-  page.append(card(
+  page.append(anchor("flow.app", card(
     row(t("Open this window when you open Coucou"), t("Not when Coucou starts with the computer."), toggle(prefs.openAtLaunch, (on) => void ctx.setPrefs((p) => (p.openAtLaunch = on)))),
-  ));
+  )));
 
   // ── Privacy ──
   page.append(label(t("Privacy")));
@@ -221,5 +221,5 @@ export async function flowSettingsPage(page: HTMLElement, ctx: HubContext) {
     );
   };
   erase();
-  page.append(privacy);
+  page.append(anchor("flow.privacy", privacy));
 }

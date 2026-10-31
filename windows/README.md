@@ -16,6 +16,7 @@ No Coucou account is required. API keys and local model servers remain optional.
 The tray opens chat, settings and session activity. **Settings → General** controls the island, notifications, editor and terminal. The island can show other supported agents and service integrations, plan usage, weekly recaps and diffs. The phone link, dictation, notes and voice features have their own controls in the Coucou window.
 
 - [Terminal detection and focus](docs/terminals.md)
+- [Mail with classic Outlook](docs/mail.md)
 - [Folder plugins](docs/plugins.md)
 - [Current integration verification](docs/integration-review.md)
 - [Windows features, call audio and Parakeet settings](docs/windows-parity.md)

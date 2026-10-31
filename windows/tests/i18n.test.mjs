@@ -462,6 +462,7 @@ const NOT_TEXT = new Set([
   "unknown", // a CI state
   "Resend", // the service's name (the Mac's "Resend" is a button: send again)
   "Stop", // Claude Code's hook event (the Mac's "Stop" is a button)
+  "running", // the phase of a mail plan (src/views/mailplan.ts)
 ]);
 
 /** Internal identifiers are identified by syntax, not an exempt English word. */

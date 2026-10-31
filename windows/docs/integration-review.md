@@ -1,10 +1,10 @@
 # Windows integration review
 
-Verification snapshot: 2026-10-30. This review covers the integrated Windows build, existing Claude Code/Codex sign-ins, chat, session monitoring, audio capture and native feature equivalents. See [Windows feature coverage](windows-parity.md) for implementation details and per-feature limits.
+Verification snapshot: 2026-10-31. This review covers the integrated Windows build, existing Claude Code/Codex sign-ins, chat, session monitoring, audio capture and native feature equivalents. See [Windows feature coverage](windows-parity.md) for implementation details and per-feature limits.
 
 ## Remote comparison
 
-The integrated branch contains upstream 0.5.6 at `37e457ddae3cbe7be4a6539cc5b1cd968692971c`; a fresh fetch reports zero missing upstream commits. The Windows tray, session details, notifications, focus, project launch and folder-plugin behavior are retained. Claude Code and Codex remain explicit, equally supported connections. There is no implicit API-to-CLI provider fallback and no unresolved merge entry.
+The integrated branch contains upstream 0.5.8 at `b6a85f29719b5291651c092e33b3f9d4004d091e`; a fresh fetch reports zero missing upstream commits. The Windows tray, session details, notifications, focus, project launch and folder-plugin behavior are retained. Claude Code and Codex remain explicit, equally supported connections. There is no implicit API-to-CLI provider fallback and no unresolved merge entry.
 
 ## Reviewed behavior
 
@@ -13,7 +13,7 @@ The integrated branch contains upstream 0.5.6 at `37e457ddae3cbe7be4a6539cc5b1cd
 - Optional Anthropic/OpenAI subscription aliases use the same Claude Code/Codex runtime. Phone chat retains its separate enable switch and model allowlist without requiring an unrelated API key. Other upstream CLI relays are opt-in and use their official plan/ask modes; inherited configuration is not an OS sandbox.
 - CLI completion requires a successful terminal result. Processes have bounded input/output, cancellation, deadlines and Windows child-process supervision. Native projects retain manual/on-request approvals.
 - Attachment history stays with its selected provider. PDF conversion includes every page within explicit limits; switching providers does not transfer attachment bytes. Screenshot pasting, window selection and drag attachment preview context without sending.
-- Session permissions remain independent for both agents. Hidden surfaces hand requests back; tray questions are not converted into Allow/Deny approvals. Hook installation requires preview, fingerprint verification, backup and an explicit click.
+- Session permissions remain independent for both agents. Queued requests keep their session waiting until its last request is answered, and the next card stays pinned. Hidden surfaces hand requests back; tray questions are not converted into Allow/Deny approvals. Hook installation requires preview, fingerprint verification, backup and an explicit click.
 - Settings migration retains Windows preferences, model-server settings and folder-plugin trust. Ordinary settings saves cannot grant trust. Credentials use the OS store.
 - Automatic call audio follows active application routes before Windows defaults, with independent fixed-device overrides, shared Settings/recording recovery and retained errors. Ambiguous app or browser routes are reported.
 - Finished calls retain source names, received-audio evidence, peak levels, native formats and warnings after transcription removes the audio files. Discontinuity warnings do not claim that a finished call is still recording.
@@ -24,12 +24,14 @@ The integrated branch contains upstream 0.5.6 at `37e457ddae3cbe7be4a6539cc5b1cd
 
 ## Observed verification
 
+Automated results describe the current source. Native interaction evidence below describes the installed 0.5.6 validation build; the desktop automation bridge is unavailable for a new GUI run.
+
 | Check | Result |
 | --- | --- |
-| Frontend suite | 683 passed, zero failed |
-| Rust workspace suite | 813 passed: 764 app, 46 hook, 3 relay; 22 opt-in tests ignored |
-| TypeScript and Vite production frontend | Passed; the large shared translation-chunk warning remains unsuppressed |
-| Rust compile | Passed without warnings |
+| Frontend suite | 708 passed, zero failed |
+| Rust workspace suite | 834 passed: 785 app, 46 hook, 3 relay; 22 opt-in tests ignored |
+| TypeScript and Vite production frontend | Passed; the translation catalogs have separate cached chunks; the existing 500 kB size advisory remains unsuppressed |
+| Rust compile | One unused `RunError::Unsupported` warning in the upstream Outlook module; reproduced on unchanged parent main |
 | Remote CI | Unverified for the latest source. GitHub rejects workflow dispatch with HTTP 422, “Actions has been disabled for this repository,” and supplies no GitHub Actions run for the latest commit |
 | Windows installer | NSIS 0.5.6 from source `6de38c423231a88ea12729ad2f50c85b7caa740e` built and installed successfully; complete executable matches the compiled release with Tauri's NSIS bundle marker |
 | Installed startup | Native accessibility state shows 0.5.6 and Ready with the selected Right Alt listener. The process remains responsive. Native model-picker, processing-progress and speaker-merge checks passed |
@@ -69,7 +71,7 @@ The opt-in tests require signed-in providers, native applications, model fixture
 - A real long Zoom call reached a saved transcript with device recovery evidence. Exact physical switch causes, lossless capture and speaker identities remain unverified. Controlled in-flight headset reconnection, Meet-specific changes and wired/USB hardware still need interactive verification. The latest native dual-capture test passed with built-in microphone and speakers at 48 kHz stereo; recoverable discontinuities remained visible.
 - Apple Music's supported-seek path and sustained audible playback remain unverified. Native play/pause acceptance and artwork do not establish audio continuity. Private exchange accounts and other configured service accounts are not tested.
 - The Android phone protocol has a Windows implementation; Windows-to-iPhone transport is not implemented. The [NetBird note](netbird.md) describes integration options, not an implemented remote-management panel.
-- The installed build is a local validation build. No public release or upstream PR is published by these checks.
+- The installed build is the 0.5.6 local validation build. The current 0.5.8 source has separate upstream PRs; these checks do not publish a release or replace the installed app.
 - Linux builds and native macOS/iPhone behavior remain outside this validation. Full app production readiness is not established by the passing suites and unsigned CI builds.
 
-The sixteen-language catalogs pass completeness and placeholder checks; both platforms' 0.5.6 What's new entries pass. The macOS localization check passes with UTF-8 Python input. Native linguistic and layout review remains open. The proactive assistant in [agent-design.md](agent-design.md) is a specification.
+The sixteen-language catalogs pass completeness and placeholder checks; both platforms' 0.5.8 What's new entries pass. The macOS localization check passes with UTF-8 Python input. Native linguistic and layout review remains open. The proactive assistant in [agent-design.md](agent-design.md) is a specification.

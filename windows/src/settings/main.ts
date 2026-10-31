@@ -266,6 +266,7 @@ const PLAN_SETTINGS_TEXT = {
   get claude() { return t("Shows your Claude plan usage (5-hour and weekly limits) in the island's header. Coucou adds a status line relay in ~/.claude/settings.json. If you already have a status line, it keeps working as before. Pro and Max plans only."); },
   get claudeCli() { return t("The numbers come from the Claude Code command-line tool. The Claude desktop app does not report them, so the gauge stays empty if you only use the desktop app."); },
   get showClaude() { return t("Show in notch"); },
+  get showClaudeCompact() { return t("Show in compact island"); },
   get codex() { return t("Shows your Codex plan usage (weekly limit and free resets left) in the island's header. Coucou asks the Codex CLI (codex app-server) when the pill shows; nothing is installed. Codex must be signed in with ChatGPT."); },
   get showCodex() { return t("Show Codex plan in the notch"); },
 };
@@ -283,7 +284,10 @@ function planSection(status: HookStatus): HTMLElement {
     if (fresh) Object.assign(status, fresh);
     settings.planRelayInstalled = status.planRelayInstalled;
     // Cancelled or failed: a switch that was waiting for the install falls back.
-    if (!status.planRelayInstalled) settings.showPlanInNotch = false;
+    if (!status.planRelayInstalled) {
+      settings.showPlanInNotch = false;
+      settings.showPlanInCompactIsland = false;
+    }
     redraw();
   };
 
@@ -305,6 +309,21 @@ function planSection(status: HookStatus): HTMLElement {
         });
       }
     });
+    const swCompact = toggle(settings.showPlanInCompactIsland, (on) => {
+      if (!on) {
+        settings.showPlanInCompactIsland = false;
+        void save();
+      } else if (status.planRelayInstalled) {
+        settings.showPlanInCompactIsland = true;
+        void save();
+      } else {
+        void reviewChange(body, STATUS_LINE_CHANGE, true, () => void rebuild(), () => {
+          settings.planRelayInstalled = true;
+          settings.showPlanInCompactIsland = true;
+          void save().then(rebuild);
+        });
+      }
+    });
     body.append(
       h("div", {
         class: "hint",
@@ -312,6 +331,7 @@ function planSection(status: HookStatus): HTMLElement {
       }),
       h("div", { class: "hint", text: PLAN_SETTINGS_TEXT.claudeCli }),
       h("div", { class: "row" }, h("label", { text: PLAN_SETTINGS_TEXT.showClaude }), sw),
+      h("div", { class: "row" }, h("label", { text: PLAN_SETTINGS_TEXT.showClaudeCompact }), swCompact),
       h("div", { class: "row" },
         h("label", { text: t("Relay") }),
         statusDot(status.planRelayInstalled),
@@ -413,9 +433,22 @@ function subscriptionsSection(): HTMLElement {
 
 // ── Claude API section ────────────────────────────────────────────────────────
 
-function apiSection(hasKey: boolean): HTMLElement {
-  const dot = statusDot(hasKey);
-  const state = h("span", { class: "hint", text: hasKey ? t("Key saved in the {store}.", { store: KEY_STORE }) : t("No key yet — the chat needs one.") });
+/** The state line under Claude: the key, else Claude Code (switched on above), else what is missing. */
+async function claudeSubscriptionReady(): Promise<boolean> {
+  const rows = await Bridge.subscriptionStatus();
+  return rows?.some(row => row.provider === "anthropic" && row.on && row.installed) ?? false;
+}
+
+function apiState(hasKey: boolean, relay: boolean): string {
+  if (hasKey) return t("Key saved in the {store}.", { store: KEY_STORE });
+  return relay
+    ? t("No key: the chat can go through your Claude subscription above.")
+    : t("No key yet — the chat needs one.");
+}
+
+function apiSection(hasKey: boolean, relay: boolean): HTMLElement {
+  const dot = statusDot(hasKey || relay);
+  const state = h("span", { class: "hint", text: apiState(hasKey, relay) });
 
   const field = h("input", {
     type: "password",
@@ -431,10 +464,9 @@ function apiSection(hasKey: boolean): HTMLElement {
 
   async function refresh() {
     const present = (await Bridge.secretPresent("anthropic-api-key")) ?? false;
-    dot.style.background = present ? "#22c55e" : "#f4505e";
-    state.textContent = present
-      ? t("Key saved in the {store}.", { store: KEY_STORE })
-      : t("No key yet — the chat needs one.");
+    relay = !present && await claudeSubscriptionReady();
+    dot.style.background = present || relay ? "#22c55e" : "#f4505e";
+    state.textContent = apiState(present, relay);
     field.placeholder = present ? `••••••••••••  ${t("(stored)")}` : "sk-ant-...";
     clearBtn.style.display = present ? "" : "none";
     void model.reload(present);
@@ -1070,6 +1102,11 @@ function generalSection(): HTMLElement {
     ),
     h("div", { class: "hint", text: t("Hovering the island opens it; it folds again shortly after the pointer leaves. Click inside to keep it open.") }),
     h("div", { class: "row" },
+      h("label", { text: t("Open for every pill’s alerts") }),
+      toggle(settings.alertsFromAllPills, (v) => { settings.alertsFromAllPills = v; void save(); }),
+    ),
+    h("div", { class: "hint", text: t("When a pill other than the one shown finishes or hits an error, the notch shows it for a moment, then the pill you had comes back.") }),
+    h("div", { class: "row" },
       h("label", { text: t("Show clock in the island") }),
       toggle(settings.showClock, (v) => { settings.showClock = v; void save(); }),
     ),
@@ -1437,6 +1474,7 @@ async function render() {
   const agents = await Bridge.agentHooksList();
 
   const hasKey = (await Bridge.secretPresent("anthropic-api-key")) ?? false;
+  const claudeRelay = !hasKey && await claudeSubscriptionReady();
   const shortcutReport = await Bridge.shortcutsStatus();
   const launch = await Bridge.launchInfo();
 
@@ -1477,7 +1515,7 @@ async function render() {
     general: () => [generalSection(), shellSection(), openInSection(launch)],
     pills: () => [activePillsSection(connected)],
     agents: () => [connectionsSection(() => settings.chatProvider, async (id) => { const next = { ...settings, chatProvider: id }; await Bridge.saveSettings(next); settings = next; }), claudeSection(status), agentsSection(agents), planSection(status)],
-    chat: () => [connectionsSection(() => settings.chatProvider, async (id) => { const next = { ...settings, chatProvider: id }; await Bridge.saveSettings(next); settings = next; }), subscriptionsSection(), apiSection(hasKey), chatProvidersSection(chatKeys, keyChanged), localSection(customKey)],
+    chat: () => [connectionsSection(() => settings.chatProvider, async (id) => { const next = { ...settings, chatProvider: id }; await Bridge.saveSettings(next); settings = next; }), subscriptionsSection(), apiSection(hasKey, claudeRelay), chatProvidersSection(chatKeys, keyChanged), localSection(customKey)],
     integrations: () => [integrationsSection(present), marketsSection(), portfolioSection(), ...whatsappSections(), pluginsSection()],
     phone: () => [phoneSection(settings.phoneLink ?? false, toggle, settings)],
     shortcuts: () => [shortcutsSection(shortcutReport)],

@@ -52,7 +52,9 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
   recordControl.append(recordIcon, recordLabel);
   listEl.append(recordControl, recordError, entries);
   const detail = h("div", { class: "hub-note-detail" });
-  page.append(h("div", { class: "hub-notes" }, listEl, detail));
+  const notesContainer = h("div", { class: "hub-notes" }, listEl, detail);
+  notesContainer.dataset.anchor = "flow.notes";
+  page.append(notesContainer);
 
   const reload = async () => {
     const next = await FlowBridge.notes();
