@@ -4,7 +4,7 @@
 // decision below is tested without launching anything. Spawning lives in
 // the platform module (`platform::spawn_launch`).
 //
-// The rules this file keeps, all from CLAUDE.md:
+// Launcher constraints:
 //   * no `cmd /C` and no shell parsing anywhere: the folder is always its own
 //     argument, so `&`, `^` and `%` in a folder name stay part of a name;
 //   * the folder must be an absolute directory that exists;
