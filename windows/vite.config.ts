@@ -6,7 +6,7 @@ import { resolve, join, extname } from "node:path";
 // THE one and only place the shared sound folder is declared.
 // The 29 WAVs live in the macOS app and are NOT duplicated in the repo; when they
 // move to `shared/sounds/`, change this single line.
-export const SOUNDS_DIR = resolve(__dirname, "../NotchBuddy/Resources/sounds");
+export const SOUNDS_DIR = resolve(import.meta.dirname, "../NotchBuddy/Resources/sounds");
 // ───────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -29,7 +29,7 @@ function sharedSounds(): Plugin {
       });
     },
     closeBundle() {
-      const out = resolve(__dirname, "dist/sounds");
+      const out = resolve(import.meta.dirname, "dist/sounds");
       if (!existsSync(SOUNDS_DIR)) {
         this.warn(`sounds not found at ${SOUNDS_DIR} — the build will ship without audio`);
         return;
@@ -61,17 +61,18 @@ export default defineConfig({
     emptyOutDir: true,
     rolldownOptions: {
       input: {
-        island: resolve(__dirname, "index.html"),
-        settings: resolve(__dirname, "settings.html"),
-        flyout: resolve(__dirname, "flyout.html"),
-        mochi: resolve(__dirname, "mochi.html"),
-        pill: resolve(__dirname, "pill.html"),
+        island: resolve(import.meta.dirname, "index.html"),
+        settings: resolve(import.meta.dirname, "settings.html"),
+        flyout: resolve(import.meta.dirname, "flyout.html"),
+        mochi: resolve(import.meta.dirname, "mochi.html"),
+        pill: resolve(import.meta.dirname, "pill.html"),
       },
       output: {
         // Cache the generated shared catalog and platform-only catalog separately.
         // Adding a platform label does not invalidate the larger shared catalog.
         codeSplitting: {
           groups: [{
+            debugName: "translation-catalogs",
             name: (id) => {
               const catalog = /[\\/]src[\\/]i18n[\\/]([^\\/]+)\.json$/.exec(id)?.[1];
               return catalog ? `i18n-${catalog}` : undefined;
