@@ -100,7 +100,7 @@ class GenStringsTest {
         File(root, "app/src/main/res/values-fr/strings.xml").appendText("<!-- edited by hand -->")
         val r = run(root, "--check")
         assertEquals(1, r.code)
-        assertTrue(r.output, r.output.contains("stale: app/src/main/res/values-fr/strings.xml"))
+        assertTrue(r.output, r.output.contains("stale: " + File("app/src/main/res/values-fr/strings.xml").path))
     }
 
     @Test fun theReviewListsWhatWasNotTakenFromTheDesktopApps() {
