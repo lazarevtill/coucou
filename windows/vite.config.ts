@@ -56,10 +56,10 @@ export default defineConfig({
   envPrefix: ["VITE_", "TAURI_ENV_"],
   build: {
     target: "chrome110",
-    minify: "esbuild",
+    minify: "oxc",
     sourcemap: false,
     emptyOutDir: true,
-    rollupOptions: {
+    rolldownOptions: {
       input: {
         island: resolve(__dirname, "index.html"),
         settings: resolve(__dirname, "settings.html"),
@@ -70,9 +70,13 @@ export default defineConfig({
       output: {
         // Cache the generated shared catalog and platform-only catalog separately.
         // Adding a platform label does not invalidate the larger shared catalog.
-        manualChunks: (id) => {
-          const catalog = /[\\/]src[\\/]i18n[\\/]([^\\/]+)\.json$/.exec(id)?.[1];
-          return catalog ? `i18n-${catalog}` : undefined;
+        codeSplitting: {
+          groups: [{
+            name: (id) => {
+              const catalog = /[\\/]src[\\/]i18n[\\/]([^\\/]+)\.json$/.exec(id)?.[1];
+              return catalog ? `i18n-${catalog}` : undefined;
+            },
+          }],
         },
       },
     },

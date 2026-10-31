@@ -25,7 +25,7 @@ The tray opens chat, settings and session activity. **Settings → General** con
 
 ## Build and verify
 
-Windows development requires Node.js, Rust with the MSVC toolchain, Microsoft C++ Build Tools and WebView2.
+Windows development requires Node.js 22.18 or newer, Rust with the MSVC toolchain, Microsoft C++ Build Tools and WebView2.
 
 ```powershell
 npm ci
