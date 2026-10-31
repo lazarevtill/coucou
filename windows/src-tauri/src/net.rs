@@ -110,9 +110,11 @@ pub fn anthropic_endpoint(raw: &str) -> Result<Url, String> {
 }
 
 /// A client for `url`: requests to this machine skip any system proxy, which
-/// would otherwise see (and usually fail) a loopback address.
+/// would otherwise see (and usually fail) a loopback address. Redirects are
+/// returned to the caller without sending data to an unconfigured destination.
 pub fn client(url: &Url, timeout: Duration) -> Result<reqwest::Client, String> {
     let mut builder = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(10).min(timeout))
         .timeout(timeout);
     if is_loopback_url(url) {
@@ -263,6 +265,23 @@ pub(crate) mod tests {
 
     fn block_on<T>(f: impl std::future::Future<Output = T>) -> T {
         tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(f)
+    }
+
+    #[test]
+    fn model_requests_do_not_follow_redirects_to_another_endpoint() {
+        let destination = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        destination.set_nonblocking(true).unwrap();
+        for status in ["301 Moved Permanently", "302 Found", "303 See Other", "307 Temporary Redirect", "308 Permanent Redirect"] {
+            let headers = format!("Location: http://{}/forwarded\r\nContent-Length: 0\r\n", destination.local_addr().unwrap());
+            let url = Url::parse(&serve_once(status, &headers, vec![])).unwrap();
+            let response = block_on(async {
+                client(&url, Duration::from_secs(2)).unwrap()
+                    .post(url.clone()).body("synthetic model prompt").send().await.unwrap()
+            });
+            assert!(response.status().is_redirection(), "{status}");
+            assert_eq!(response.url(), &url);
+            assert_eq!(destination.accept().unwrap_err().kind(), std::io::ErrorKind::WouldBlock);
+        }
     }
 
     #[test]

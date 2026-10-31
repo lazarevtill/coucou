@@ -6,6 +6,7 @@ Read [CLAUDE.md](CLAUDE.md) for the repository structure and product rules. macO
 - Claude API settings discover models with the stored API key, independently of CLI subscription switches. Preserve the saved model during refresh and failed saves; never silently migrate it to a newer model.
 - Keep both CLI sign-ins available for text tasks and opted-in phone chat. Speech performance uses measured local runtime capabilities, with a persisted manual override. Call capture must show source health and preserve gaps and warnings after device recovery.
 - Phone chat keeps its explicit enable switch and model allowlist. A selected subscription must not require an API key; unavailable CLI subscriptions must not fall back to an API credential.
+- Model clients must not follow HTTP redirects to unconfigured endpoints. Keep loopback proxy bypass and bounded responses.
 - Speech calibration selects a bounded segment with audio from a successful transcription, including recordings with leading silence. Keep the original transcript unchanged and retain the manual thread override.
 - Automatic call audio follows observed application routes before Windows defaults; manual microphone and playback choices stay independent and fixed. Use the same recovery path for Settings meters and recording. Report ambiguous browser/app routes instead of guessing.
 - Audio-route discovery reads process ownership only, never window titles or UI messages. Open and stop capture off the UI thread; never hold recording locks across calls into that thread.
