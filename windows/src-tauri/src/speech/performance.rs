@@ -72,7 +72,7 @@ fn fastest(measurements: &[Measurement], limit: u16) -> Option<u16> {
 }
 
 fn key() -> String {
-    format!("{}:sherpa-1.13.8:cpu:v1:{}:{}:{}", super::PARAKEET.id, std::env::consts::ARCH,
+    format!("{}:sherpa-2.0.1:cpu:v1:{}:{}:{}", super::PARAKEET.id, std::env::consts::ARCH,
         std::env::var("PROCESSOR_IDENTIFIER").unwrap_or_default(), available_threads())
 }
 
