@@ -2,7 +2,6 @@ import java.util.zip.ZipFile
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -24,8 +23,10 @@ android {
         targetSdk = 35
         versionCode = 3
         versionName = "0.3.0"
-        // The app's languages (English and the translations in i18n/translations); the libraries' other languages are left out of the app.
-        resourceConfigurations += listOf("en", "fr", "es", "pt-rBR", "b+zh+Hans", "hi", "bn", "ru", "in", "ar", "tr")
+    }
+    androidResources {
+        // Keep the app's languages and omit unused library translations.
+        localeFilters += listOf("en", "fr", "es", "pt-rBR", "b+zh+Hans", "hi", "bn", "ru", "in", "ar", "tr")
     }
     signingConfigs {
         val keystore = releaseKeystore
@@ -55,10 +56,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
-    sourceSets["main"].java.srcDirs("src/main/kotlin")
-    sourceSets["debug"].java.srcDirs("src/debug/kotlin") // the Widgets preview receiver: debug builds only
-    sourceSets["test"].java.srcDirs("src/test/kotlin")
+    // Built-in Kotlin uses the Java target above and its own source directories.
+    sourceSets["main"].kotlin.directories += "src/main/kotlin"
+    sourceSets["debug"].kotlin.directories += "src/debug/kotlin" // the Widgets preview receiver: debug builds only
+    sourceSets["test"].kotlin.directories += "src/test/kotlin"
 }
 
 dependencies {
@@ -82,7 +83,7 @@ dependencies {
 
 // Proves the release build in CI without a workflow change: CI runs `lint`, and lint now needs a release build that R8 has processed and
 // whose code no longer carries the debug logs (the Log calls are removed by the rules, so their tags and messages must not be in the dex).
-val verifyReleaseNoLogs by tasks.registering {
+val verifyReleaseNoLogs = tasks.register("verifyReleaseNoLogs") {
     group = "verification"
     description = "Builds the release APK and fails if a debug log tag or message is still in it."
     dependsOn("assembleRelease")

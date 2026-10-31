@@ -1,0 +1,51 @@
+// Run with: ./gradlew -I scripts/security-dependencies.gradle dependencySecuritySbom
+// Includes build plugins as well as the app and JVM tests; never excludes advisories.
+import groovy.json.JsonOutput
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.result.UnresolvedDependencyResult
+
+gradle.projectsEvaluated {
+    gradle.rootProject.tasks.register('dependencySecuritySbom') {
+        group = 'verification'
+        description = 'Exports resolved app, test and build-plugin dependencies as CycloneDX.'
+        doLast {
+            def components = [:]
+            gradle.rootProject.allprojects.each { project ->
+                def configurations = project.configurations.toList().findAll {
+                    it.canBeResolved && it.name in ['debugRuntimeClasspath', 'releaseRuntimeClasspath', 'debugUnitTestRuntimeClasspath']
+                } + project.buildscript.configurations.toList().findAll {
+                    it.canBeResolved && it.name == 'classpath'
+                }
+                configurations.each { configuration ->
+                    def resolved = configuration.incoming.resolutionResult
+                    def missing = resolved.allDependencies.findAll { it instanceof UnresolvedDependencyResult }
+                    if (!missing.isEmpty()) {
+                        throw new GradleException("Cannot audit unresolved dependencies in ${project.path}:${configuration.name}")
+                    }
+                    resolved.allComponents.each { component ->
+                        if (component.id instanceof ModuleComponentIdentifier) {
+                            def id = component.id
+                            def encode = { value -> URLEncoder.encode(value, 'UTF-8').replace('+', '%20') }
+                            def purl = "pkg:maven/${encode(id.group)}/${encode(id.module)}@${encode(id.version)}".toString()
+                            def entry = components.computeIfAbsent(purl) {
+                                [type: 'library', group: id.group, name: id.module, version: id.version, purl: purl, 'bom-ref': purl, scopes: [] as Set]
+                            }
+                            entry.scopes.add("${project.path}:${configuration.name}".toString())
+                        }
+                    }
+                }
+            }
+            def entries = components.sort().values().collect { entry ->
+                def scopes = entry.remove('scopes').sort().join(', ')
+                entry.properties = [[name: 'coucou:configurations', value: scopes]]
+                entry
+            }
+            def report = gradle.rootProject.layout.buildDirectory.file('reports/dependency-security.cdx.json').get().asFile
+            report.parentFile.mkdirs()
+            report.setText(JsonOutput.prettyPrint(JsonOutput.toJson([
+                bomFormat: 'CycloneDX', specVersion: '1.5', version: 1, components: entries,
+            ])) + '\n', 'UTF-8')
+            println "Exported ${entries.size()} resolved components to ${report}"
+        }
+    }
+}

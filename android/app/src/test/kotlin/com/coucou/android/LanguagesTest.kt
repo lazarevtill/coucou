@@ -32,7 +32,7 @@ class LanguagesTest {
     }
 
     @Test fun theBuildKeepsEnglishAndEachTranslation() {
-        val configured = Regex("""resourceConfigurations\s*\+=\s*listOf\(([^)]*)\)""").find(read("build.gradle.kts"))!!.groupValues[1]
+        val configured = Regex("""localeFilters\s*\+=\s*listOf\(([^)]*)\)""").find(read("build.gradle.kts"))!!.groupValues[1]
             .split(",").map { it.trim().trim('"') }
         val expected = listOf("en") + table.filter { it.first in translations }.map { it.second }
         assertEquals(expected.sorted(), configured.sorted())
