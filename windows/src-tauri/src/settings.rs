@@ -29,6 +29,9 @@ pub struct Settings {
     pub hooks_installed: bool,
     /// Claude model used by the chat. Changeable in the settings window.
     pub model: String,
+    /// Native project launchers; existing installs keep VS Code as their editor.
+    pub editor: String,
+    pub terminal: String,
     /// Show the Claude plan pill (5 h and weekly limits) in the island's header.
     /// Off until the user turns it on, so the header stays as it shipped.
     pub show_plan_in_notch: bool,
@@ -147,6 +150,8 @@ impl Default for Settings {
             autostart: false,
             hooks_installed: false,
             model: default_model(),
+            editor: "vscode".into(),
+            terminal: "windowsTerminal".into(),
             show_plan_in_notch: false,
             plan_relay_installed: false,
             show_codex_plan_in_notch: false,
@@ -446,6 +451,8 @@ mod tests {
   "autostart": true,
   "hooksInstalled": true,
   "model": "some-model",
+  "editor": "cursor",
+  "terminal": "shell",
   "showPlanInNotch": true,
   "planRelayInstalled": true,
   "showCodexPlanInNotch": true,
@@ -965,6 +972,8 @@ mod tests {
                 "autostart",
                 "hooksInstalled",
                 "model",
+                "editor",
+                "terminal",
                 "showPlanInNotch",
                 "planRelayInstalled",
                 "showCodexPlanInNotch",

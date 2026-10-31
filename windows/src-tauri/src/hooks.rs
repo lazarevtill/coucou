@@ -396,19 +396,69 @@ pub fn ensure_hook_exe(app: &AppHandle) {
 
 #[cfg(windows)]
 fn install_relay(src: &Path, dest: &Path) {
-    let same = match (std::fs::metadata(src), std::fs::metadata(dest)) {
-        (Ok(a), Ok(b)) => a.len() == b.len() && a.modified().ok() == b.modified().ok(),
-        _ => false,
-    };
-    if same {
-        return;
+    if let Err(err) = replace_relay(src, dest) {
+        crate::log::line(format!("could not install {}: {err}", platform::HOOK_EXE));
     }
-    // A hook may be running right now and hold the file open; keeping the old
-    // copy is fine, it is the same relay.
-    if let Err(err) = std::fs::copy(src, dest) {
-        if !dest.exists() {
-            crate::log::line(format!("could not install {}: {err}", platform::HOOK_EXE));
+}
+
+/// Stage the whole executable before replacing it. A running relay may prevent
+/// replacement; retain its original path on failure and retry at the next launch.
+#[cfg(windows)]
+fn replace_relay(src: &Path, dest: &Path) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let bytes = std::fs::read(src)?;
+    if std::fs::read(dest).is_ok_and(|old| old == bytes) { return Ok(()); }
+    let suffix = format!("{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed));
+    let staged = dest.with_extension(format!("new-{suffix}"));
+    let backup = dest.with_extension(format!("old-{suffix}"));
+    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&staged)?;
+    let written = file.write_all(&bytes).and_then(|_| file.sync_all());
+    drop(file);
+    if let Err(error) = written { let _ = std::fs::remove_file(&staged); return Err(error); }
+    let had_old = dest.exists();
+    if had_old {
+        if let Err(error) = std::fs::rename(dest, &backup) {
+            let _ = std::fs::remove_file(&staged);
+            return Err(error);
         }
+    }
+    if let Err(error) = std::fs::rename(&staged, dest) {
+        let _ = std::fs::remove_file(&staged);
+        if had_old {
+            if let Err(restore) = std::fs::rename(&backup, dest) {
+                return Err(std::io::Error::other(format!("{error}; restoring the relay failed: {restore}; backup retained at {}", backup.display())));
+            }
+        }
+        return Err(error);
+    }
+    if had_old { let _ = std::fs::remove_file(backup); }
+    Ok(())
+}
+
+#[cfg(all(test, windows))]
+mod relay_replacement_tests {
+    use super::*;
+    use std::os::windows::fs::OpenOptionsExt;
+
+    #[test]
+    fn a_locked_destination_or_missing_source_keeps_the_installed_relay() {
+        let dir = std::env::temp_dir().join(format!("coucou-relay-swap-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("source.exe"); let dest = dir.join("relay.exe");
+        std::fs::write(&src, b"new relay").unwrap(); std::fs::write(&dest, b"old relay").unwrap();
+        let locked = std::fs::OpenOptions::new().read(true).share_mode(0).open(&dest).unwrap();
+        assert!(replace_relay(&src, &dest).is_err());
+        drop(locked);
+        assert_eq!(std::fs::read(&dest).unwrap(), b"old relay");
+        assert!(replace_relay(&dir.join("missing.exe"), &dest).is_err());
+        assert_eq!(std::fs::read(&dest).unwrap(), b"old relay");
+        replace_relay(&src, &dest).unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), b"new relay");
+        replace_relay(&src, &dest).unwrap();
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }
 

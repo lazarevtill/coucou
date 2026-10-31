@@ -13,6 +13,11 @@ mod files;
 mod flow;
 mod github;
 mod hooks;
+mod host;
+mod ide_lock;
+mod launch;
+mod open;
+mod sessions;
 mod i18n;
 mod identity;
 mod integrations;
@@ -56,6 +61,7 @@ use hooks::{HookPreview, HookStatus};
 use island::{PollGate, ScreenInfo};
 use pipe::Pending;
 use settings::Settings;
+use sessions::Sessions;
 
 pub struct Shared {
     pub settings: Mutex<Settings>,
@@ -275,6 +281,57 @@ fn open_gitea_url(url: String) {
     }
 }
 
+#[tauri::command]
+fn open_project(shared: State<Shared>, launches: State<open::Launches>, target: String, path: Option<String>) -> open::Opened {
+    let Some(target) = open::Target::parse(&target) else {
+        let result = open::OpenResult { via: "none".into(), fell_back: false, error: Some("unknown target".into()) };
+        return open::Opened { result, starting_ms: None };
+    };
+    let (editor, terminal) = {
+        let s = shared.settings.lock().unwrap();
+        (launch::Editor::from_setting(&s.editor), launch::Terminal::from_setting(&s.terminal))
+    };
+    let opened = launches.open(std::time::Instant::now(), &open::RealHost, editor, terminal, target, path.as_deref());
+    log::line(format!("open {target:?} -> {} (fallback {})", opened.result.via, opened.result.fell_back));
+    opened
+}
+
+/// What the settings window shows next to the editor and terminal choices.
+#[tauri::command]
+fn launch_info() -> launch::LaunchInfo {
+    launch::describe(&launch::SystemEnv)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FocusResult {
+    /// `focused`, `focusedUnsure`, `flashed`, `noWindow` or `unknownSession`.
+    outcome: &'static str,
+}
+
+/// Brings the window a session lives in to the front; says how it went.
+fn jump(sessions: &Sessions, session_id: &str) -> &'static str {
+    let Some(record) = sessions.get(session_id) else {
+        return "unknownSession";
+    };
+    let target = sessions::focus_target(&record);
+    let (outcome, method) = platform::focus_window(target.window, &target.candidates, &target.hints);
+    // The host and how it went — no folder names, no ids.
+    log::line(format!("jump {} -> {outcome:?} ({method:?})", record.host.label));
+    match outcome {
+        platform::FocusOutcome::Focused => "focused",
+        platform::FocusOutcome::FocusedUnsure => "focusedUnsure",
+        platform::FocusOutcome::Flashed => "flashed",
+        platform::FocusOutcome::NoWindow => "noWindow",
+    }
+}
+
+/// Click on a session: bring the window it lives in to the front.
+#[tauri::command]
+fn focus_session(sessions: State<Sessions>, session_id: String) -> FocusResult {
+    FocusResult { outcome: jump(&sessions, &session_id) }
+}
+
 /// "Open terminal" opens the working folder in VS Code when `code` is on PATH,
 /// and falls back to the file manager otherwise.
 #[tauri::command]
@@ -312,7 +369,8 @@ fn open_in_vscode(path: Option<String>) -> bool {
 /// runs in, when it was found (see session_window.rs); otherwise opens the
 /// folder in VS Code, as before.
 #[tauri::command]
-fn open_session(session_id: Option<String>, path: Option<String>) -> bool {
+fn open_session(sessions: State<Sessions>, session_id: Option<String>, path: Option<String>) -> bool {
+    if session_id.as_deref().is_some_and(|id| matches!(jump(&sessions, id), "focused" | "focusedUnsure" | "flashed")) { return true; }
     let Some(owners) = session_id.as_deref().and_then(session_window::lookup) else {
         return open_in_vscode(path);
     };
@@ -817,6 +875,26 @@ fn open_settings_window(app: AppHandle, page: Option<String>) {
     show_hub(&app, Some(page.as_deref().unwrap_or("general")));
 }
 
+fn spawn_session_pruner(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(20));
+        loop {
+            ticker.tick().await;
+            let sessions = app.state::<Sessions>();
+            if sessions.len() == 0 {
+                continue;
+            }
+            let gone = sessions.prune(std::time::Instant::now(), &|entry| {
+                platform::process_alive(entry.pid, &entry.exe)
+            });
+            for id in gone {
+                let _ = app.emit_to(island::WINDOW_LABEL, "session-ended", id);
+            }
+        }
+    });
+}
+
+
 pub fn run() {
     platform::prepare_environment();
     let loaded = settings::load();
@@ -844,6 +922,8 @@ pub fn run() {
             settings: Mutex::new(loaded.clone()),
             gate: gate.clone(),
         })
+        .manage(Sessions::default())
+        .manage(open::Launches::default())
         .manage(Pending::default())
         .manage(Chat::default())
         .manage(shortcuts::Registry::default())
@@ -863,6 +943,9 @@ pub fn run() {
             open_gitlab_url,
             open_gitea,
             open_gitea_url,
+            open_project,
+            launch_info,
+            focus_session,
             open_in_vscode,
             open_session,
             open_claude_desktop,
@@ -1016,6 +1099,7 @@ pub fn run() {
         .setup(move |app| {
             let handle = app.handle().clone();
             app.manage(phone_link::PhoneLink::new(handle.clone()));
+            spawn_session_pruner(handle.clone());
             tray::build(&handle)?;
             // Before the island: see create_settings_window.
             create_settings_window(&handle);

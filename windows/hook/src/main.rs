@@ -47,6 +47,8 @@ const DROPPED_FIELDS: &[&str] = &["tool_response", "tool_output", "transcript_pa
 const MAX_FIELD_LEN: usize = 2_000;
 
 mod statusline;
+mod console;
+mod proc;
 
 /// The live diff needs the whole text of a file edit, once it has happened:
 /// PostToolUse of these tools keeps its edit strings far longer than the rest.
@@ -210,12 +212,20 @@ fn add_terminal_context(map: &mut Map<String, Value>, env: &dyn Fn(&str) -> Opti
         ("wt_session", "WT_SESSION"),
         ("term_session_id", "TERM_SESSION_ID"),
         ("vscode_pid", "VSCODE_PID"),
-        ("session_pid", "CLAUDE_CODE_SSE_PORT"),
     ] {
         if !map.contains_key(key) {
             map.insert(key.into(), Value::String(env(var).unwrap_or_default()));
         }
     }
+    map.insert("ide_port".into(), Value::String(env("CLAUDE_CODE_SSE_PORT").unwrap_or_default()));
+    map.insert("host_hint".into(), Value::String(host_hint(&env("TERM_PROGRAM").unwrap_or_default(), &env("GIT_ASKPASS").unwrap_or_default()).into()));
+    let ancestors = proc::ancestors();
+    if let Some(window) = console::target(&ancestors).and_then(console::owner_window) {
+        map.insert("host_window".into(), Value::from(window));
+    }
+    map.insert("host_chain".into(), Value::Array(ancestors.into_iter()
+        .map(|a| serde_json::json!({ "pid": a.pid, "exe": a.exe })).collect()));
+
 }
 
 /// The `coucou_agent` tag: `--agent` when given, otherwise `claude-desktop` for
@@ -538,5 +548,22 @@ mod tests {
         truncate_payload(&mut multi, "PostToolUse");
         assert!(multi.to_string().len() < MAX_DIFF_TOTAL + 64 * 1024);
         assert_eq!(multi["coucou_diff_truncated"], serde_json::Value::Bool(true));
+    }
+}
+
+fn host_hint(term_program: &str, git_askpass: &str) -> &'static str {
+    if term_program != "vscode" {
+        return "";
+    }
+    // Cursor ships its own copy of VS Code's git extension, so its askpass lives
+    // under a directory called `cursor`. Whole path segments only: `cursors` or
+    // `cursor-tools` must not match.
+    let in_cursor_dir = git_askpass
+        .split(['\\', '/'])
+        .any(|segment| segment.eq_ignore_ascii_case("cursor"));
+    if in_cursor_dir {
+        "cursor"
+    } else {
+        "vscode"
     }
 }

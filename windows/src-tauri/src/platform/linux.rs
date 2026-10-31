@@ -938,3 +938,40 @@ fn apply_rects(gw: &impl IsA<gtk::Widget>, rects: &[(f64, f64, f64, f64)]) {
     }
     gdk_window.input_shape_combine_region(&region, 0, 0);
 }
+
+pub fn find_all_on_path(stem: &str) -> Vec<PathBuf> {
+    let Some(dirs) = std::env::var_os("PATH") else { return Vec::new() };
+    let mut hits: Vec<PathBuf> = Vec::new();
+    for path in std::env::split_paths(&dirs).map(|dir| dir.join(stem)) {
+        let runnable = std::fs::metadata(&path)
+            .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false);
+        if runnable && !hits.contains(&path) {
+            hits.push(path);
+        }
+    }
+    hits
+}
+
+pub fn spawn_launch(launch: &crate::launch::Launch) -> std::io::Result<()> {
+    let mut command = Command::new(&launch.program);
+    command.args(&launch.args);
+    if let Some(cwd) = &launch.cwd {
+        command.current_dir(cwd);
+    }
+    command.spawn().map(|_| ())
+}
+
+pub fn process_alive(pid: u32, exe: &str) -> bool {
+    let Ok(comm) = std::fs::read_to_string(format!("/proc/{pid}/comm")) else { return false };
+    let wanted: String = exe.chars().take(15).collect();
+    comm.trim_end() == wanted
+}
+
+/// Preserve the existing compositor/terminal focus path for session candidates.
+pub fn focus_window(_window: Option<u64>, candidates: &[super::Candidate], hints: &[String]) -> (super::FocusOutcome, super::FocusMethod) {
+    let owners: Vec<_> = candidates.iter().filter(|c| c.exe.as_deref().is_none_or(|exe| process_alive(c.pid, exe))).map(|c| c.pid).collect();
+    if super::focus_session_window(&owners, hints.first().map(String::as_str).unwrap_or_default()) {
+        (super::FocusOutcome::Focused, super::FocusMethod::Plain)
+    } else { (super::FocusOutcome::NoWindow, super::FocusMethod::None) }
+}

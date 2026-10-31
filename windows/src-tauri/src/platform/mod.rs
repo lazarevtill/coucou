@@ -37,6 +37,45 @@ pub fn home_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
+// ── Finding and focusing the window a session lives in ───────────────────────
+//
+// Each OS file provides:
+//   focus_window(Option<u64>, &[Candidate], &[String]) -> (FocusOutcome, FocusMethod)
+//   process_alive(pid, exe) -> bool
+//   find_all_on_path(stem) -> Vec<PathBuf>
+//   spawn_launch(&Launch) -> io::Result<()>
+
+/// A process whose windows could be a session's. When `exe` is set the process
+/// must really be running that image: pids arrive from outside and are recycled.
+#[derive(Debug, Clone)]
+pub struct Candidate {
+    pub pid: u32,
+    pub exe: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FocusOutcome {
+    /// In front, and it is the window whose title matched.
+    Focused,
+    /// In front, but nothing told this window apart from the process's others.
+    FocusedUnsure,
+    /// The OS would not let us; the taskbar button is flashing instead.
+    Flashed,
+    /// No visible window belongs to any candidate (or this platform cannot look).
+    NoWindow,
+}
+
+/// Which step of the ladder got the window to the front.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FocusMethod {
+    /// The plain request was enough.
+    Plain,
+    /// Needed the brief input-queue attach (Windows).
+    Attached,
+    /// Neither — or nothing was tried.
+    None,
+}
+
 /// How the desktop Mochi's window can be placed and clicked on this system.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DesktopMode {

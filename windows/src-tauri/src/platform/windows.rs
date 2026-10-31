@@ -38,7 +38,9 @@ use ::windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_TOOLWINDOW,
 };
 
-use super::LocalTime;
+mod focus;
+use super::{Candidate, FocusMethod, FocusOutcome, LocalTime};
+const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
 use crate::session_window::{self, Proc};
 
 /// File name of the Claude Code relay.
@@ -642,3 +644,44 @@ pub fn prepare_pill_window(win: &WebviewWindow, _mode: super::DesktopMode) -> bo
 pub fn set_pill_edge(_win: &WebviewWindow, _edge: &str) {}
 
 pub fn set_pill_input(_win: &WebviewWindow, _rects: Vec<(f64, f64, f64, f64)>) {}
+
+pub fn find_all_on_path(stem: &str) -> Vec<PathBuf> {
+    let exts = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
+    let Some(dirs) = std::env::var_os("PATH") else { return Vec::new() };
+    let mut hits: Vec<PathBuf> = Vec::new();
+    for dir in std::env::split_paths(&dirs) {
+        for ext in exts.split(';').filter(|e| !e.is_empty()) {
+            let candidate = dir.join(format!("{stem}{}", ext.to_lowercase()));
+            if candidate.is_file() && !hits.contains(&candidate) {
+                hits.push(candidate);
+            }
+        }
+    }
+    hits
+}
+
+pub fn spawn_launch(launch: &crate::launch::Launch) -> std::io::Result<()> {
+    use crate::launch::Via;
+    let program = crate::launch::native_program(launch, &crate::launch::SystemEnv)
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "the native launcher executable was not found"))?;
+    let mut command = Command::new(program);
+    command.args(&launch.args);
+    if let Some(cwd) = &launch.cwd {
+        command.current_dir(cwd);
+    }
+    let flags = match launch.via {
+        Via::Cursor | Via::Vscode => CREATE_NO_WINDOW,
+        Via::Shell => CREATE_NEW_CONSOLE,
+        // wt.exe and explorer.exe are GUI programs and need no flag.
+        Via::WindowsTerminal | Via::Explorer => 0,
+    };
+    command.creation_flags(flags).spawn().map(|_| ())
+}
+
+pub fn focus_window(window: Option<u64>, candidates: &[Candidate], hints: &[String]) -> (FocusOutcome, FocusMethod) {
+    focus::focus(window, candidates, hints)
+}
+
+pub fn process_alive(pid: u32, exe: &str) -> bool {
+    focus::is_running(pid, exe)
+}
