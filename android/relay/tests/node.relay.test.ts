@@ -1,7 +1,7 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import { startRelay } from "../tools/dev-relay.ts";
-import { ACCESS, behaviour, offer, proofOf, randomRoom, type Conn, type Harness, type Msg, type Options } from "./behaviour.ts";
+import { ACCESS, behaviour, offer, open, proofOf, randomRoom, type Conn, type Harness, type Msg, type Options } from "./behaviour.ts";
 
 let relay: Awaited<ReturnType<typeof startRelay>>;
 
@@ -74,6 +74,36 @@ const harness = async (): Promise<Harness> => {
 behaviour("Node twin", harness);
 
 describe("Node twin only", () => {
+  it("preserves frame order when cryptographic checks complete at different speeds", async () => {
+    const h = await harness();
+    const room = randomRoom();
+    const pc = await open(h, room, "pc");
+    const phone = await open(h, room, "phone");
+    await pc.next();
+    await phone.next();
+    const digest = crypto.subtle.digest.bind(crypto.subtle);
+    const spy = vi.spyOn(crypto.subtle, "digest");
+    let checks = 0;
+    spy.mockImplementation(async (...args) => {
+      const first = checks++ === 0;
+      const hash = await digest(...args);
+      if (first) await new Promise((resolve) => setTimeout(resolve, 100));
+      return hash;
+    });
+    try {
+      for (const [sender, receiver] of [[phone, pc], [pc, phone]]) {
+        checks = 0;
+        for (let i = 0; i < 20; i++) sender.send(new Uint8Array([i]));
+        for (let i = 0; i < 20; i++) {
+          expect(await receiver.next()).toEqual({ kind: "binary", data: new Uint8Array([i]) });
+        }
+      }
+    } finally {
+      spy.mockRestore();
+      await h.stop();
+    }
+  });
+
   it("answers 429 after too many new connections from one address, before checking the key", async () => {
     const r = await startRelay({ accessKey: ACCESS, connectsPerMinute: 3 });
     try {

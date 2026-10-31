@@ -13,7 +13,7 @@ import type { Duplex } from "node:stream";
 import { WebSocketServer, type WebSocket } from "ws";
 import {
   Bucket, MAX_FRAME, PEER_OFFLINE, PEER_ONLINE, RATE_BURST, RATE_PER_SECOND, SUBPROTOCOL,
-  accessGeneration, accessKeyOk, joinVerifier, otherRole, parseJoinProof, parseRoomRequest,
+  AccessGeneration, accessKeyOk, joinVerifier, otherRole, parseJoinProof, parseRoomRequest,
   type Role,
 } from "../src/protocol.ts";
 
@@ -37,6 +37,7 @@ export interface Relay {
 
 export async function startRelay(options: { port?: number; host?: string; accessKey?: string; connectsPerMinute?: number } = {}): Promise<Relay> {
   let accessKey = options.accessKey;
+  const generation = new AccessGeneration();
   const rooms = new Map<string, Partial<Record<Role, Peer>> & { verifier?: string }>();
   const connects = new Map<string, number[]>();
   const wss = new WebSocketServer({
@@ -73,7 +74,7 @@ export async function startRelay(options: { port?: number; host?: string; access
     const proof = parseJoinProof((req.headers["sec-websocket-protocol"] as string | undefined) ?? null);
     if (!proof) return refuse(socket, 400, "Bad Request");
     const verifier = await joinVerifier(proof);
-    const gen = await accessGeneration(accessKey);
+    const gen = await generation.forKey(accessKey);
 
     wss.handleUpgrade(req, socket, head, (ws) => {
       const room = rooms.get(target.room) ?? {};
@@ -97,7 +98,7 @@ export async function startRelay(options: { port?: number; host?: string; access
       }
 
       ws.on("message", async (data, isBinary) => {
-        if ((await accessGeneration(accessKey)) !== me.gen || !me.gen) return ws.close(1008, "access key changed");
+        if ((await generation.forKey(accessKey)) !== me.gen || !me.gen) return ws.close(1008, "access key changed");
         if (!isBinary) {
           if (data.toString() === "ping") return ws.send("pong"); // the platform's auto-response in the Worker
           return ws.close(1003, "binary only");

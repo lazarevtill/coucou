@@ -73,6 +73,21 @@ export async function accessGeneration(configured: string | undefined): Promise<
   return toHex((await sha256(configured)).subarray(0, 8));
 }
 
+/** Share one digest per configured key. Independent per-frame digests can finish out of order and corrupt the channel. */
+export class AccessGeneration {
+  private configured: string | undefined;
+  private pending: Promise<string> | undefined;
+
+  forKey(configured: string | undefined): Promise<string> {
+    if (!this.pending || configured !== this.configured) {
+      this.configured = configured;
+      this.pending = accessGeneration(configured);
+    }
+    // Awaiters of the same promise resume in arrival order, including while its first digest is still pending.
+    return this.pending;
+  }
+}
+
 /** SHA-256 of the 32 raw bytes behind a join proof, as hex: what a room remembers in memory while it has a live socket. */
 export async function joinVerifier(proof: string): Promise<string> {
   return toHex(await sha256(fromBase64Url(proof)));

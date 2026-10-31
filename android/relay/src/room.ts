@@ -8,7 +8,7 @@ import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./index";
 import {
   Bucket, MAX_FRAME, PEER_OFFLINE, PEER_ONLINE, RATE_BURST, RATE_PER_SECOND, SUBPROTOCOL,
-  accessGeneration, joinVerifier, otherRole, parseJoinProof, parseRoomRequest,
+  AccessGeneration, joinVerifier, otherRole, parseJoinProof, parseRoomRequest,
   type Role,
 } from "./protocol";
 
@@ -24,6 +24,7 @@ const OPEN = 1;
 export class Room extends DurableObject<Env> {
   /** Token buckets live in memory only: a room that hibernated has no flood in progress. */
   private readonly buckets = new Map<WebSocket, Bucket>();
+  private readonly generation = new AccessGeneration();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -37,7 +38,7 @@ export class Room extends DurableObject<Env> {
     if (!target || !proof || request.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response(null, { status: 400 });
 
     const verifier = await joinVerifier(proof);
-    const gen = await accessGeneration(this.env.ACCESS_KEY);
+    const gen = await this.generation.forKey(this.env.ACCESS_KEY);
     const live = this.live();
     const wrongProof = live.length > 0 && attachmentOf(live[0]).verifier !== verifier;
 
@@ -71,7 +72,7 @@ export class Room extends DurableObject<Env> {
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const att = attachmentOf(ws);
     // The key the socket was admitted under must still be the configured one (rotation closes live sockets here).
-    if (!att.gen || att.gen !== (await accessGeneration(this.env.ACCESS_KEY))) {
+    if (!att.gen || att.gen !== (await this.generation.forKey(this.env.ACCESS_KEY))) {
       ws.close(1008, "access key changed");
       return;
     }

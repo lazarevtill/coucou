@@ -158,4 +158,20 @@ describe("Worker only", () => {
     b.send(new Uint8Array([1])); // accepted: a different proof is fine for an empty room
     expect(await b.next()).toEqual({ kind: "text", data: '{"peer":"offline"}' });
   });
+
+  it("preserves bursts in both directions after hibernation", async () => {
+    const h = await harness();
+    const room = randomRoom();
+    const pc = await open(h, room, "pc");
+    const phone = await open(h, room, "phone");
+    await pc.next();
+    await phone.next();
+    await evictDurableObject(env.ROOM.get(env.ROOM.idFromName(room)), { webSockets: "hibernate" });
+    for (const [sender, receiver] of [[phone, pc], [pc, phone]]) {
+      for (let i = 0; i < 20; i++) sender.send(new Uint8Array([i]));
+      for (let i = 0; i < 20; i++) {
+        expect(await receiver.next(5000)).toEqual({ kind: "binary", data: new Uint8Array([i]) });
+      }
+    }
+  });
 });
