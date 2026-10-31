@@ -52,6 +52,7 @@ mod shortcuts;
 mod sounds;
 mod speech;
 mod media;
+mod mcp;
 #[cfg(windows)]
 mod media_windows;
 mod apple_music;
@@ -78,6 +79,9 @@ use island::{PollGate, ScreenInfo};
 use pipe::Pending;
 use sessions::Sessions;
 use settings::Settings;
+
+/// A client launches this mode directly; it never initializes the GUI or hooks.
+pub use mcp::run as run_mcp;
 
 pub struct Shared {
     pub settings: Mutex<Settings>,
@@ -1227,6 +1231,8 @@ pub fn run() {
         .manage(shortcuts::Registry::default())
         .manage(recap::load())
         .invoke_handler(tauri::generate_handler![
+            mcp::mcp_status,
+            mcp::mcp_set_enabled,
             boot,
             mail::mail_refresh,
             mail::mail_more,

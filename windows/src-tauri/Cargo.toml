@@ -23,6 +23,9 @@ serde_json = { version = "1", features = ["preserve_order"] }
 # Already in the dependency tree; bounded CLI image messages use the same codec.
 base64 = { version = "=0.23.1", default-features = false, features = ["std"] }
 tokio = { version = "=1.54.1", features = ["net", "io-util", "sync", "time", "rt", "macros"] }
+# Official MCP protocol implementation. Only local stdio serving is enabled;
+# there is no HTTP listener, OAuth client or agent runtime in the notes server.
+rmcp = { version = "=3.8.0", default-features = false, features = ["server", "transport-io"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 # Phone link (phone_link/): a TLS server for the Android app, off unless the user
 # turns it on. Every crate here is justified in docs/ANDROID_LINK.md.
@@ -99,6 +102,7 @@ windows = { version = "0.61", features = [
   "Win32_System_JobObjects",
   "Win32_System_Pipes",
   "Win32_System_Registry",
+  "Win32_Storage_FileSystem",
   "Win32_System_SystemInformation",
   "Win32_System_Threading",
   "Win32_System_WinRT",
