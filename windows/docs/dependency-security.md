@@ -21,6 +21,7 @@ OSV-Scanner 2.7.0 was checked against its official release asset SHA-256. Scans 
 - Android relay: Vitest **5.0.5**, Cloudflare Vitest plugin **1.4.11**, Wrangler **4.156.0** and Workers types **5.20261031.1**. Peer dependency checks are enabled.
 - APNs relay: Wrangler **4.156.0** and Workers types **5.20261031.1**.
 - Rust networking: rustls **0.23.46**, rustls-webpki **0.103.16**, webpki-roots **1.0.11** and Tokio **1.54.1**.
+- Local MCP: official Rust SDK `rmcp` **3.8.0**, with server and stdio features only. The 659-package Rust rescan reports no additional advisories from this dependency.
 - Speech: sherpa-onnx **2.0.1**, zip **9.2.0**, zstd **0.14.3**, zstd-safe **8.2.0** and zstd-sys **2.1.2+zstd.1.5.7**. The calibration cache identifies the runtime version. The downloaded Windows native archive matches its official release digest; the release's CMake files select ONNX Runtime **1.28.2** for Windows/Linux x64.
 - Android build: AGP **9.5.0**, Kotlin Compose plugin **2.4.21**, Gradle **9.8.2** with a distribution checksum and verified wrapper. Built-in Kotlin uses the Java 17 target. `localeFilters` retains the exact supported language list.
 - Android build-only constraints: Bouncy Castle **1.86**, Guava **33.7.2-jre**, Commons Lang **3.21.0**, JDOM **2.0.6.1** and jose4j **0.9.7**. These correct vulnerable transitive selections still present in the current Android plugin; they are not additional APK dependencies.
@@ -53,6 +54,6 @@ The export fails if any dependency is unresolved. On Linux/macOS use `./gradlew`
 
 ## Verification
 
-The Windows frontend has 708 passing tests. All five production pages load in headless Edge without script or network failures. The Rust workspace has 836 passing tests; 22 opt-in tests are excluded from the default run. Explicit model tests pass for transcription, diarization, automatic calibration and manual thread selection using isolated synthetic audio and model storage.
+The full Windows frontend run has 716 passing tests, including MCP desktop setup and settings search. All five production pages load in headless Edge without script or network failures. The Rust workspace has 852 passing tests; 22 opt-in tests are excluded from the default run. Explicit model tests pass for transcription, diarization, automatic calibration and manual thread selection using isolated synthetic audio and model storage. Both Claude Code and Codex pass live MCP search/fetch checks using synthetic calls.
 
 Android has 1,010 unit tests: 1,008 pass and two opt-in end-to-end cases require their relay harness. Lint, debug APK, optimized unsigned release APK and the release log-removal check pass. Both relay projects pass their applicable typecheck and dry Worker build checks; the phone relay has 41 passing tests. These results do not establish macOS/Linux runtime readiness or verify a new installed Windows GUI build.

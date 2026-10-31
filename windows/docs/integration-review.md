@@ -28,15 +28,16 @@ Automated results describe the current source. Native interaction evidence below
 
 | Check | Result |
 | --- | --- |
-| Frontend suite | 708 passed, zero failed |
-| Rust workspace suite | 836 passed: 787 app, 46 hook, 3 relay; 22 opt-in tests ignored |
+| Frontend suite | 716 passed in the full run, including MCP settings, desktop setup, localization and settings search |
+| Rust workspace suite | 852 passed: 801 app, two MCP subprocess checks, 46 hook, three relay; 22 opt-in tests ignored |
+| Local MCP | Both current and legacy clients pass against the real executable. Live Claude Code and Codex each search and fetch an isolated synthetic call and report the expected owner, deadline and verification word. Permission revocation, Unicode pagination, corruption and Windows junction checks pass. The Settings card passes twelve headless Edge client/viewport cases. Claude Desktop and Codex desktop setup is provided; native desktop conversation verification remains open |
 | Android unit suite on Windows | 1008 passed, zero failed, two explicit relay E2E checks skipped in the unit run. Node and Rust interoperability fixtures ran. Lint, debug APK, optimized unsigned release APK and release-log verification passed |
 | Android/Rust relay E2E | Both approval round trips passed through the local Node relay and the local Cloudflare Worker; each mode passed two Android tests and one Rust test. Incorrect relay keys returned HTTP 401. Deterministic ordering and established-connection idle regressions passed |
 | TypeScript and Vite production frontend | Passed with Vite 8.3.5. All five built entry pages loaded in headless Edge without script or request failures. Translation catalogs retain separate cached chunks; the existing 500 kB size advisory remains unsuppressed |
 | Dependency security | All three npm audits and the 218-coordinate Android app/test/build-plugin scan reported zero findings. Native Sherpa and Linux GLib findings remain open; see [dependency security](dependency-security.md) for exact coverage and limits |
 | Rust compile | One unused `RunError::Unsupported` warning in the upstream Outlook module; reproduced on unchanged parent main |
 | Remote CI | Unverified for the current integrated source. Repository and workflow settings report enabled, but GitHub rejects dispatch with HTTP 422, “Actions has been disabled for this repository,” and current main pushes have no workflow runs |
-| Windows installer | NSIS 0.5.6 from source `6de38c423231a88ea12729ad2f50c85b7caa740e` built and installed successfully; complete executable matches the compiled release with Tauri's NSIS bundle marker |
+| Windows installer | NSIS 0.5.8 from source `6eb6f00` builds successfully. Its extracted executable matches the complete compiled release after Tauri's NSIS marker change; the packaged hook matches the current hook build. The installed app remains the validated 0.5.6 build; installation and native GUI verification of 0.5.8 remain open |
 | Installed startup | Native accessibility state shows 0.5.6 and Ready with the selected Right Alt listener. The process remains responsive. Native model-picker, processing-progress and speaker-merge checks passed |
 | Installation preservation | Twenty-three checked files unchanged immediately after installation, including notes, models, preferences and both CLI configurations |
 | Native provider controls | Both Use for all text buttons completed successfully; all four targets changed correctly and unrelated preferences were retained. Original choices were restored after testing |
