@@ -128,14 +128,16 @@ opens the project in the editor instead.
 
 | Setting | Starts |
 |---|---|
-| Editor: Cursor | `cursor.cmd` from `PATH`, else Cursor's per-user install |
-| Editor: VS Code | `code.cmd` from `PATH` — skipping Cursor's copy, which is also called `code` — else VS Code's per-user install |
+| Editor: Cursor | `Cursor.exe`, found through the known `cursor.cmd` installation layout or a native executable on `PATH` |
+| Editor: VS Code | `Code.exe`, found through `code.cmd` on `PATH` (excluding Cursor's copy) or VS Code's per-user/system installation |
 | Terminal: Windows Terminal | `wt.exe -d <folder> <shell>` |
 | Terminal: PowerShell window | the shell in a new console window, in the folder |
 | None | nothing |
 
 The shell is PowerShell 7 (`pwsh.exe`) when installed, else Windows PowerShell.
-Nothing goes through `cmd /C`. The folder must be an absolute, existing
+Known editor batch entry points are resolved to their native executables before
+passing the project path. Unknown batch scripts are refused. Nothing goes through
+`cmd /C`. The folder must be an absolute, existing
 directory; Windows Terminal reads `;` as a command separator, so a folder with
 one in its name opens in File Explorer instead. File Explorer is also what opens
 when the chosen program is missing or fails to start.

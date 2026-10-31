@@ -840,7 +840,9 @@ pub fn find_all_on_path(stem: &str) -> Vec<PathBuf> {
 
 pub fn spawn_launch(launch: &crate::launch::Launch) -> std::io::Result<()> {
     use crate::launch::Via;
-    let mut command = Command::new(&launch.program);
+    let program = crate::launch::native_program(launch, &crate::launch::SystemEnv)
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "the native launcher executable was not found"))?;
+    let mut command = Command::new(program);
     command.args(&launch.args);
     if let Some(cwd) = &launch.cwd {
         command.current_dir(cwd);

@@ -85,6 +85,31 @@ pub struct Launch {
     pub via: Via,
 }
 
+/// Rust invokes .cmd/.bat through cmd.exe. Resolve the known editor entry points
+/// to their GUI executable before passing any project path, or refuse the launch.
+#[cfg(windows)]
+pub fn native_program(launch: &Launch, env: &dyn Env) -> Option<PathBuf> {
+    let path = &launch.program;
+    let ext = path.extension()?.to_str()?;
+    if ext.eq_ignore_ascii_case("exe") { return env.file_exists(path).then(|| path.clone()); }
+    if !ext.eq_ignore_ascii_case("cmd") { return None; }
+    let name = path.file_name()?.to_str()?;
+    let parent = path.parent()?;
+    let folder = parent.file_name()?.to_str()?;
+    let native = match launch.via {
+        Via::Vscode if name.eq_ignore_ascii_case("code.cmd") && folder.eq_ignore_ascii_case("bin") => parent.parent()?.join("Code.exe"),
+        Via::Cursor if (name.eq_ignore_ascii_case("cursor.cmd") || name.eq_ignore_ascii_case("code.cmd"))
+            && (folder.eq_ignore_ascii_case("bin") || folder.eq_ignore_ascii_case("codeBin")) => {
+                let app = parent.parent()?;
+                let resources = app.parent()?;
+                if !app.file_name()?.to_str()?.eq_ignore_ascii_case("app") || !resources.file_name()?.to_str()?.eq_ignore_ascii_case("resources") { return None; }
+                resources.parent()?.join("Cursor.exe")
+            }
+        _ => return None,
+    };
+    env.file_exists(&native).then_some(native)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LaunchError {
     /// The terminal setting is "none".
@@ -300,6 +325,28 @@ mod tests {
 
     fn args(l: &Launch) -> Vec<String> {
         l.args.iter().map(|a| a.to_string_lossy().into_owned()).collect()
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn batch_entry_points_resolve_to_native_editors_before_untrusted_arguments() {
+        let mut env = this_machine();
+        let cursor = r"C:\Users\u\AppData\Local\Programs\cursor\Cursor.exe";
+        let vscode = r"C:\Users\u\AppData\Local\Programs\Microsoft VS Code\Code.exe";
+        env.files.extend([cursor, vscode, VSCODE_CMD]);
+        env.path.insert("code", vec![VSCODE_CMD]);
+        for (editor, expected) in [(Editor::Cursor, cursor), (Editor::Vscode, vscode)] {
+            let mut launch = plan_editor(editor, &env, Path::new(r"C:\a & b\100%^")).unwrap();
+            assert_eq!(native_program(&launch, &env), Some(PathBuf::from(expected)));
+            assert_eq!(args(&launch), [r"C:\a & b\100%^"]);
+            launch.program = r"C:\unrelated\run.cmd".into();
+            assert_eq!(native_program(&launch, &env), None);
+            launch.program = r"C:\unrelated\run.bat".into();
+            assert_eq!(native_program(&launch, &env), None);
+        }
+        env.files.remove(cursor);
+        let launch = plan_editor(Editor::Cursor, &env, Path::new("")).unwrap();
+        assert_eq!(native_program(&launch, &env), None);
     }
 
     // ── editors ───────────────────────────────────────────────────────────────

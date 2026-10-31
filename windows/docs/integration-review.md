@@ -29,7 +29,7 @@ Automated results describe the current source. Native interaction evidence below
 | Check | Result |
 | --- | --- |
 | Frontend suite | 708 passed, zero failed |
-| Rust workspace suite | 834 passed: 785 app, 46 hook, 3 relay; 22 opt-in tests ignored |
+| Rust workspace suite | 836 passed: 787 app, 46 hook, 3 relay; 22 opt-in tests ignored |
 | TypeScript and Vite production frontend | Passed; the translation catalogs have separate cached chunks; the existing 500 kB size advisory remains unsuppressed |
 | Rust compile | One unused `RunError::Unsupported` warning in the upstream Outlook module; reproduced on unchanged parent main |
 | Remote CI | Unverified for the latest source. GitHub rejects workflow dispatch with HTTP 422, “Actions has been disabled for this repository,” and supplies no GitHub Actions run for the latest commit |
