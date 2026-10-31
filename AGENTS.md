@@ -35,4 +35,5 @@ Read [CLAUDE.md](CLAUDE.md) for the repository structure and product rules. macO
 - Do not commit, push, merge a PR/MR, publish or deploy without explicit authorization in the current session. No force push without separate permission. No co-author trailers or generated footers.
 - Make small, cohesive commits with clear plain messages. After commit and push are authorized, push all task commits to the intended branch and verify the remote SHA.
 - Fix causes, do not suppress checks. Keep secrets out of code, commands, logs and documentation. Keep docs current, with detailed instructions under `docs/`.
+- Security audits include resolved Android build plugins and native speech libraries, not only package lockfiles. Keep unresolved native and Linux advisories visible; a clean registry scan is not proof that downloaded binaries are fixed. See `windows/docs/dependency-security.md`.
 - Long runs keep local state in ignored `_prive/` files. Do not add personal infrastructure details to project documentation.

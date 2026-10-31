@@ -19,6 +19,7 @@ To run it day to day on the Mac (signed, iPhone link, permissions kept across bu
 Windows and Linux: `cd windows && npm ci && npm run tauri dev`
 
 Windows checks: `npm test`, `npm run build`, `cargo test --workspace` from `windows/`.
+Dependency security checks and unresolved native/Linux findings are in `windows/docs/dependency-security.md`. Android's `dependencySecuritySbom` init task exports the actual app, test and build-plugin graph. Do not hide findings or infer native binary safety from a clean lockfile scan.
 Claude Code and Codex connections are in `windows/src-tauri/src/cli_agents.rs` and `windows/src/settings/connections.ts`. Both use official CLI sign-ins; credentials stay with the CLI. Keep both agents covered when changing connections, chat, project launch or tray behavior. See `windows/docs/coding-agents.md` and `windows/docs/integration-review.md`.
 
 `cli_relay.rs` adds opt-in subscription switches for the upstream providers. Anthropic and OpenAI subscription aliases must use the same `cli_agents` runtime, attachment handling and cancellation as explicit Claude Code/Codex. Keep API model choices and billing separate. Other relays use official CLI read-only modes with bounded process supervision; their inherited configuration is not an OS sandbox. A failed settings save must leave the subscription switch unchanged.
