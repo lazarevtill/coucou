@@ -33,7 +33,7 @@ Automated results describe the current source. Native interaction evidence below
 | Android unit suite on Windows | 971 passed, zero failed, 38 opt-in or platform checks skipped; the local Node relay fixture ran. Catalog, drawing-parity and stale-file assertions are retained |
 | TypeScript and Vite production frontend | Passed; the translation catalogs have separate cached chunks; the existing 500 kB size advisory remains unsuppressed |
 | Rust compile | One unused `RunError::Unsupported` warning in the upstream Outlook module; reproduced on unchanged parent main |
-| Remote CI | Unverified for the latest source. GitHub rejects workflow dispatch with HTTP 422, “Actions has been disabled for this repository,” and supplies no GitHub Actions run for the latest commit |
+| Remote CI | Unverified for the current integrated source. Repository and workflow settings report enabled, but GitHub rejects dispatch with HTTP 422, “Actions has been disabled for this repository,” and current main pushes have no workflow runs |
 | Windows installer | NSIS 0.5.6 from source `6de38c423231a88ea12729ad2f50c85b7caa740e` built and installed successfully; complete executable matches the compiled release with Tauri's NSIS bundle marker |
 | Installed startup | Native accessibility state shows 0.5.6 and Ready with the selected Right Alt listener. The process remains responsive. Native model-picker, processing-progress and speaker-merge checks passed |
 | Installation preservation | Twenty-three checked files unchanged immediately after installation, including notes, models, preferences and both CLI configurations |
