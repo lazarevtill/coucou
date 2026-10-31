@@ -32,6 +32,7 @@ npm ci
 npm test
 npm run build
 cargo test --workspace
+python -X utf8 ../scripts/test-whats-new.py
 npm run tauri dev
 ```
 
