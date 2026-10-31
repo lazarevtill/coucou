@@ -37,6 +37,7 @@ import { connectionsSection } from "./connections";
 import { claudeModelControl } from "./claude-models";
 import { agentsSection } from "./agents";
 import { phoneSection } from "./phone";
+import { mcpSection } from "./mcp";
 import { whatsappSection } from "./whatsapp";
 import { WHATSAPP_ID } from "../core/whatsapp";
 import { updateRows, updatesListener } from "./updates";
@@ -1516,7 +1517,7 @@ async function render() {
     pills: () => [activePillsSection(connected)],
     agents: () => [connectionsSection(() => settings.chatProvider, async (id) => { const next = { ...settings, chatProvider: id }; await Bridge.saveSettings(next); settings = next; }), claudeSection(status), agentsSection(agents), planSection(status)],
     chat: () => [connectionsSection(() => settings.chatProvider, async (id) => { const next = { ...settings, chatProvider: id }; await Bridge.saveSettings(next); settings = next; }), subscriptionsSection(), apiSection(hasKey, claudeRelay), chatProvidersSection(chatKeys, keyChanged), localSection(customKey)],
-    integrations: () => [integrationsSection(present), marketsSection(), portfolioSection(), ...whatsappSections(), pluginsSection()],
+    integrations: () => [mcpSection(), integrationsSection(present), marketsSection(), portfolioSection(), ...whatsappSections(), pluginsSection()],
     phone: () => [phoneSection(settings.phoneLink ?? false, toggle, settings)],
     shortcuts: () => [shortcutsSection(shortcutReport)],
   };

@@ -139,6 +139,7 @@ export const SETTINGS_ENTRIES: SettingsSearchEntry[] = [
       "Linear", "X", "YouTube", "Figma", "OpenWeather", "Railway", "Supabase", "Hugging Face", "Sentry", "PostHog", "Twilio",
     ],
   },
+  { id: "integrations.mcp", page: "integrations", title: "Local agents (MCP)", terms: ["Allow agents to read saved calls", "Claude Code", "Claude Desktop", "Codex desktop / ChatGPT desktop"] },
   { id: "phone.android", page: "phone", title: "phone.title", terms: ["phone.status", "phone.pairing", "phone.approvals"] },
   { id: "voice.wake", page: "voice", title: "«\u202FOK Coucou\u202F» — voice wake word", terms: ["Enable voice command", "Request permissions"] },
   { id: "voice.language", page: "voice", title: "Language", terms: ["voice.listen-language", "voice.language"] },

@@ -26,6 +26,8 @@ Claude Code and Codex connections are in `windows/src-tauri/src/cli_agents.rs` a
 
 Phone chat validates its enabled switch and model allowlist independently. Selected subscription routes do not require API credentials; the picker offers Claude Code/Codex aliases only after their sign-in probes succeed. Subscription-only providers expose the CLI's default model.
 
+Local MCP access to saved calls uses `windows/src-tauri/src/mcp/` and `windows/src/settings/mcp.ts`. `coucou mcp` starts the official SDK's stdio server before Tauri initialization. Its separate permission is off by default, rechecked per request and before returning data; ordinary preferences cannot grant it. Search/fetch are the only tools. Preserve opened-handle path checks, input/read bounds, revision-checked pagination, cancellation and incomplete-note diagnostics. Setup covers Claude Code, Claude Desktop, Codex CLI and desktop clients without silently changing their files or tool permissions. See `windows/docs/local-mcp.md`.
+
 The Claude API model picker uses `claude_api_models` for account discovery even when chat uses a subscription. Settings opening, key changes and Refresh update the list without changing the saved model. Keep known choices and show discovery failures; failed model saves restore the saved selection. Claude API text tasks use this same model preference.
 
 The connections view's Use for all text action selects chat and uses `flow_use_agent` to patch the three Flow text providers under the store lock. It must retain audio, hotkey, performance and enabled switches, and report a failed Flow save without claiming complete setup.

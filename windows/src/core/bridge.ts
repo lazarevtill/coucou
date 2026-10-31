@@ -37,6 +37,12 @@ export interface BootInfo {
   cursorPoll: boolean;
 }
 
+export interface McpStatus {
+  enabled: boolean;
+  executable: string;
+  windows: boolean;
+}
+
 /** The phone link (src-tauri/src/phone_link): how it is, never its secrets. */
 export interface PhoneLinkStatus {
   enabled: boolean;
@@ -216,6 +222,8 @@ export interface AgentConnection {
 
 export const Bridge = {
   agentConnections: () => callOrThrow<AgentConnection[]>("agent_connections"),
+  mcpStatus: () => callOrThrow<McpStatus>("mcp_status"),
+  mcpSetEnabled: (enabled: boolean) => callOrThrow<McpStatus>("mcp_set_enabled", { enabled }),
   agentOpen: (agent: string, login: boolean, project: string | null) => callOrThrow<void>("agent_open", { agent, login, project }),
   agentChatCancel: () => callOrThrow<void>("agent_chat_cancel"),
   boot: () => call<BootInfo>("boot"),

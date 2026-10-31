@@ -18,6 +18,7 @@ The tray opens chat, settings and session activity. **Settings → General** con
 - [Terminal detection and focus](docs/terminals.md)
 - [Mail with classic Outlook](docs/mail.md)
 - [Folder plugins](docs/plugins.md)
+- [Read call transcripts from Claude Desktop, Codex and other local MCP clients](docs/local-mcp.md)
 - [Current integration verification](docs/integration-review.md)
 - [Dependency security audit and open findings](docs/dependency-security.md)
 - [Windows features, call audio and Parakeet settings](docs/windows-parity.md)
