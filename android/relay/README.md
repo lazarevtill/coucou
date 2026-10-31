@@ -19,7 +19,7 @@ The wire is specified in `docs/RELAY_LINK.md`; the reasoning is in `android/RELA
 
 ## Deploy (once)
 
-You need a free Cloudflare account and Node 22 or newer.
+You need a free Cloudflare account and Node 22.12 or newer from a supported Node release line (22, 24 or 26+).
 
 ```
 cd android/relay
@@ -72,7 +72,7 @@ Without `ACCESS_KEY` it refuses every room request.
 ## Develop and test
 
 ```
-npm install        # .npmrc sets legacy-peer-deps (the Workers test plugin's peer range)
+npm ci
 npm run typecheck
 npm test           # the behaviour suite in workerd (Miniflare) and against the Node twin, the guards, the vectors
 npm run vectors    # test-vectors.json is up to date (shared with the Rust and Kotlin code)
