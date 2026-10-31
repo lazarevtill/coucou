@@ -88,6 +88,8 @@ class RelayConnector(
         }
         try {
             val session = handshake(ws, key)
+            // The stream owns its timeout; the handshake timeout must not end an idle connection.
+            ws.setReadTimeout(0)
             issue = RelayIssue.NONE
             return RelayStreamSocket(ws, session)
         } catch (e: Throwable) {
