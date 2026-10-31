@@ -5,6 +5,7 @@
 import { h, svg, clear, dot } from "./dom";
 import { ICONS } from "./icons";
 import { Ticker } from "./ticker";
+import { sessionConnections } from "./sessions";
 import { State, type AgentTask } from "../core/state";
 import { washRGBA, type IslandViewName, type Wash } from "../core/layout";
 import { createMiniBot, pruneMiniBots } from "../mochi/minibots";
@@ -190,7 +191,8 @@ function buildOverview(actions: ViewActions): ViewHost {
     State.notify();
   });
   const who = h("div", { class: "who" });
-  const tickerBody = h("div", { class: "card-body" }, who, ticker.el);
+  const connections = sessionConnections();
+  const tickerBody = h("div", { class: "card-body" }, who, connections.el, ticker.el);
   const leftBody = h("div", { class: "left-body" });
   const jump = h(
     "button",
@@ -314,7 +316,10 @@ function buildOverview(actions: ViewActions): ViewHost {
 
       // A workspace or agent pill with a live session keeps the ticker; every
       // other pill shows its own card, exactly like IntegrationCardView.
-      const sessionActive = task != null && hasSessionTicker(task);
+      const sessionAgent = State.os !== "windows" ? null : task?.id === "agent_codex" ? "codex"
+        : task?.id === "integration_claude" || task?.id === "agent_cursor" ? "claude" : null;
+      const hasConnections = connections.sync(sessionAgent);
+      const sessionActive = task != null && (hasSessionTicker(task) || hasConnections);
 
       const planOpen = planCardOpen();
       if (mode === "plan" && !planOpen) {

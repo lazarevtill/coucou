@@ -1,0 +1,11 @@
+# Coding session windows on Windows
+
+Claude Code and Codex hooks carry their process ancestry and, when available, their console window and IDE connection. Coucou keeps each session's project and host, so two sessions do not overwrite each other's jump target. Hook installation still uses the existing preview, confirmation and backup controls in Settings.
+
+The island's Claude Code and Codex cards offer a session selector. Open tries the recorded window first, then checks live process identities and ranks matching windows by project hints. A minimized window is restored. When Windows refuses foreground activation, its taskbar button flashes and the card says where to look. A heuristic match is also identified. Windows Terminal tabs and multiple editor windows can remain ambiguous; focusing a window does not guarantee selecting the exact tab inside it.
+
+Settings → General → Open projects in selects VS Code or Cursor and Windows Terminal or the available PowerShell shell. None hides the corresponding launch action. Open in the editor and Open terminal use the selected session's absolute existing project directory. Windows editor command files are resolved to the installed editor executable before launch, so project arguments never pass through a batch file. Unsafe Windows Terminal separators fall back to File Explorer with an explanation. The original Open action elsewhere in the app retains its existing platform fallback.
+
+Finished sessions stay available until SessionEnd, process exit or the six-hour inactivity limit. The native table is bounded at 64 sessions and checks liveness every 20 seconds. The frontend removes entries when native cleanup reports their IDs. The relay stages and flushes a complete update beside its executable before replacing it; if replacement fails, it attempts to restore the saved executable and reports the failure.
+
+Automated checks cover host classification, stale process/window selection, launcher arguments, relay forwarding, session isolation and settings round trips. Real foreground activation and tab selection require native testing with the target apps. Linux keeps its existing compositor-aware focus path; these additional session controls are shown on Windows.

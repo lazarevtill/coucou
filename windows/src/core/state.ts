@@ -2,6 +2,7 @@
 
 import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./layout";
 import type { EyeShape } from "../mochi/engine";
+import { SessionStore } from "./sessions";
 import {
   DEFAULT_MAIN_PILL, HOST_OS, availablePills, orderPills, pillDefinition, sanitizeDeclared,
   toggleDeclared, type HostOs, type PillDefinition,
@@ -116,6 +117,8 @@ export interface Settings {
   hooksInstalled: boolean;
   /** Claude model used by the chat. */
   model: string;
+  editor: "cursor" | "vscode" | "none";
+  terminal: "windowsTerminal" | "shell" | "none";
   /** Show the Claude plan pill (5 h and weekly limits) in the island's header. */
   showPlanInNotch: boolean;
   /** Coucou's status line relay is installed in Claude Code's settings. */
@@ -183,6 +186,8 @@ export const DEFAULT_SETTINGS: Settings = {
   autostart: false,
   hooksInstalled: false,
   model: "claude-opus-5",
+  editor: "vscode",
+  terminal: "windowsTerminal",
   showPlanInNotch: false,
   planRelayInstalled: false,
   showCodexPlanInNotch: false,
@@ -206,6 +211,7 @@ export const MAX_DIFFS_PER_PILL = 50;
 export const DIFF_TTL_MS = 3_600_000;
 
 class AppState {
+  sessions = new SessionStore();
   mode: IslandMode = "hidden";
   view: IslandViewName = "overview";
 

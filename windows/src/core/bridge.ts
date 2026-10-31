@@ -247,6 +247,9 @@ export const Bridge = {
 
   /** "Open terminal" → opens the folder in VS Code when `code` is on PATH. */
   openInVSCode: (path: string | null) => call<boolean>("open_in_vscode", { path }),
+  openProject: (target: "editor" | "terminal", path: string | null) => call<{ result: { via: string; fellBack: boolean; error: string | null }; startingMs: number | null }>("open_project", { target, path }),
+  focusSession: (sessionId: string) => call<{ outcome: string }>("focus_session", { sessionId }),
+  launchInfo: () => call<{ cursor: boolean; vscode: boolean; windowsTerminal: boolean; shell: string | null }>("launch_info"),
 
   /**
    * "Open terminal": the window the session runs in when Rust found it

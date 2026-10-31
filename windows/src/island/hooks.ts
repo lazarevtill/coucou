@@ -242,7 +242,13 @@ function recordDiff(agentId: string, payload: HookPayload) {
 export function registerHookHandlers(island: Island) {
   // The last plan numbers seen survive a restart, as on the Mac.
   State.planUsage ??= restorePlanUsage(storedClaudePlanUsage());
-  void onEvent<HookPayload>("hook", (payload) => handleHook(island, payload));
+  void onEvent<HookPayload>("hook", (payload) => {
+    const tracked = !payload.coucou_agent || payload.coucou_agent === "claude" || payload.coucou_agent === "codex";
+    if (!State.paused && tracked && payload.hook_event_name !== "StatusLine") State.sessions.apply(payload, Date.now());
+    handleHook(island, payload);
+    if (tracked) State.notify();
+  });
+  void onEvent<string>("session-ended", id => { State.sessions.remove(id); State.notify(); });
   // The relay stopped waiting without a decision and the terminal has taken
   // over: a card still up for that request would be lying (#857).
   void onEvent<string>("approval-expired", (requestId) => {
