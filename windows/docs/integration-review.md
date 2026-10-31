@@ -30,8 +30,10 @@ Automated results describe the current source. Native interaction evidence below
 | --- | --- |
 | Frontend suite | 708 passed, zero failed |
 | Rust workspace suite | 836 passed: 787 app, 46 hook, 3 relay; 22 opt-in tests ignored |
-| Android unit suite on Windows | 971 passed, zero failed, 38 opt-in or platform checks skipped; the local Node relay fixture ran. Catalog, drawing-parity and stale-file assertions are retained |
-| TypeScript and Vite production frontend | Passed; the translation catalogs have separate cached chunks; the existing 500 kB size advisory remains unsuppressed |
+| Android unit suite on Windows | 1008 passed, zero failed, two explicit relay E2E checks skipped in the unit run. Node and Rust interoperability fixtures ran. Lint, debug APK, optimized unsigned release APK and release-log verification passed |
+| Android/Rust relay E2E | Both approval round trips passed through the local Node relay and the local Cloudflare Worker; each mode passed two Android tests and one Rust test. Incorrect relay keys returned HTTP 401. Deterministic ordering and established-connection idle regressions passed |
+| TypeScript and Vite production frontend | Passed with Vite 8.3.5. All five built entry pages loaded in headless Edge without script or request failures. Translation catalogs retain separate cached chunks; the existing 500 kB size advisory remains unsuppressed |
+| Dependency security | All three npm audits and the 218-coordinate Android app/test/build-plugin scan reported zero findings. Native Sherpa and Linux GLib findings remain open; see [dependency security](dependency-security.md) for exact coverage and limits |
 | Rust compile | One unused `RunError::Unsupported` warning in the upstream Outlook module; reproduced on unchanged parent main |
 | Remote CI | Unverified for the current integrated source. Repository and workflow settings report enabled, but GitHub rejects dispatch with HTTP 422, “Actions has been disabled for this repository,” and current main pushes have no workflow runs |
 | Windows installer | NSIS 0.5.6 from source `6de38c423231a88ea12729ad2f50c85b7caa740e` built and installed successfully; complete executable matches the compiled release with Tauri's NSIS bundle marker |
@@ -60,7 +62,7 @@ Automated results describe the current source. Native interaction evidence below
 | Audio | Laptop mic plus Bluetooth playback passed; the current build's laptop mic plus built-in speakers check passed at 48 kHz stereo. Both streams reported recoverable discontinuities and continued delivering audio |
 | App audio routing | Separate native capture/playback fixture detected on its actual endpoints |
 | Native Settings audio test | Both built-in source names, meters and 48 kHz stereo formats appeared; the ten-second check stopped automatically and created no note. The microphone's interruption warning stayed visible |
-| Parakeet | Synthetic transcription, leading-silence calibration, manual override and speaker separation passed. The native fixture measured four threads fastest at about 234 ms per six-second sample; the installed call measured two threads fastest for its sample |
+| Parakeet | Sherpa 2.0.1 passed isolated native transcription, leading-silence calibration, manual override and speaker separation. Four threads were fastest at 196 ms for the synthetic sample; the manual one-thread setting retained the same transcript. Calibration depends on the actual audio and hardware |
 | Markets | Public quotes and nine public wallet-service checks passed |
 | Apple Music | Selected-track discovery, artwork, 5% per-app volume and both play/pause state changes passed the native control check. The current player session advertises seeking as unavailable; Coucou rejects it and keeps the progress bar read-only |
 
