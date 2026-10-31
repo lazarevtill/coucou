@@ -4,6 +4,8 @@ design/** linguist-documentation
 android/gradlew text eol=lf
 android/**/*.sh text eol=lf
 android/**/*.mjs text eol=lf
+# The shared cryptographic vectors are compared byte for byte with the generator output.
+android/relay/test-vectors.json text eol=lf
 
 # PDF cross-reference offsets require the fixture's original bytes.
 windows/src-tauri/src/cli_agents/fixtures/*.pdf binary
