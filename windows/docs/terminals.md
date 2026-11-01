@@ -136,8 +136,9 @@ opens the project in the editor instead.
 
 The shell is PowerShell 7 (`pwsh.exe`) when installed, else Windows PowerShell.
 Known editor batch entry points are resolved to their native executables before
-passing the project path. Unknown batch scripts are refused. Nothing goes through
-`cmd /C`. The folder must be an absolute, existing
+passing the project path. Unknown batch scripts are refused. VS Code started by
+the diff card's ↗, or by a session's ↗ when no window can be brought forward, is
+found and checked the same way. Nothing goes through `cmd /C`. The folder must be an absolute, existing
 directory; Windows Terminal reads `;` as a command separator, so a folder with
 one in its name opens in File Explorer instead. File Explorer is also what opens
 when the chosen program is missing or fails to start.

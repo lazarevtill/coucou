@@ -64,7 +64,6 @@ mod voice;
 mod webview_drop;
 mod whatsapp;
 
-use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -523,18 +522,14 @@ fn diff_file(path: &str) -> Option<&std::path::Path> {
     (p.is_absolute() && p.is_file()).then_some(p)
 }
 
-/// The diff card's ↗: opens the edited file in VS Code when `code` is on PATH,
+/// The diff card's ↗: opens the edited file in VS Code when it is installed,
 /// otherwise shows its folder. The file itself is never opened by its type —
 /// xdg-open or Explorer would run a script that Claude just wrote.
 #[tauri::command]
 fn open_file_in_vscode(path: String) -> bool {
     let Some(file) = diff_file(&path) else { return false };
-    if let Some(code) = platform::find_on_path("code") {
-        let mut cmd = Command::new(code);
-        cmd.arg(file);
-        if platform::no_console(&mut cmd).spawn().is_ok() {
-            return true;
-        }
+    if open_with_vscode(file) {
+        return true;
     }
     if let Some(folder) = file.parent().filter(|d| d.is_dir()) {
         platform::reveal_folder(&folder.to_string_lossy());
@@ -1590,17 +1585,18 @@ fn open_in_vscode(path: Option<String>) -> bool {
             return false;
         }
     }
-    if let Some(code) = platform::find_on_path("code") {
-        let mut cmd = Command::new(code);
-        if let Some(p) = path.as_deref() {
-            cmd.arg(p);
-        }
-        if platform::no_console(&mut cmd).spawn().is_ok() {
-            return true;
-        }
+    if open_with_vscode(std::path::Path::new(path.as_deref().unwrap_or(""))) {
+        return true;
     }
     if let Some(p) = path.as_deref() {
         platform::reveal_folder(p);
     }
     false
+}
+
+/// VS Code on `path` (nothing: the editor alone), planned like "Open project":
+/// its `code.cmd` becomes Code.exe, and an unknown batch script never gets the path.
+fn open_with_vscode(path: &std::path::Path) -> bool {
+    launch::plan_editor(launch::Editor::Vscode, &launch::SystemEnv, path)
+        .is_some_and(|planned| platform::spawn_launch(&planned).is_ok())
 }
