@@ -144,6 +144,22 @@ test("an export failure is visible and a successful retry reports the selected p
   assert.match(fixture.detail().textContent, /Saved as C:\\chosen\\Synthetic call\.md/);
 });
 
+test("a failed delete keeps the call listed with the reason beside the confirmation", async t => {
+  const fixture = await exportPage(t);
+  const answer = internals.invoke;
+  t.mock.method(internals, "invoke", async (cmd, args) => {
+    if (cmd === "notes_delete") throw "Could not remove: mic.wav is open in another program";
+    return answer(cmd, args);
+  });
+  const detail = fixture.detail();
+  detail.find("button").find(b => b.getAttribute("aria-label") === "Delete").fire("click");
+  detail.find("button").find(b => b.textContent === "Delete").fire("click");
+  await flush();
+  assert.match(detail.textContent, /Could not remove: mic\.wav is open in another program/);
+  assert.match(detail.textContent, /Delete this call and its notes\?/);
+  assert.match(fixture.page.querySelector(".hub-notes-list").textContent, /Synthetic call/);
+});
+
 test("processing keeps live lines mounted while native stage progress and elapsed time update", async t => {
   const fixture = await recordingPage(t);
   fixture.state.recording = null;

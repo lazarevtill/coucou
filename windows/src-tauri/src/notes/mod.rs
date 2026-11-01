@@ -700,13 +700,20 @@ pub struct NotesState {
     progress: std::collections::BTreeMap<String, progress::Progress>,
 }
 
+/// Off the UI thread: the device monitor holds `recording` while it reopens a
+/// device, for up to 5 s, and every window would freeze waiting for it.
 #[tauri::command]
-pub fn notes_state(taker: State<Arc<NoteTaker>>) -> NotesState {
-    let notes = taker.notes.lock().unwrap().clone();
-    let recording = taker.recording.lock().unwrap().as_ref().map(|r| r.id.clone());
-    let working = taker.working.lock().unwrap().clone();
-    let progress = taker.progress.lock().unwrap().clone();
-    NotesState { notes, recording, working, audio: audio_status(&taker), progress }
+pub async fn notes_state(app: AppHandle) -> Result<NotesState, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let taker = app.state::<Arc<NoteTaker>>();
+        let notes = taker.notes.lock().unwrap().clone();
+        let recording = taker.recording.lock().unwrap().as_ref().map(|r| r.id.clone());
+        let working = taker.working.lock().unwrap().clone();
+        let progress = taker.progress.lock().unwrap().clone();
+        NotesState { notes, recording, working, audio: audio_status(&taker), progress }
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 fn audio_status(taker: &NoteTaker) -> Vec<SourceStatus> {
@@ -715,8 +722,13 @@ fn audio_status(taker: &NoteTaker) -> Vec<SourceStatus> {
     recording_sources(rec)
 }
 
+/// Off the UI thread, like `notes_state`.
 #[tauri::command]
-pub fn notes_audio_status(taker: State<Arc<NoteTaker>>) -> Vec<SourceStatus> { audio_status(&taker) }
+pub async fn notes_audio_status(app: AppHandle) -> Result<Vec<SourceStatus>, String> {
+    tauri::async_runtime::spawn_blocking(move || audio_status(&app.state::<Arc<NoteTaker>>()))
+        .await
+        .map_err(|e| e.to_string())
+}
 
 #[tauri::command]
 pub async fn notes_start(app: AppHandle) -> Result<String, String> {
@@ -765,14 +777,29 @@ pub fn notes_toggle_todo(app: AppHandle, taker: State<Arc<NoteTaker>>, id: Strin
     });
 }
 
+/// The note leaves the list only once its folder, audio included, is gone.
 #[tauri::command]
-pub fn notes_delete(app: AppHandle, taker: State<Arc<NoteTaker>>, id: String) {
-    if taker.recording.lock().unwrap().as_ref().is_some_and(|r| r.id == id) {
-        return;
-    }
-    taker.notes.lock().unwrap().retain(|n| n.id != id);
-    let _ = std::fs::remove_dir_all(note_dir(&id));
-    let _ = app.emit_to(crate::HUB_LABEL, "notes-changed", &id);
+pub async fn notes_delete(app: AppHandle, id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let taker = app.state::<Arc<NoteTaker>>();
+        if taker.recording.lock().unwrap().as_ref().is_some_and(|r| r.id == id) {
+            return Ok(());
+        }
+        {
+            // Under the notes lock: a transcript being saved cannot recreate the folder.
+            let mut notes = taker.notes.lock().unwrap();
+            match std::fs::remove_dir_all(note_dir(&id)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(tf("Could not remove: {error}", &[("error", &error.to_string())])),
+            }
+            notes.retain(|n| n.id != id);
+        }
+        let _ = app.emit_to(crate::HUB_LABEL, "notes-changed", &id);
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

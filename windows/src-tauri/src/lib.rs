@@ -877,12 +877,15 @@ fn plugins_list(shared: State<Shared>) -> Vec<PluginInfo> {
         .collect()
 }
 
+/// The change is made on a copy and only becomes the live settings once saved.
 fn save_and_announce(app: &AppHandle, shared: &Shared, change: impl FnOnce(&mut Settings)) -> Result<(), String> {
     let updated = {
-        let mut s = shared.settings.lock().unwrap();
-        change(&mut s);
-        settings::save(&s).map_err(|e| e.to_string())?;
-        s.clone()
+        let mut current = shared.settings.lock().unwrap();
+        let mut next = current.clone();
+        change(&mut next);
+        settings::save(&next).map_err(|e| e.to_string())?;
+        *current = next.clone();
+        next
     };
     let _ = app.emit("settings-changed", updated);
     plugins::runner::refresh(app);
