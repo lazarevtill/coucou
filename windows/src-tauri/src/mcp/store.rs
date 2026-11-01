@@ -1,4 +1,4 @@
-use std::{fs::{self, File, OpenOptions}, io::{self, Read, Write}, path::{Path, PathBuf}, sync::Mutex};
+use std::{fs::{self, File}, io::{self, Read}, path::{Path, PathBuf}, sync::Mutex};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use crate::notes::{Note, Status};
@@ -67,16 +67,9 @@ impl Store {
         if enabled { self.enabled()?; }
         let root = self.access.parent().ok_or("The MCP access folder is unavailable.")?;
         crate::platform::ensure_private_dir(root).map_err(|_| "Could not create the MCP access folder.")?;
-        let temp = root.join(format!("mcp-access-{}.tmp", crate::flow::text::new_id()));
-        let written = (|| -> io::Result<()> {
-            let mut file = OpenOptions::new().write(true).create_new(true).open(&temp)?;
-            file.write_all(if enabled { b"{\"enabled\":true}\n" } else { b"{\"enabled\":false}\n" })?;
-            file.sync_all()?;
-            drop(file);
-            fs::rename(&temp, &self.access)
-        })();
-        if written.is_err() { let _ = fs::remove_file(&temp); }
-        written.map_err(|_| "Could not save MCP access. The saved permission is unchanged.".into())
+        let bytes: &[u8] = if enabled { b"{\"enabled\":true}\n" } else { b"{\"enabled\":false}\n" };
+        crate::config_file::replace(&self.access, bytes)
+            .map_err(|_| "Could not save MCP access. The saved permission is unchanged.".into())
     }
 
     pub(super) fn call(&self, name: &str, args: Value, cancelled: impl Fn() -> bool) -> Result<Value, String> {

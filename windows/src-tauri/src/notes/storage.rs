@@ -1,5 +1,4 @@
 //! Commit the final transcript before releasing its source audio.
-use std::io::Write;
 use std::path::Path;
 use super::{Note, Status, builder::{Line, Speaker}};
 
@@ -7,11 +6,7 @@ pub(super) fn save(dir: &Path, note: &Note) -> Result<(), String> {
     let write = || -> Result<(), Box<dyn std::error::Error>> {
         crate::platform::ensure_private_dir(dir)?;
         let bytes = serde_json::to_vec_pretty(note)?;
-        let mut file = std::fs::File::create(dir.join("note.json.tmp"))?;
-        file.write_all(&bytes)?;
-        file.sync_all()?;
-        drop(file);
-        std::fs::rename(dir.join("note.json.tmp"), dir.join("note.json"))?;
+        crate::config_file::replace(&dir.join("note.json"), &bytes)?;
         Ok(())
     };
     write().map_err(|error| format!("Could not save call notes: {error}"))
@@ -50,13 +45,14 @@ mod tests {
         let original = std::fs::read(dir.join("note.json")).unwrap();
         for name in ["mic.wav", "system.wav"] { std::fs::write(dir.join(name), b"recording").unwrap(); }
         // A failed staging write must not make the live or stored note Ready.
-        std::fs::create_dir(dir.join("note.json.tmp")).unwrap();
+        let staging = dir.join(format!("note.json.coucou-{}", std::process::id()));
+        std::fs::create_dir(&staging).unwrap();
         assert!(finish(&dir, &mut note, vec![], vec![]).is_err());
         assert_eq!(note.status, Status::Processing);
         assert_eq!(note.lines[0].text, "Live preview");
         assert_eq!(std::fs::read(dir.join("note.json")).unwrap(), original);
         for name in ["mic.wav", "system.wav"] { assert_eq!(std::fs::read(dir.join(name)).unwrap(), b"recording"); }
-        std::fs::remove_dir(dir.join("note.json.tmp")).unwrap();
+        std::fs::remove_dir(&staging).unwrap();
         finish(&dir, &mut note, vec![], vec![]).unwrap();
         let saved: Note = serde_json::from_slice(&std::fs::read(dir.join("note.json")).unwrap()).unwrap();
         assert_eq!(saved.status, Status::Ready);

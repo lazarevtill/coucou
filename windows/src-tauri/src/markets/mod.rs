@@ -110,13 +110,10 @@ pub fn markets_save(app: AppHandle, prefs: Prefs) -> Result<Prefs, String> {
     {
         let _guard = WRITE.lock().unwrap();
         let path = path();
-        let temp = path.with_extension("json.tmp");
         let result = crate::platform::ensure_private_dir(path.parent().unwrap())
             .and_then(|()| serde_json::to_vec_pretty(&prefs).map_err(std::io::Error::other))
-            .and_then(|bytes| std::fs::write(&temp, bytes))
-            .and_then(|()| std::fs::rename(&temp, &path));
+            .and_then(|bytes| crate::config_file::replace(&path, &bytes));
         if result.is_err() {
-            let _ = std::fs::remove_file(&temp);
             return Err("Cannot save markets.json".into());
         }
         REVISION.fetch_add(1, Ordering::SeqCst);

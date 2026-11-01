@@ -41,6 +41,8 @@ These editors save locally before applying changes to dictation. If the file can
 
 Deleting a dictation keeps the entry visible until the history file is updated. History erasure failures remain visible and retryable. **Erase everything** retains its confirmation if the write fails; if history was erased but statistics could not be, the error identifies that partial result and the remaining statistics stay intact.
 
+Flow's files are written beside the original, flushed to disk and renamed into place. A file that is present but cannot be used is copied beside it as `<name>.corrupt-<date>` before anything replaces it; one that cannot be read at all is copied aside once it becomes readable, and until then it is not written over. While the preferences file does not load, the history is not shortened by age.
+
 ## Call audio
 
 Notetaker fills the available width in maximized and restored windows. Its call list and note stay side by side when space permits; narrow windows place a scrollable call list above the note and keep Record/Stop at the top of that list. Capture details use two columns when they fit. Long text, speaker names and export controls wrap within the window.
