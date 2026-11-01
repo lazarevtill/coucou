@@ -16,72 +16,9 @@ Coucou is a native macOS app (`NotchBuddy/`); `windows/` is the Tauri version fo
 cd NotchBuddy && xcodegen && xcodebuild -scheme NotchBuddy -configuration Debug build
 ```
 To run it day to day on the Mac (signed, iPhone link, permissions kept across builds): `./scripts/dev-install.sh` — it installs the only Coucou in /Applications and removes the copies earlier builds left.
-Windows and Linux: `cd windows && npm ci && npm run tauri dev`
-
-Windows checks: `npm test`, `npm run build`, `cargo test --workspace` from `windows/`.
-Dependency security checks and unresolved native/Linux findings are in `windows/docs/dependency-security.md`. Android's `dependencySecuritySbom` init task exports the actual app, test and build-plugin graph. Do not hide findings or infer native binary safety from a clean lockfile scan.
-Claude Code and Codex connections are in `windows/src-tauri/src/cli_agents.rs` and `windows/src/settings/connections.ts`. Both use official CLI sign-ins; credentials stay with the CLI. Keep both agents covered when changing connections, chat, project launch or tray behavior. See `windows/docs/coding-agents.md` and `windows/docs/integration-review.md`.
-
-`cli_relay.rs` adds opt-in subscription switches for the upstream providers. Anthropic and OpenAI subscription aliases must use the same `cli_agents` runtime, attachment handling and cancellation as explicit Claude Code/Codex. Keep API model choices and billing separate. Other relays use official CLI read-only modes with bounded process supervision; their inherited configuration is not an OS sandbox. A failed settings save must leave the subscription switch unchanged.
-
-Phone chat validates its enabled switch and model allowlist independently. Selected subscription routes do not require API credentials; the picker offers Claude Code/Codex aliases only after their sign-in probes succeed. Subscription-only providers expose the CLI's default model.
-
-Local MCP access to saved calls uses `windows/src-tauri/src/mcp/` and `windows/src/settings/mcp.ts`. `coucou mcp` starts the official SDK's stdio server before Tauri initialization. Its separate permission is off by default, rechecked per request and before returning data; ordinary preferences cannot grant it. Search/fetch are the only tools. Preserve opened-handle path checks, input/read bounds, revision-checked pagination, cancellation and incomplete-note diagnostics. Setup covers Claude Code, Claude Desktop, Codex CLI and desktop clients without silently changing their files or tool permissions. See `windows/docs/local-mcp.md`.
-
-The Claude API model picker uses `claude_api_models` for account discovery even when chat uses a subscription. Settings opening, key changes and Refresh update the list without changing the saved model. Keep known choices and show discovery failures; failed model saves restore the saved selection. Claude API text tasks use this same model preference.
-
-The connections view's Use for all text action selects chat and uses `flow_use_agent` to patch the three Flow text providers under the store lock. It must retain audio, hotkey, performance and enabled switches, and report a failed Flow save without claiming complete setup.
-
-Public crypto quotes and read-only portfolios use `windows/src-tauri/src/markets/`, with request limits and service origins in its `defaults.json`. They must remain read-only and inactive until the user enables the pill. Portfolio keys stay in the OS credential store; unavailable balances and prices must remain visibly incomplete.
-
-Music state includes the native session's `canSeek` capability (Windows media controls or MPRIS CanSeek). A disabled seek bar remains read-only; native Windows commands also recheck that capability before changing position. Apple Music and Spotify retain separate state and commands.
-
-Speech and call recording use `windows/src-tauri/src/speech/` and `notes/`. Flow Settings selects text providers, audio devices and automatic or manual CPU threads. Source recovery runs independently of transcription; lost-audio warnings remain in the note. See `windows/docs/windows-parity.md` for feature coverage and hardware verification limits.
-
-Parakeet calibration uses at most six seconds from the most energetic window of a successful transcription. Leading silence must not invalidate tuning. Every candidate must produce a stable, matching transcript before its timing can win; the source transcript is unchanged and no calibration audio is saved.
-
-The Flow toolbar uses `windows/src/pill/surface.ts` to retain its capsule and controls. Tooltips sit outside the capsule layout, toward the screen interior. Keep native input regions and frontend hover geometry aligned through animations and DPI changes.
-
-User requests from shortcuts and tray commands use `Island.openExplicit`, so chat, wardrobe, recap and update cards remain available with the idle island off. `Island.alert` is for background events and respects that setting.
-
-`hub_shown` takes its initial visibility snapshot on the native UI queue. WebView2 can process page commands during setup before queued event listeners are installed; reading the startup atomic immediately can leave visible canvases stopped. Keep the initial snapshot ordered after native setup and retain the hidden-window animation gate.
-
-`flow_status` awaits native setup before returning listener availability. Notetaker saves final source diagnostics in each note: used device names, audio receipt, peak level and warnings survive transcription and audio deletion. Received packets do not prove speech, and a WASAPI discontinuity does not prove a device disconnect.
-
-`speech/source.rs` shares audio health and reconnection between Notetaker and the no-file Settings test. `speech/routing.rs` follows the active call application's Windows audio sessions before system defaults. Manual microphone and playback choices remain independent; ambiguous app routes must be visible. Hardware diagnostics are ignored tests that require explicit live-test authorization.
-
-Audio-route process grouping uses title-free window ownership. Never call `GetWindowTextW` on Coucou's windows from a recording worker: it synchronously waits for the UI thread. Capture start/stop and writer draining run off the UI thread, including floating-toolbar actions.
-
-Notetaker retains one Record/Stop button across timer and note updates. Pending actions disable it; failed start/stop commands leave the error visible and permit retry. The stop bridge must propagate failures.
-
-Hub pages use the available window width. Notetaker uses flexible call-list and detail columns, with a container query to stack them in narrow windows. The compact history scrolls independently with Record/Stop pinned at its top. Audio details use two columns when they fit; text and action rows wrap. CSS resizing must preserve mounted controls and input drafts.
-
-Final transcription retains existing text on screen and emits `notes-progress` by source. Progress counts examined audio; speaker analysis has a stage and elapsed time, without a fabricated percentage. Only exact digital silence skips model inference. A failed model chunk fails the operation instead of saving a partial result as complete. Note writes are serialized; `notes/storage.rs` saves and syncs the final transcript before removing source audio. Failed commits retain recordings and the prior transcript for retry.
-
-Windows uses the Mac's short-speaker-fragment rules with temporal matching because Sherpa does not expose per-turn embeddings. Giving two remote speakers the same name combines their lines; microphone identity stays separate. Automatic speaker labels are estimates, not verified identities.
-
-Windows note exports use `notes/export.rs` and the native Save As dialog. Its dedicated COM apartment keeps the main UI responsive and preserves Windows overwrite confirmation. Cancellation writes no file; the page prevents duplicate dialogs and reports write failures and the chosen saved path. Export must not alter the stored note.
-
-Dictionary, snippet and app-style commands commit their JSON file before updating the Flow store. Their pages use `hub/save.ts` to prevent overlapping edits and show native write errors. Keep entered text and the saved list on failure; only clear a submitted form after success. A failed style selection returns to its saved value.
-
-History deletion and erasure also await disk writes and propagate errors through the Flow bridge. Keep an entry visible until deletion succeeds, retain the erase confirmation on failure and prevent overlapping submissions. Erasing everything writes history first, then statistics; if the second write fails, the error explicitly states that history was erased and statistics remain. Live values follow each successful write so retry and reload agree.
-
-`windows/src-tauri/src/local_chat.rs` owns model-server chat. Settings migration must retain Windows preferences and plugin trust, preserve explicit current values, and back up a migrated settings file before replacing it. Generic settings saves cannot grant plugin trust.
-
-`windows/src-tauri/src/file_share.rs` opens Windows Share for a copied inbox file. Its native attachment is prepared off the UI thread and marshalled through an agile reference. Only explicit clicks open the chooser; the user selects the mail application and sends the draft.
-
-Chat window attachments use short-lived, single-use selections in `chat_input.rs`. `platform/window_context.rs` reads only the chosen browser's navigation chrome, excludes document/password controls, and returns only an unambiguous web address. Preview context before Send; do not add background browser collection.
-
-The Windows Attach front window shortcut records its target before the island opens. Its separate single-use offer expires after ten seconds. Keep Windows/Linux shortcut availability and native/frontend contract assertions aligned.
-
-On Windows, dragging Mochi from the island onto an app uses the same single-use context offer. `context_window_at_point` respects window stacking and refuses to select behind an unreadable top window. Moving Mochi after placing him on the desktop only changes his position.
-
-`cli_agents/attachments.rs` shares image and PDF handling between Claude Code and Codex. Windows renders PDFs locally with bounded page counts, size and time. Keep native attachment history separate from provider-neutral text history. Codex temporary files are private and scoped to the supervised request; Claude images travel over stdin.
-
-`chat_images.rs` and `views/chat-images.ts` provide explicit screenshot pasting with bounded PNG storage and preview. The capture button launches the verified Microsoft Snipping Tool package. Capture and annotation stay in that native app; Coucou never polls the clipboard or sends an attachment without Send.
+Windows and Linux: `cd windows && npm install && npm run tauri dev`
 
 ## Rules
-- Keep commits small, cohesive and readable, with clear plain messages. Once commit and push are authorized, push all task commits to the intended branch and verify the remote SHA. Keep upstream merges separate from subsequent feature and fix commits.
 - Swift 6, SwiftUI + AppKit. No third-party dependencies unless truly unavoidable. The character is drawn in code (`Canvas` + `TimelineView`), no Rive/Lottie/images.
 - Secrets live in the Keychain, never on disk or in git.
 - No telemetry. Network calls only to services the user configured.
@@ -94,4 +31,4 @@ On Windows, dragging Mochi from the island onto an app uses the same single-use 
 - Pill IDs are stable contract values (Keychain, UserDefaults, hook routing): never rename an existing pill ID.
 - New views follow the existing app style. `design/prototype/notch-buddy.html` and `design/captures/` are references for new work, not a reason to change existing views.
 - Every release adds its CHANGELOG.md section, a row in the README Versions table, and commits the regenerated Info.plist with the new version.
-- Every release also adds its What's new, shown once in the notch or the island after Coucou updates itself: an entry for the new version in `NotchBuddy/Resources/whats-new.json` (Mac, the 16 languages) or `windows/src/whats-new/whats-new.json` (Windows and Linux, the 16 languages). 1 to 4 items picked from the CHANGELOG section, each with an icon from `scripts/test-whats-new.py`, a short title and one line, translated in every language. `python3 scripts/test-whats-new.py` checks it; CI and `release.sh` fail without it.
+- Every release also adds its What's new, shown once in the notch or the island after Coucou updates itself: an entry for the new version in `NotchBuddy/Resources/whats-new.json` (Mac, the 16 languages) or `windows/src/whats-new/whats-new.json` (Windows and Linux, the 14 languages). 1 to 4 items picked from the CHANGELOG section, each with an icon from `scripts/test-whats-new.py`, a short title and one line, translated in every language. `python3 scripts/test-whats-new.py` checks it; CI and `release.sh` fail without it.
