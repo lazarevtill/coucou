@@ -256,12 +256,41 @@ fn capture(mut cmd: Command, input: Option<String>, timeout: Duration, cancel: &
 fn chat_args(agent: Agent) -> Vec<&'static str> {
     match agent {
         Agent::Claude => vec!["--print", "--output-format", "json", "--tools", "", "--strict-mcp-config", "--mcp-config", "{\"mcpServers\":{}}", "--disable-slash-commands", "--no-session-persistence", "--safe-mode", "--permission-mode", "manual"],
-        Agent::Codex => vec!["exec", "--json", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check", "--sandbox", "read-only", "--disable", "shell_tool", "--disable", "unified_exec", "--disable", "multi_agent", "--disable", "plugins", "--disable", "hooks", "-c", "web_search=\"disabled\"", "-"],
+        Agent::Codex => vec!["exec", "--json", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check", "--sandbox", "read-only", "--disable", "apps", "--disable", "shell_tool", "--disable", "unified_exec", "--disable", "multi_agent", "--disable", "plugins", "--disable", "hooks", "-c", "web_search=\"disabled\"", "-"],
     }
 }
 
+/// What a failed CLI said: its error event or error result, else its last stderr
+/// line. It only chooses the hint below and is never shown.
+fn said(output: &Captured) -> String {
+    let mut said = String::new();
+    for line in output.stdout.split(|b| *b == b'\n') {
+        let Ok(v) = serde_json::from_slice::<Value>(line) else { continue };
+        for e in v.as_array().map_or(std::slice::from_ref(&v), Vec::as_slice) {
+            let text = match e.get("type").and_then(Value::as_str) {
+                Some("error") => e.get("message"),
+                Some("turn.failed") => e.pointer("/error/message"),
+                Some("result") if e.get("is_error").and_then(Value::as_bool) == Some(true) => e.get("result"),
+                _ => None,
+            };
+            if let Some(text) = text.and_then(Value::as_str) { said = text.into(); }
+        }
+    }
+    if said.is_empty() { crate::cli_relay::last_line(&output.stderr) } else { said }
+}
+
+/// A rejected sign-in (Settings still shows the CLI connected) names the official
+/// sign-in command; any other failure keeps `generic`.
+fn failure(agent: Agent, output: &Captured, generic: &str) -> String {
+    if !crate::cli_relay::needs_sign_in(&said(output)) { return generic.into(); }
+    let cli = match agent { Agent::Claude => "claude", Agent::Codex => "codex" };
+    format!("{} is not signed in. Sign in again in a terminal: {cli} {}", agent.name(), interactive_args(agent, true).join(" "))
+}
+
 fn answer(agent: Agent, output: Captured) -> Result<String, String> {
-    if !output.success { return Err(format!("{} could not complete the reply. Check its sign-in and usage limit in Settings → Agents.", agent.name())); }
+    if !output.success {
+        return Err(failure(agent, &output, &format!("{} could not complete the reply. Check its sign-in and usage limit in Settings → Agents.", agent.name())));
+    }
     let text = match agent {
         Agent::Claude => {
             // Both JSON and stream-JSON are official output modes. Parse the
@@ -279,7 +308,7 @@ fn answer(agent: Agent, output: Captured) -> Result<String, String> {
             if result.get("type").and_then(Value::as_str) != Some("result")
                 || result.get("subtype").and_then(Value::as_str) != Some("success")
                 || result.get("is_error").and_then(Value::as_bool) != Some(false) {
-                return Err("Claude Code did not complete the reply.".into());
+                return Err(failure(agent, &output, "Claude Code did not complete the reply."));
             }
             result.get("result").and_then(Value::as_str).unwrap_or_default().to_string()
         }
@@ -289,7 +318,7 @@ fn answer(agent: Agent, output: Captured) -> Result<String, String> {
                 let Ok(v) = serde_json::from_slice::<Value>(line) else { continue };
                 match v.get("type").and_then(Value::as_str) {
                     Some("turn.completed") => completed = true,
-                    Some("turn.failed" | "error") => return Err("Codex did not complete the reply. Open it in a terminal for details.".into()),
+                    Some("turn.failed" | "error") => return Err(failure(agent, &output, "Codex did not complete the reply. Open it in a terminal for details.")),
                     Some("item.completed") if v.pointer("/item/type").and_then(Value::as_str) == Some("agent_message") => {
                         text = v.pointer("/item/text").and_then(Value::as_str).unwrap_or_default().into();
                     }
@@ -491,6 +520,34 @@ mod tests {
             assert!(!interactive_args(agent,false).iter().any(|s|s.contains("bypass")));
             assert!(!chat_args(agent).iter().any(|s|s.contains("bypass")));
         }
+    }
+
+    #[test]
+    fn codex_chat_is_read_only_ephemeral_and_without_apps_or_shell() {
+        let args = chat_args(Agent::Codex);
+        assert_eq!(&args[..2], ["exec", "--json"]);
+        assert_eq!(args.last(), Some(&"-"));
+        for pair in [["--sandbox", "read-only"], ["--disable", "apps"], ["--disable", "shell_tool"], ["--disable", "unified_exec"],
+            ["--disable", "multi_agent"], ["--disable", "plugins"], ["--disable", "hooks"], ["-c", "web_search=\"disabled\""]] {
+            assert!(args.windows(2).any(|p| p == pair), "{pair:?}");
+        }
+        for flag in ["--ephemeral", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check"] {
+            assert!(args.contains(&flag), "{flag}");
+        }
+    }
+
+    #[test]
+    fn a_rejected_sign_in_names_the_official_command() {
+        let failed = |stdout: &str, stderr: &str| Captured { success: false, stdout: stdout.into(), stderr: stderr.into() };
+        let codex = r#"{"type":"error","message":"unexpected status 401 Unauthorized"}"#;
+        assert!(answer(Agent::Codex, failed(codex, "")).unwrap_err().ends_with("codex login"));
+        assert!(answer(Agent::Codex, Captured { success: true, ..failed(codex, "") }).unwrap_err().ends_with("codex login"));
+        let claude = r#"{"type":"result","subtype":"success","is_error":true,"result":"Invalid API key · Please run /login"}"#;
+        assert!(answer(Agent::Claude, failed(claude, "")).unwrap_err().ends_with("claude auth login"));
+        assert!(answer(Agent::Claude, Captured { success: true, ..failed(claude, "") }).unwrap_err().ends_with("claude auth login"));
+        assert!(answer(Agent::Claude, failed("", "Error: not logged in\n")).unwrap_err().ends_with("claude auth login"));
+        let limit = r#"{"type":"turn.failed","error":{"message":"You've hit your usage limit."}}"#;
+        assert!(!answer(Agent::Codex, failed(limit, "")).unwrap_err().contains("login"));
     }
 
     #[test]

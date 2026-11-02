@@ -11,6 +11,8 @@ Coucou uses the official CLIs and their existing account sign-ins. It has no sep
 
 The combined action changes provider choices only. Dictation cleanup and voice still need their switches enabled in Flow Settings; microphone, playback, hotkey and performance preferences are retained. Each feature can also select a different provider in Flow Settings.
 
+If a CLI rejects its saved sign-in during a reply while Settings still shows it connected, chat names the official command to sign in again in a terminal: `claude auth login` or `codex login`.
+
 API credentials are optional separate chat providers. A CLI signed in only with an API key is not shown as a subscription connection. Plan limits and model availability belong to the selected agent's account.
 
 ### Claude API models
@@ -21,7 +23,7 @@ The selected model applies to Claude API chat and to Flow text tasks that select
 
 ## Chat and project work
 
-Chat answers questions and accepts UTF-8 text attachments up to 200 KB, PNG/JPEG/GIF/WebP images up to 5 MiB, and PDFs up to 20 MiB and twenty pages on Windows. It retains conversation context and offers a Stop control. The displayed provider identifies which account is answering. The native CLI chooses its default model; Coucou does not pin a model ID. Chat has no shell, project-editing, MCP or web-search tools.
+Chat answers questions and accepts UTF-8 text attachments up to 200 KB, PNG/JPEG/GIF/WebP images up to 5 MiB, and PDFs up to 20 MiB and twenty pages on Windows. It retains conversation context and offers a Stop control. The displayed provider identifies which account is answering. The native CLI chooses its default model; Coucou does not pin a model ID. Chat has no shell, project-editing, MCP, app or web-search tools.
 
 Both CLI providers receive the same image content. Windows renders every PDF page locally, in order, at a maximum long edge of 1,600 pixels. A document exceeding the page, image or rendering limits is rejected as a whole. Dense text can be less legible after rendering; use a text attachment for exact text analysis. Limits live in `src-tauri/src/cli_agents/attachment-limits.json`.
 

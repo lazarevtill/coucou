@@ -380,7 +380,7 @@ fn last_json_object(bytes: &[u8]) -> Option<Value> {
 }
 
 /// The last line a tool wrote on stderr, without terminal colours.
-fn last_line(bytes: &[u8]) -> String {
+pub(crate) fn last_line(bytes: &[u8]) -> String {
     let text = String::from_utf8_lossy(bytes);
     let mut clean = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
@@ -399,7 +399,7 @@ fn last_line(bytes: &[u8]) -> String {
     clean.lines().map(str::trim).filter(|l| !l.is_empty()).last().unwrap_or("").to_string()
 }
 
-fn needs_sign_in(text: &str) -> bool {
+pub(crate) fn needs_sign_in(text: &str) -> bool {
     let t = text.to_lowercase();
     ["log in", "login", "logged in", "authenticat", "unauthorized", "401", "sign in", "signed in", "auth method",
      "invalid api key"]
