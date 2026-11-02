@@ -25,6 +25,10 @@ The Windows app uses native Windows services where the Mac uses Apple APIs. The 
 | Sixteen languages, including Korean, Japanese, Traditional Chinese and Thai | Complete Windows catalogs, language picker and native locale/plural rules | Native linguistic and layout review |
 | Apple iPhone/iCloud features | Windows has Android pairing; no iPhone transport equivalent yet | Cross-platform phone protocol and iPhone implementation |
 
+## Service pills
+
+The GitHub, GitLab and Gitea activity calendars count the signed-in user's own activity over the past year. GitLab's comes from at most 1,000 of the user's events, newest first; beyond that, older days show no activity and Coucou's log records that the year is incomplete.
+
 ## Floating toolbar and dictation key
 
 Flow Settings selects the dictation key and the bottom, left or right screen edge. The floating toolbar keeps its buttons in place when tooltips appear; side tooltips open toward the screen interior. Its microphone starts hands-free dictation, the record button toggles Notetaker, and the window button opens Coucou.
