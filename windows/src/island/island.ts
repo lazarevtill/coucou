@@ -235,7 +235,7 @@ export class Island {
       openUrl: (url) => {
         if (url) void Bridge.openUrl(url);
       },
-      decide: (d) => this.decide(d),
+      decide: (d, requestId) => this.decide(d, requestId),
       answer: (answers) => {
         const req = State.pendingApproval;
         if (!req) return;
@@ -431,10 +431,10 @@ export class Island {
 
   /**
    * The permission card was answered — from the island or the flyout. With a
-   * `requestId` the answer only counts for that request: a card that changed
-   * under the click must not decide a newer one.
+   * `requestId` the answer only counts for that request (null: none was
+   * drawn): a card that changed under the click must not decide a newer one.
    */
-  decide(d: "allow" | "deny", requestId?: string) {
+  decide(d: "allow" | "deny", requestId?: string | null) {
     const req = State.pendingApproval;
     void Bridge.log(`decide ${d} req=${req?.requestId ?? "none"}`);
     if (!req || req.questions || (requestId !== undefined && requestId !== req.requestId)) return;
