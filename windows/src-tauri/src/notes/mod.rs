@@ -562,7 +562,10 @@ fn transcript(app: &AppHandle, taker: &Arc<NoteTaker>, id: &str) -> Result<(), S
         return Err(t("The recording of this call is gone."));
     }
     let me = t("Me");
-    let (mine, mic_samples) = words_in(&mic_path, |done, total| taker.progress(app, id, progress::Stage::Microphone, Some((done, total))))?;
+    // One recording in memory at a time: the microphone is read again only for a room.
+    // shortcut: that recording stays whole (4 bytes per sample, about 0.7 GB for 3 h)
+    // because the diarizer takes it at once; streaming needs a windowed diarizer.
+    let mine = words_in(&mic_path, |done, total| taker.progress(app, id, progress::Stage::Microphone, Some((done, total))))?.0;
     taker.progress(app, id, progress::Stage::Playback, None);
     let (theirs, system_samples) = words_in(&system_path, |done, total| taker.progress(app, id, progress::Stage::Playback, Some((done, total))))?;
     taker.progress(app, id, progress::Stage::Speakers, None);
@@ -571,6 +574,8 @@ fn transcript(app: &AppHandle, taker: &Arc<NoteTaker>, id: &str) -> Result<(), S
         let turns = builder::merging_fragments(speech::diarize(&system_samples));
         builder::build(&mine, &theirs, &turns, &me, person_name)
     } else if mine.len() >= 20 {
+        drop(system_samples);
+        let mic_samples = audio::read_wav(&mic_path).map_err(|e| e.to_string())?;
         // People around the computer: one recording, the voices told apart.
         let turns = builder::merging_fragments(speech::diarize(&mic_samples));
         let voices: std::collections::HashSet<&str> = turns.iter().map(|t| t.speaker.as_str()).collect();
