@@ -223,3 +223,21 @@ test("Escape keeps the old title even though removing the editor blurs it", asyn
   assert.equal(sent("notes_rename").length, 0);
   assert.equal(detail.find("h2")[0].textContent, "Synthetic call");
 });
+
+test("a title being typed during a recording survives live transcript lines", async t => {
+  const fixture = await recordingPage(t);
+  const detail = fixture.page.querySelector(".hub-note-detail");
+  detail.find("h2")[0].fire("click");
+  const input = detail.find("input")[0];
+  input.value = "Weekly sync";
+  fixture.state.notes[0].lines.push({ start: 2, speaker: "others", text: "Next line" });
+  emit("notes-changed", "synthetic");
+  await flush();
+  assert.equal(detail.find("input")[0], input);
+  assert.equal(input.value, "Weekly sync");
+  press(input, "Enter");
+  input.fire("blur");
+  await flush();
+  assert.deepEqual(sent("notes_rename"), [{ id: "synthetic", title: "Weekly sync" }]);
+  assert.match(detail.textContent, /Next line/);
+});
