@@ -356,7 +356,15 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
 
   drawList();
   drawDetail();
-  const unlisten = await onEvent<string>("notes-changed", () => void reload());
+  // A live line, rename or warning sends that note, patched in place instead of
+  // reloading every call's transcript. An id or a new status reloads everything.
+  const unlisten = await onEvent<string | Note>("notes-changed", (changed) => {
+    const i = typeof changed === "string" ? -1 : state.notes.findIndex((n) => n.id === changed.id);
+    if (typeof changed === "string" || i < 0 || state.notes[i].status !== changed.status) return void reload();
+    state.notes[i] = changed;
+    drawList();
+    drawDetail();
+  });
   const unlistenProgress = await onEvent<{ id: string; progress: NoteProgress }>("notes-progress", ({ id, progress }) => {
     (state.progress ??= {})[id] = progress;
     if (id === selected) updateProgress();
