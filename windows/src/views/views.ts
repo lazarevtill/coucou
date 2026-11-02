@@ -8,6 +8,7 @@ import { Ticker } from "./ticker";
 import { CLAUDE_ID, State, type AgentTask } from "../core/state";
 import type { SessionInfo } from "../core/sessions";
 import { finishedSession, jumpLabel, sessionDetail, type StepKind } from "../core/sessionView";
+import { CLICK_GUARD_MS } from "../core/shell";
 import { editNotes } from "../core/edits";
 import { codeLines, fileTab } from "./code";
 import { washRGBA, type IslandViewName, type Wash } from "../core/layout";
@@ -646,9 +647,6 @@ function buildEmpty(actions: ViewActions): ViewHost {
 }
 
 // ── Approval ──────────────────────────────────────────────────────────────────
-
-/** How long a fresh permission card ignores clicks on its buttons. */
-const CLICK_GUARD_MS = 600;
 
 /**
  * The ⌃ in the corner of a waiting card: folds the island to its compact size

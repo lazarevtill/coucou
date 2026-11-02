@@ -239,6 +239,9 @@ export function staleToasts(shown: Map<string, Notable>, list: SessionInfo[]): s
 
 // ── The snapshot the island publishes ─────────────────────────────────────────
 
+/** How long a fresh permission card ignores clicks on its buttons, in the island and the flyout. */
+export const CLICK_GUARD_MS = 600;
+
 export interface ApprovalCard {
   requestId: string;
   sessionId: string;
