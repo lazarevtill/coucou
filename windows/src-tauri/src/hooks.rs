@@ -420,25 +420,40 @@ fn install_relay(src: &Path, dest: &Path) {
     if matches!((std::fs::read(src), std::fs::read(dest)), (Ok(a), Ok(b)) if a == b) {
         return;
     }
-    let pid = std::process::id();
-    let fail = |what: &str, err: std::io::Error| crate::log::line(format!("could not install {}: {what}: {err}", platform::HOOK_EXE));
-    let temp = dest.with_extension(format!("new-{pid}"));
-    if let Err(err) = std::fs::copy(src, &temp) {
-        return fail("copy", err);
+    let temp = dest.with_extension(format!("new-{}", std::process::id()));
+    let result = std::fs::copy(src, &temp).map_err(|err| ("copy", err)).and_then(|_| move_in(&temp, dest));
+    if let Err((what, err)) = result {
+        crate::log::line(format!("could not install {}: {what}: {err}", platform::HOOK_EXE));
     }
+}
+
+/// Moves `temp` to `dest`, the old relay aside first. The old one is removed
+/// only once the new one is in place, and put back if it cannot be: there is
+/// always a relay for Claude Code's hooks to run.
+#[cfg(windows)]
+fn move_in(temp: &Path, dest: &Path) -> Result<(), (&'static str, std::io::Error)> {
+    let mut aside = None;
     if dest.exists() {
         let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-        let aside = dest.with_extension(format!("old-{pid}-{stamp}"));
-        if let Err(err) = std::fs::rename(dest, &aside) {
-            let _ = std::fs::remove_file(&temp);
-            return fail("move the old relay aside", err);
+        let old = dest.with_extension(format!("old-{}-{stamp}", std::process::id()));
+        if let Err(err) = std::fs::rename(dest, &old) {
+            let _ = std::fs::remove_file(temp);
+            return Err(("move the old relay aside", err));
         }
-        // Gone now if nothing runs it; otherwise on a later start.
-        let _ = std::fs::remove_file(&aside);
+        aside = Some(old);
     }
-    if let Err(err) = std::fs::rename(&temp, dest) {
-        fail("move the new relay in", err);
+    if let Err(err) = std::fs::rename(temp, dest) {
+        if let Some(old) = &aside {
+            let _ = std::fs::rename(old, dest);
+        }
+        let _ = std::fs::remove_file(temp);
+        return Err(("move the new relay in", err));
     }
+    // Gone now if nothing runs it; otherwise on a later start.
+    if let Some(old) = aside {
+        let _ = std::fs::remove_file(old);
+    }
+    Ok(())
 }
 
 /// Old relays set aside by earlier updates, and copies an update left half-done.
@@ -523,6 +538,21 @@ mod relay_install_tests {
         assert_eq!(std::fs::metadata(&dest).unwrap().modified().unwrap(), before, "not rewritten");
         let left: Vec<String> = std::fs::read_dir(dir.join("bin")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
         assert_eq!(left, vec!["coucou-hook.exe"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn when_the_new_relay_cannot_move_in_the_old_one_stays() {
+        let (dir, _, dest) = setup("stuck", b"old relay", b"unused");
+        let temp = dir.join("bin").join("coucou-hook.new-1");
+        std::fs::write(&temp, b"new relay").unwrap();
+        // Opened without FILE_SHARE_DELETE: Windows refuses to rename it.
+        let stuck = std::fs::OpenOptions::new().read(true).share_mode(FILE_SHARE_READ).open(&temp).unwrap();
+        assert!(super::move_in(&temp, &dest).is_err());
+        assert_eq!(std::fs::read(&dest).unwrap(), b"old relay", "hooks must still find a relay");
+        drop(stuck);
+        let left: Vec<String> = std::fs::read_dir(dir.join("bin")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+        assert!(!left.iter().any(|n| n.contains(".old-")), "the old relay was put back, not left aside: {left:?}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
