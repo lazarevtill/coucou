@@ -251,17 +251,23 @@ impl NoteTaker {
     }
 }
 
-pub fn setup(app: &AppHandle) {
+fn load(folder: &std::path::Path) -> Vec<Note> {
     let mut notes: Vec<Note> = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(folder()) {
+    if let Ok(entries) = std::fs::read_dir(folder) {
         for entry in entries.flatten() {
             if let Ok(text) = std::fs::read_to_string(entry.path().join("note.json")) {
                 if let Ok(note) = serde_json::from_str::<Note>(&text) {
+                    if note.status == Status::Ready { storage::remove_audio(&entry.path()); }
                     notes.push(note);
                 }
             }
         }
     }
+    notes
+}
+
+pub fn setup(app: &AppHandle) {
+    let mut notes = load(&folder());
     notes.sort_by(|a, b| b.start.cmp(&a.start));
     // A call left recording or being written when Coucou last quit: written now.
     let unfinished: Vec<String> = notes
@@ -876,6 +882,26 @@ mod capture_tests {
         assert_eq!(source.peak_seen, 0.5);
         assert_eq!(source.warnings, ["Audio was interrupted"]);
         assert_eq!((source.sample_rate, source.channels), (48_000, 2));
+    }
+
+    #[test]
+    fn launch_removes_audio_left_behind_a_saved_transcript_only() {
+        let root = std::env::temp_dir().join(format!("coucou-notes-{}", crate::flow::text::new_id()));
+        for status in ["ready", "processing", "failed"] {
+            let dir = root.join(status);
+            std::fs::create_dir_all(&dir).unwrap();
+            let note = serde_json::json!({"id": status, "title": status, "start": 0, "status": status});
+            std::fs::write(dir.join("note.json"), note.to_string()).unwrap();
+            for name in ["mic.wav", "system.wav"] { std::fs::write(dir.join(name), b"audio").unwrap(); }
+        }
+        assert_eq!(load(&root).len(), 3);
+        for name in ["mic.wav", "system.wav"] {
+            assert!(!root.join("ready").join(name).exists());
+            // Not yet transcribed, or kept for Retry.
+            assert!(root.join("processing").join(name).exists());
+            assert!(root.join("failed").join(name).exists());
+        }
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

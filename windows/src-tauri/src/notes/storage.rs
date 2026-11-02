@@ -20,6 +20,13 @@ pub(super) fn finish(dir: &Path, note: &mut Note, speakers: Vec<Speaker>, lines:
     completed.error = None;
     save(dir, &completed)?;
     *note = completed;
+    remove_audio(dir);
+    Ok(())
+}
+
+/// Only once the Ready transcript is saved; launch repeats it for audio left
+/// by a failed removal or a crash right after the save.
+pub(super) fn remove_audio(dir: &Path) {
     for name in ["mic.wav", "system.wav"] {
         if let Err(error) = std::fs::remove_file(dir.join(name)) {
             if error.kind() != std::io::ErrorKind::NotFound {
@@ -27,7 +34,6 @@ pub(super) fn finish(dir: &Path, note: &mut Note, speakers: Vec<Speaker>, lines:
             }
         }
     }
-    Ok(())
 }
 
 #[cfg(test)]
