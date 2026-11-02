@@ -56,3 +56,17 @@ test("a fresh permission card ignores clicks for a moment", (t) => {
   allow.fire("click");
   assert.deepEqual(sent("shell_action"), [{ action: { kind: "decide", requestId: "A", decision: "allow" } }]);
 });
+
+test("Mochi is drawn only while Rust says the flyout is on screen", async () => {
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(frames.length, 0, "the window is created hidden");
+  emit("flyout-visible", true);
+  emit("flyout-visible", true);
+  assert.equal(frames.length, 1, "shown: one loop, however often it is said");
+  frames.shift()(16);
+  assert.equal(frames.length, 1, "the loop goes on while shown");
+  // WebKitGTK still calls a hidden window's page "visible" (#792).
+  emit("flyout-visible", false);
+  frames.shift()(32);
+  assert.equal(frames.length, 0, "hidden: the loop stops");
+});

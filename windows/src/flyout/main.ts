@@ -313,18 +313,38 @@ function render(s: ShellSnapshot) {
 // ── Mochi ─────────────────────────────────────────────────────────────────────
 
 let last = performance.now();
+let pending: number | null = null;
+/** The flyout is on screen, as Rust says (`flyout-visible`): WebKitGTK keeps a
+ *  hidden window's page "visible" (#792). The window is created hidden. */
+let shown = false;
+const animating = () => shown && document.visibilityState === "visible";
+
 function frame(now: number) {
+  pending = null;
   tickMiniBots(Math.min(0.05, (now - last) / 1000));
   last = now;
-  if (document.visibilityState === "visible") requestAnimationFrame(frame);
+  if (animating()) pending = requestAnimationFrame(frame);
 }
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
+
+function wake() {
+  if (pending === null && animating()) {
     last = performance.now();
-    requestAnimationFrame(frame);
+    pending = requestAnimationFrame(frame);
   }
-});
-requestAnimationFrame(frame);
+}
+
+function setShown(visible: boolean) {
+  shown = visible;
+  wake();
+}
+
+document.addEventListener("visibilitychange", wake);
+// Listening first, then asking, misses no change in between.
+void onEvent<boolean>("flyout-visible", setShown)
+  .then(() => Bridge.flyoutVisible())
+  .then((visible) => {
+    if (visible !== null) setShown(visible);
+  });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
