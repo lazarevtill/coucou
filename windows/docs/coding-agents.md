@@ -48,7 +48,7 @@ The running app inherits these optional environment settings:
 
 Without executable overrides, Coucou checks PATH and standard per-user install locations. Restart Coucou after changing its environment. No executable is downloaded by the connection controls; Install opens the official instructions.
 
-The connection view returns only installation and subscription-sign-in status. Chat prompts travel over stdin, not process arguments. Output and conversation sizes are bounded. CLI checks time out after 15 seconds; a chat reply after 180 seconds. Stop and timeout end the supervised process tree on Windows. Inherited API key variables are removed from subscription commands.
+The connection view returns only installation and subscription-sign-in status. Chat prompts travel over stdin, not process arguments. Output and conversation sizes are bounded. CLI checks time out after 15 seconds; a chat reply after 180 seconds. Stop and timeout end the supervised process tree: its job object on Windows, its process group on Linux. Inherited API key variables are removed from subscription commands.
 
 CLI chat runs in Coucou's private chat directory with project rules and tools disabled. Full project sessions run with native interactive configuration. User hooks are changed only through the separate preview-and-install flow.
 

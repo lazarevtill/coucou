@@ -210,11 +210,14 @@ fn read_bounded(mut stream: impl Read) -> std::io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// A finite process and finite output. A Windows job ends its descendants too;
-/// cancellation and deadlines are checked while it runs, not after output closes.
+/// A finite process and finite output. A Windows job, or the process group on Linux,
+/// ends its descendants too; cancellation and deadlines are checked while it runs,
+/// not after output closes.
 fn capture(mut cmd: Command, input: Option<String>, timeout: Duration, cancel: &AtomicBool) -> Result<Captured, String> {
     platform::no_console(&mut cmd);
     cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    #[cfg(target_os = "linux")]
+    std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
     let mut child = cmd.spawn().map_err(|_| "Could not start the agent CLI.".to_string())?;
     let job = platform::contain(&child);
     #[cfg(windows)]
@@ -241,6 +244,10 @@ fn capture(mut cmd: Command, input: Option<String>, timeout: Duration, cancel: &
             Err(_) => break Err("Could not read the agent's exit status.".into()),
         }
     };
+    // SIGKILL to the parent alone leaves a relaunched child (Gemini's npm launcher)
+    // holding stdout open. The group id stays reserved while any member is alive.
+    #[cfg(target_os = "linux")]
+    unsafe { libc::killpg(child.id() as libc::pid_t, libc::SIGKILL); }
     let _ = child.kill();
     let _ = child.wait();
     drop(job);
@@ -554,6 +561,17 @@ mod tests {
     fn a_process_that_never_replies_is_stopped_at_the_deadline() {
         let mut cmd = Command::new("node");
         cmd.args(["-e", "setInterval(() => {}, 1000)"]);
+        let start = Instant::now();
+        let result = capture(cmd, None, Duration::from_millis(150), &AtomicBool::new(false));
+        assert!(result.is_err_and(|e| e.contains("too long")));
+        assert!(start.elapsed() < Duration::from_secs(5));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_child_holding_the_output_open_is_stopped_with_its_parent() {
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "sleep 30 & sleep 30"]);
         let start = Instant::now();
         let result = capture(cmd, None, Duration::from_millis(150), &AtomicBool::new(false));
         assert!(result.is_err_and(|e| e.contains("too long")));
