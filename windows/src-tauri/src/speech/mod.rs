@@ -395,12 +395,16 @@ fn decode_chunks(samples: &[f32], mut decode: impl FnMut(usize, &[f32]) -> Optio
     for (offset, chunk) in audio::split_for_model(samples, SAMPLE_RATE, MAX_CHUNK_SECONDS) {
         // Only exact digital silence is skipped. A threshold would also erase
         // quiet speech; offsets must remain on the original call timeline.
-        if chunk.len() < (SAMPLE_RATE as usize) / 4 || chunk.iter().all(|&sample| sample == 0.0) {
+        if chunk.iter().all(|&sample| sample == 0.0) {
             progress(offset + chunk.len(), samples.len());
             continue;
         }
+        // A few samples abort the process inside the model (no feature frame):
+        // a short stretch is padded with silence to 0.25 s, never dropped.
+        let mut input = std::borrow::Cow::Borrowed(chunk);
+        if chunk.len() < SAMPLE_RATE as usize / 4 { input.to_mut().resize(SAMPLE_RATE as usize / 4, 0.0); }
         // A failed chunk must not silently become a successful partial transcript.
-        let result = decode(offset, chunk)?;
+        let result = decode(offset, &input)?;
         let text = result.text.trim();
         if !text.is_empty() {
             if !out.text.is_empty() {
@@ -495,6 +499,24 @@ mod tests {
         assert_eq!(progress.first(), Some(&(0, samples.len())));
         assert_eq!(progress.last(), Some(&(samples.len(), samples.len())));
         assert!(progress.windows(2).all(|w| w[0].0 <= w[1].0));
+    }
+
+    #[test]
+    fn a_short_final_stretch_of_speech_is_padded_for_the_model_not_dropped() {
+        let rate = super::SAMPLE_RATE as usize;
+        // The quietest window sits just before the end, so the cut leaves a 0.15 s tail.
+        let mut samples = vec![0.1; rate * 28 + rate / 10];
+        samples[rate * 28 - rate / 10..rate * 28].fill(0.0);
+        let mut decoded = Vec::new();
+        super::decode_chunks(&samples, |offset, chunk| {
+            decoded.push((offset, chunk.len(), chunk.iter().filter(|&&s| s != 0.0).count()));
+            Some(super::Transcript::default())
+        }, |_, _| {}).unwrap();
+        let &(offset, len, voiced) = decoded.last().unwrap();
+        assert_eq!(decoded.len(), 2);
+        assert!(samples.len() - offset < rate / 4, "the tail is shorter than 0.25 s");
+        assert_eq!(len, rate / 4);
+        assert_eq!(voiced, samples[offset..].iter().filter(|&&s| s != 0.0).count());
     }
 
     #[test]
