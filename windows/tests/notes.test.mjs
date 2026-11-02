@@ -255,3 +255,16 @@ test("a live line patches its note in place without reloading every call", async
   await flush();
   assert.equal(sent("notes_state").length, reloads + 1, "a new status re-reads recording and working");
 });
+
+test("the recording clock and meters stop polling while the Coucou window is hidden", async t => {
+  const fixture = await recordingPage(t);
+  const polls = sent("notes_audio_status").length;
+  emit("hub-visible", false);
+  fixture.tick();
+  await flush();
+  assert.equal(sent("notes_audio_status").length, polls);
+  emit("hub-visible", true);
+  fixture.tick();
+  await flush();
+  assert.equal(sent("notes_audio_status").length, polls + 1);
+});

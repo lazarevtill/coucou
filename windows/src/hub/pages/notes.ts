@@ -369,8 +369,11 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
     (state.progress ??= {})[id] = progress;
     if (id === selected) updateProgress();
   });
-  // The recording's clock in the list.
+  // The recording's clock in the list, only while the Coucou window is on screen.
+  let visible = (await FlowBridge.hubShown()) !== false;
+  const unlistenVisibility = await onEvent<boolean>("hub-visible", shown => { visible = shown; });
   const timer = window.setInterval(() => {
+    if (!visible) return;
     updateProgress();
     if (!state.recording) return;
     void FlowBridge.audioStatus().then(sources => { if (sources && page.isConnected) meters.update(sources); });
@@ -380,6 +383,7 @@ export async function notesPage(page: HTMLElement, ctx: HubContext) {
     left = true;
     unlisten();
     unlistenProgress();
+    unlistenVisibility();
     window.clearInterval(timer);
   };
 }
