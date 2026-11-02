@@ -5,7 +5,7 @@
 // The relay has already mapped every agent's events and fields onto Claude
 // Code's (hook/src/normalize.rs), so one handler serves them all.
 
-import { toast, clearStaleToasts, handBackPending } from "./shellLink";
+import { toast, clearStaleToasts, elevatedNotice, handBackPending } from "./shellLink";
 import type { HookEvent } from "../core/sessions";
 import { Bridge, onEvent } from "../core/bridge";
 import { buildFileDiff, fileName, makeDiffStep, toOneLine } from "../core/diff";
@@ -332,6 +332,7 @@ export function registerHookHandlers(island: Island) {
         pill.pillLabel = summary.count > 1 ? `${label} · ${summary.count}` : undefined;
       }
       if (change.became && change.session) toast(change.became, change.session, island.enabled && State.mode === "expanded");
+      if (change.session?.elevated) elevatedNotice();
       clearStaleToasts();
       State.notify();
     }
@@ -591,8 +592,9 @@ function handleHook(island: Island, payload: HookPayload) {
     case "PermissionRequest": {
       // Only Claude Code and the agents the relay can answer for (Codex, Copilot
       // CLI, Muse Code — same as the Mac) get a card. Anyone else's request is
-      // declined at once, so the agent asks in its own terminal.
-      if (isExternalAgent && !APPROVAL_AGENTS.has(validAgent!)) {
+      // declined at once, so the agent asks in its own terminal; so is a session
+      // running as administrator, which Coucou may show but never answer for.
+      if (payload.coucou_elevated || (isExternalAgent && !APPROVAL_AGENTS.has(validAgent!))) {
         if (payload.request_id) void Bridge.approvalDecline(payload.request_id);
         break;
       }

@@ -6,6 +6,7 @@ import { Bridge, onEvent, type ShellAction } from "../core/bridge";
 import type { Notable, SessionInfo } from "../core/sessions";
 import { buildSnapshot, staleToasts, toastFor, type PluginStatus } from "../core/shell";
 import { State } from "../core/state";
+import { t } from "../i18n/i18n";
 import type { Island } from "./island";
 
 /** Toasts on screen or in the notification centre, by session, and what for. */
@@ -94,6 +95,26 @@ export function toast(kind: Notable, session: SessionInfo, islandAlerted: boolea
   if (!spec) return;
   shownToasts.set(spec.tag, kind);
   void Bridge.showToast(spec);
+}
+
+/** The administrator notice has been raised this run. */
+let elevatedNoticeShown = false;
+
+/**
+ * Says once per run why an administrator session has no Allow / Deny. A toast,
+ * not `Island.alert`: that one stays silent while the idle island is off.
+ * Never registered in `shownToasts`, so it is not taken back with a session.
+ */
+export function elevatedNotice() {
+  if (elevatedNoticeShown || State.settings.notifications === "off" || State.paused) return;
+  elevatedNoticeShown = true;
+  void Bridge.showToast({
+    tag: "coucou-elevated",
+    title: t("Claude Code is running as administrator."),
+    body: t("Answer its requests in that terminal: Coucou shows the session but can't answer for it."),
+    jump: null,
+    jumpLabel: "",
+  });
 }
 
 /** Takes back the toasts whose session no longer needs anyone. */

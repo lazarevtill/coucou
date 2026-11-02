@@ -9638,6 +9638,57 @@
       "th": "Codex",
       "ko": "Codex",
       "ja": "Codex"
+    },
+    "Administrator": {
+      "zh-Hans": "管理员",
+      "hi": "व्यवस्थापक",
+      "es": "Administrador",
+      "ar": "المسؤول",
+      "fr": "Administrateur",
+      "bn": "প্রশাসক",
+      "pt-BR": "Administrador",
+      "ru": "Администратор",
+      "id": "Administrator",
+      "de": "Administrator",
+      "tr": "Yönetici",
+      "ko": "관리자",
+      "ja": "管理者",
+      "th": "ผู้ดูแลระบบ",
+      "zh-Hant": "管理員"
+    },
+    "Claude Code is running as administrator.": {
+      "zh-Hans": "Claude Code 正以管理员身份运行。",
+      "hi": "Claude Code व्यवस्थापक के रूप में चल रहा है।",
+      "es": "Claude Code se está ejecutando como administrador.",
+      "ar": "يعمل Claude Code بصلاحيات المسؤول.",
+      "fr": "Claude Code s'exécute en tant qu'administrateur.",
+      "bn": "Claude Code প্রশাসক হিসেবে চলছে।",
+      "pt-BR": "O Claude Code está sendo executado como administrador.",
+      "ru": "Claude Code запущен от имени администратора.",
+      "id": "Claude Code berjalan sebagai administrator.",
+      "de": "Claude Code läuft als Administrator.",
+      "tr": "Claude Code yönetici olarak çalışıyor.",
+      "ko": "Claude Code가 관리자 권한으로 실행 중이에요.",
+      "ja": "Claude Code は管理者として実行されています。",
+      "th": "Claude Code กำลังทำงานในฐานะผู้ดูแลระบบ",
+      "zh-Hant": "Claude Code 正以管理員身分執行。"
+    },
+    "Answer its requests in that terminal: Coucou shows the session but can't answer for it.": {
+      "zh-Hans": "请在那个终端中回应它的请求：Coucou 会显示该会话，但无法代它回答。",
+      "hi": "इसके अनुरोधों का जवाब उसी टर्मिनल में दें: Coucou सत्र दिखाता है, पर उसकी ओर से जवाब नहीं दे सकता।",
+      "es": "Responde a sus solicitudes en esa terminal: Coucou muestra la sesión, pero no puede responder por ella.",
+      "ar": "أجب عن طلباته في تلك الطرفية: يعرض Coucou الجلسة لكنه لا يستطيع الرد نيابةً عنه.",
+      "fr": "Réponds à ses demandes dans ce terminal : Coucou affiche la session mais ne peut pas répondre à sa place.",
+      "bn": "এর অনুরোধগুলোর উত্তর সেই টার্মিনালেই দিন: Coucou সেশনটি দেখায়, কিন্তু এর হয়ে উত্তর দিতে পারে না।",
+      "pt-BR": "Responda aos pedidos dele nesse terminal: o Coucou mostra a sessão, mas não pode responder por ela.",
+      "ru": "Отвечайте на его запросы в том терминале: Coucou показывает сессию, но не может отвечать за неё.",
+      "id": "Jawab permintaannya di terminal itu: Coucou menampilkan sesi, tetapi tidak dapat menjawab atas namanya.",
+      "de": "Beantworte seine Anfragen in diesem Terminal: Coucou zeigt die Sitzung, kann aber nicht für sie antworten.",
+      "tr": "İsteklerini o terminalde yanıtla: Coucou oturumu gösterir ama onun yerine yanıt veremez.",
+      "ko": "요청에는 그 터미널에서 답해 주세요. Coucou는 세션을 보여 주지만 대신 답할 수는 없어요.",
+      "ja": "要求にはそのターミナルで応答してください。Coucou はセッションを表示しますが、代わりに応答することはできません。",
+      "th": "ตอบคำขอของเซสชันนี้ในเทอร์มินัลนั้น: Coucou แสดงเซสชันได้ แต่ตอบแทนไม่ได้",
+      "zh-Hant": "請在那個終端中回應它的請求：Coucou 會顯示該會話，但無法代它回答。"
     }
   }
 }

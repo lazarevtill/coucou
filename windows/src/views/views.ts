@@ -7,7 +7,7 @@ import { ICONS } from "./icons";
 import { Ticker } from "./ticker";
 import { CLAUDE_ID, State, type AgentTask } from "../core/state";
 import type { SessionInfo } from "../core/sessions";
-import { finishedSession, jumpLabel, sessionDetail, type StepKind } from "../core/sessionView";
+import { finishedSession, hostLabel, jumpLabel, sessionDetail, type StepKind } from "../core/sessionView";
 import { CLICK_GUARD_MS } from "../core/shell";
 import { editNotes } from "../core/edits";
 import { codeLines, fileTab } from "./code";
@@ -655,7 +655,7 @@ function buildSession(actions: ViewActions): ViewHost {
         } else {
           file.append(h("div", { class: "s-empty" },
             h("div", { class: "s-empty-title", text: waitingOnYou && s.waitingFor ? s.waitingFor : "No file changed yet" }),
-            h("div", { class: "s-empty-sub", text: waitingOnYou ? `Answer in ${s.host?.label ?? "the terminal"}.` : "Edits and new files show here, line by line." }),
+            h("div", { class: "s-empty-sub", text: waitingOnYou ? `Answer in ${s.host ? hostLabel(s) : "the terminal"}.` : "Edits and new files show here, line by line." }),
           ));
         }
       }

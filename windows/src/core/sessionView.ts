@@ -10,6 +10,12 @@ import type { BotStateName, IslandViewName } from "./layout";
 import type { PillBadge } from "./state";
 import type { SoundName } from "./sound";
 import { shownPath, type FileEdit } from "./edits.ts";
+import { t } from "../i18n/i18n";
+
+/** Where a session runs, as shown: "Windows Terminal", "Windows Terminal · Administrator". */
+export function hostLabel(s: SessionInfo): string {
+  return [s.host?.label, s.elevated && t("Administrator")].filter(Boolean).join(" · ");
+}
 
 /** The character has no "waiting" face; a question is what it is waiting on. */
 export function botState(s: SessionState): BotStateName {
@@ -38,7 +44,7 @@ const BADGES: Record<NonNullable<Summary["badge"]>, PillBadge> = {
 export function claudePill(sum: Summary): ClaudePill {
   const top = sum.top;
   const tool = ["Claude Code"];
-  if (top?.host && top.host.kind !== "unknown") tool.push(top.host.label);
+  if (top?.host && top.host.kind !== "unknown") tool.push(hostLabel(top));
   if (sum.count > 1) tool.push(`${sum.count} sessions`);
   if (top?.permissionMode === "bypassPermissions") tool.push("bypass");
   return {
@@ -125,7 +131,7 @@ export function staleCard(view: IslandViewName, list: SessionInfo[]): boolean {
 
 /** The grey line on the question card: what the session waits for, and where. */
 export function waitingLine(s: SessionInfo): string {
-  const where = s.host && s.host.kind !== "unknown" ? s.host.label : null;
+  const where = s.host && s.host.kind !== "unknown" ? hostLabel(s) : null;
   if (!where) return "is asking a question";
   switch (s.waitingKind) {
     case "permission": return `needs permission in ${where}`;
@@ -221,8 +227,8 @@ export function sessionDetail(list: SessionInfo[], selected: string | null): Ses
     steps: stepRows(session.steps, session.state),
     edit: session.edit ?? null,
     editPath: session.edit ? shownPath(session.edit.path, session.cwd) : null,
-    where: [host?.label, host?.shellLabel].filter(Boolean).join(" · "),
-    host: host?.label ?? null,
+    where: [host && hostLabel(session), host?.shellLabel].filter(Boolean).join(" · "),
+    host: host ? hostLabel(session) : null,
     jumpLabel: jumpLabel(session),
   };
 }
