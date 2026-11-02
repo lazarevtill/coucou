@@ -68,7 +68,7 @@ The relay adds `coucou_agent` to the JSON it forwards. You can also add it yours
 Send newline-terminated JSON to the socket:
 - **macOS (GitHub build):** `~/Library/Application Support/NotchBuddy/nb.sock`
 - **macOS (App Store build):** `~/Library/Containers/fr.louisraille.Coucou/Data/nb.sock`
-- **Windows:** `\\.\pipe\coucou-<user-SID>`
+- **Windows:** `\\.\pipe\coucou-<user-SID>`. Only your own user account can connect. Send the line as soon as you connect: Coucou drops a connection that has sent nothing after 5 seconds.
 - **Linux:** `$XDG_RUNTIME_DIR/coucou.sock` (usually `/run/user/<uid>/coucou.sock`). Only your own user account can connect.
 
 The Mac relay, `nb-hook`, uses another socket when `COUCOU_SOCKET` is set. That is how an agent on a remote machine reaches the Mac through an SSH tunnel: see [`REMOTE.md`](REMOTE.md).
