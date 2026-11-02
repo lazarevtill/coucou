@@ -24,6 +24,17 @@ Object.getPrototypeOf(root()).prepend = function (...nodes) {
   for (const node of nodes) node.parentNode = this;
   this.childNodes.unshift(...nodes);
 };
+// In-place editors swap a title or speaker chip for an input.
+Object.getPrototypeOf(root()).replaceWith = function (node) {
+  const parent = this.parentNode;
+  parent.childNodes[parent.childNodes.indexOf(this)] = node;
+  node.parentNode = parent;
+  this.parentNode = null;
+};
+Object.getPrototypeOf(root()).removeEventListener = function (type, fn) {
+  this.listeners.set(type, (this.listeners.get(type) ?? []).filter(listener => listener !== fn));
+};
+const press = (input, key) => { for (const fn of input.listeners.get("keydown") ?? []) fn({ key }); };
 const { notesPage } = await import("../src/hub/pages/notes.ts");
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 const originalInvoke = internals.invoke;
@@ -198,4 +209,17 @@ test("failed final processing retains the live transcript alongside Retry", asyn
   assert.match(detail.textContent, /Could not save call notes/);
   assert.match(detail.querySelector(".hub-line").textContent, /Test/);
   assert.ok(detail.find("button").some(button => button.textContent === "Retry"));
+});
+
+test("Escape keeps the old title even though removing the editor blurs it", async t => {
+  const fixture = await recordingPage(t);
+  const detail = fixture.page.querySelector(".hub-note-detail");
+  detail.find("h2")[0].fire("click");
+  const input = detail.find("input")[0];
+  input.value = "Draft title";
+  press(input, "Escape");
+  input.fire("blur"); // WebView2 fires blur on an input removed from the page
+  await flush();
+  assert.equal(sent("notes_rename").length, 0);
+  assert.equal(detail.find("h2")[0].textContent, "Synthetic call");
 });
