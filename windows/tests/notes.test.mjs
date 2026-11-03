@@ -24,6 +24,17 @@ Object.getPrototypeOf(root()).prepend = function (...nodes) {
   for (const node of nodes) node.parentNode = this;
   this.childNodes.unshift(...nodes);
 };
+// In-place editors swap a title or speaker chip for an input.
+Object.getPrototypeOf(root()).replaceWith = function (node) {
+  const parent = this.parentNode;
+  parent.childNodes[parent.childNodes.indexOf(this)] = node;
+  node.parentNode = parent;
+  this.parentNode = null;
+};
+Object.getPrototypeOf(root()).removeEventListener = function (type, fn) {
+  this.listeners.set(type, (this.listeners.get(type) ?? []).filter(listener => listener !== fn));
+};
+const press = (input, key) => { for (const fn of input.listeners.get("keydown") ?? []) fn({ key }); };
 const { notesPage } = await import("../src/hub/pages/notes.ts");
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 const originalInvoke = internals.invoke;
@@ -144,6 +155,22 @@ test("an export failure is visible and a successful retry reports the selected p
   assert.match(fixture.detail().textContent, /Saved as C:\\chosen\\Synthetic call\.md/);
 });
 
+test("a failed delete keeps the call listed with the reason beside the confirmation", async t => {
+  const fixture = await exportPage(t);
+  const answer = internals.invoke;
+  t.mock.method(internals, "invoke", async (cmd, args) => {
+    if (cmd === "notes_delete") throw "Could not remove: mic.wav is open in another program";
+    return answer(cmd, args);
+  });
+  const detail = fixture.detail();
+  detail.find("button").find(b => b.getAttribute("aria-label") === "Delete").fire("click");
+  detail.find("button").find(b => b.textContent === "Delete").fire("click");
+  await flush();
+  assert.match(detail.textContent, /Could not remove: mic\.wav is open in another program/);
+  assert.match(detail.textContent, /Delete this call and its notes\?/);
+  assert.match(fixture.page.querySelector(".hub-notes-list").textContent, /Synthetic call/);
+});
+
 test("processing keeps live lines mounted while native stage progress and elapsed time update", async t => {
   const fixture = await recordingPage(t);
   fixture.state.recording = null;
@@ -182,4 +209,62 @@ test("failed final processing retains the live transcript alongside Retry", asyn
   assert.match(detail.textContent, /Could not save call notes/);
   assert.match(detail.querySelector(".hub-line").textContent, /Test/);
   assert.ok(detail.find("button").some(button => button.textContent === "Retry"));
+});
+
+test("Escape keeps the old title even though removing the editor blurs it", async t => {
+  const fixture = await recordingPage(t);
+  const detail = fixture.page.querySelector(".hub-note-detail");
+  detail.find("h2")[0].fire("click");
+  const input = detail.find("input")[0];
+  input.value = "Draft title";
+  press(input, "Escape");
+  input.fire("blur"); // WebView2 fires blur on an input removed from the page
+  await flush();
+  assert.equal(sent("notes_rename").length, 0);
+  assert.equal(detail.find("h2")[0].textContent, "Synthetic call");
+});
+
+test("a title being typed during a recording survives live transcript lines", async t => {
+  const fixture = await recordingPage(t);
+  const detail = fixture.page.querySelector(".hub-note-detail");
+  detail.find("h2")[0].fire("click");
+  const input = detail.find("input")[0];
+  input.value = "Weekly sync";
+  fixture.state.notes[0].lines.push({ start: 2, speaker: "others", text: "Next line" });
+  emit("notes-changed", "synthetic");
+  await flush();
+  assert.equal(detail.find("input")[0], input);
+  assert.equal(input.value, "Weekly sync");
+  press(input, "Enter");
+  input.fire("blur");
+  await flush();
+  assert.deepEqual(sent("notes_rename"), [{ id: "synthetic", title: "Weekly sync" }]);
+  assert.match(detail.textContent, /Next line/);
+});
+
+test("a live line patches its note in place without reloading every call", async t => {
+  const fixture = await recordingPage(t);
+  const reloads = sent("notes_state").length;
+  const note = structuredClone(fixture.state.notes[0]);
+  note.lines.push({ start: 3, speaker: "others", text: "Patched line" });
+  emit("notes-changed", note);
+  await flush();
+  assert.equal(sent("notes_state").length, reloads);
+  assert.match(fixture.page.querySelector(".hub-note-detail").textContent, /Patched line/);
+  emit("notes-changed", { ...note, status: "processing" });
+  await flush();
+  assert.equal(sent("notes_state").length, reloads + 1, "a new status re-reads recording and working");
+});
+
+test("the recording clock and meters stop polling while the Coucou window is hidden", async t => {
+  const fixture = await recordingPage(t);
+  const polls = sent("notes_audio_status").length;
+  emit("hub-visible", false);
+  fixture.tick();
+  await flush();
+  assert.equal(sent("notes_audio_status").length, polls);
+  emit("hub-visible", true);
+  fixture.tick();
+  await flush();
+  assert.equal(sent("notes_audio_status").length, polls + 1);
 });

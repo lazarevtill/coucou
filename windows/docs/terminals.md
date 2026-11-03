@@ -48,6 +48,22 @@ Terminal* — with **Go to Windows Terminal** (or **Go to Cursor**…). Opening 
 island while a session waits shows that card first. The card goes away by itself
 once nobody waits any more.
 
+## Administrator terminals
+
+Claude Code started from a terminal run as administrator runs at High
+integrity; Coucou started normally runs at Medium. The relay sends nothing to a
+pipe server that is not your account, runs inside an AppContainer or sits below
+Medium integrity: any such process could have created the pipe first and
+answered for Claude Code. A Coucou at the relay's level or above gets
+everything. A Coucou at Medium serving a High relay may only show the session:
+every event arrives marked `coucou_elevated`, and a permission request is never
+sent, so Claude Code asks in its own terminal at once, as if Coucou were
+closed. Showing the session gives nothing away: a Medium process of the same
+account can already read an elevated session's transcript in the user's
+profile. The session's host reads **Windows Terminal · Administrator**, its
+waiting card says to answer in the terminal, with no Allow / Deny, and once per
+run a Windows notification (unless notifications are off) explains why.
+
 ## Where a session runs
 
 `coucou-hook.exe` adds to each event, computed on the spot and never taken from
@@ -136,8 +152,9 @@ opens the project in the editor instead.
 
 The shell is PowerShell 7 (`pwsh.exe`) when installed, else Windows PowerShell.
 Known editor batch entry points are resolved to their native executables before
-passing the project path. Unknown batch scripts are refused. Nothing goes through
-`cmd /C`. The folder must be an absolute, existing
+passing the project path. Unknown batch scripts are refused. VS Code started by
+the diff card's ↗, or by a session's ↗ when no window can be brought forward, is
+found and checked the same way. Nothing goes through `cmd /C`. The folder must be an absolute, existing
 directory; Windows Terminal reads `;` as a command separator, so a folder with
 one in its name opens in File Explorer instead. File Explorer is also what opens
 when the chosen program is missing or fails to start.
@@ -158,7 +175,8 @@ Automated:
 
 - `cargo test --workspace` — host classification on process chains copied from
   real Cursor and Windows Terminal sessions, the lock-file reader, the session
-  table, window choice, launch plans, the console target, and the relay itself
+  table, window choice, launch plans, the console target, the pipe server's
+  trust level and what a display-only server is sent, and the relay itself
   run against a private named pipe (`hook/tests/relay.rs`);
 - `npm test` — the session model and everything the island derives from it
   (`tests/*.test.mjs`).
@@ -190,4 +208,6 @@ Cursor 3.23 and Claude Code 2.1.287, without touching the installed Coucou:
    20-second liveness check sees it.
 
 Not covered end to end: a session typed into Cursor's own terminal, several
-Cursor windows open at once (covered by the window-choice tests), Linux.
+Cursor windows open at once (covered by the window-choice tests), a terminal
+run as administrator (it needs a UAC prompt; covered by the trust-level and
+session tests), Linux.

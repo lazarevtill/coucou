@@ -4,6 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { SessionStore } from "../src/core/sessions.ts";
 import { botState, claudePill, reactTo, waitingSession, finishedSession, waitingLine, jumpLabel, jumpNote, staleCard, claudeIdleLine, stepRows, sessionDetail } from "../src/core/sessionView.ts";
+import { setLanguage } from "../src/i18n/i18n.ts";
 
 const T0 = 1_000_000;
 const CURSOR = { kind: "cursor", shell: "powershell", label: "Cursor", shellLabel: "PowerShell" };
@@ -183,6 +184,33 @@ test("the card says what the session waits for, and where", () => {
 
   s.apply(ev("n", "PreToolUse", ASK), T0);
   assert.equal(waitingLine(s.get("n")), "is asking a question", "no host known: no place named");
+});
+
+test("a session Claude Code runs as administrator says so wherever its host is named", () => {
+  const s = new SessionStore();
+  const admin = { coucou_host: WT, coucou_elevated: true };
+  s.apply(ev("adm", "PreToolUse", { ...BASH, ...admin }), T0);
+  // Claude Code asks in its own terminal; Coucou only hears the notification that follows.
+  s.apply(ev("adm", "Notification", { notification_type: "permission_prompt", message: "Claude needs your permission to use Bash", ...admin }), T0 + 1);
+  const adm = s.get("adm");
+  assert.equal(adm.elevated, true);
+  assert.equal(adm.state, "waiting");
+  assert.equal(waitingLine(adm), "needs permission in Windows Terminal · Administrator");
+  assert.equal(claudePill(s.summary(T0 + 1)).toolLabel, "Claude Code · Windows Terminal · Administrator");
+  const d = sessionDetail(s.list(), "adm");
+  assert.equal(d.host, "Windows Terminal · Administrator");
+  assert.equal(d.where, "Windows Terminal · Administrator · PowerShell");
+  assert.equal(jumpLabel(adm), "Go to Windows Terminal", "the jump goes to the same window");
+  setLanguage("fr");
+  try {
+    assert.equal(sessionDetail(s.list(), "adm").host, "Windows Terminal · Administrateur");
+  } finally {
+    setLanguage("en");
+  }
+
+  s.apply(ev("n", "PreToolUse", { ...BASH, coucou_host: WT }), T0 + 2);
+  assert.equal(s.get("n").elevated, false);
+  assert.equal(sessionDetail(s.list(), "n").host, "Windows Terminal");
 });
 
 test("a question card is stale once nobody waits any more", () => {

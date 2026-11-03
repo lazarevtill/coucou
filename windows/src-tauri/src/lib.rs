@@ -64,7 +64,6 @@ mod voice;
 mod webview_drop;
 mod whatsapp;
 
-use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -523,18 +522,14 @@ fn diff_file(path: &str) -> Option<&std::path::Path> {
     (p.is_absolute() && p.is_file()).then_some(p)
 }
 
-/// The diff card's ↗: opens the edited file in VS Code when `code` is on PATH,
+/// The diff card's ↗: opens the edited file in VS Code when it is installed,
 /// otherwise shows its folder. The file itself is never opened by its type —
 /// xdg-open or Explorer would run a script that Claude just wrote.
 #[tauri::command]
 fn open_file_in_vscode(path: String) -> bool {
     let Some(file) = diff_file(&path) else { return false };
-    if let Some(code) = platform::find_on_path("code") {
-        let mut cmd = Command::new(code);
-        cmd.arg(file);
-        if platform::no_console(&mut cmd).spawn().is_ok() {
-            return true;
-        }
+    if open_with_vscode(file) {
+        return true;
     }
     if let Some(folder) = file.parent().filter(|d| d.is_dir()) {
         platform::reveal_folder(&folder.to_string_lossy());
@@ -573,14 +568,16 @@ fn hooks_preview(install: bool) -> Result<HookPreview, String> {
     hooks::preview(install)
 }
 
-/// Only ever called from an explicit click in the settings window.
+/// Only ever called from an explicit click in the settings window (the calling window is checked).
 #[tauri::command]
 fn hooks_apply(
     app: AppHandle,
+    window: tauri::WebviewWindow,
     shared: State<Shared>,
     install: bool,
     fingerprint: String,
 ) -> Result<String, String> {
+    phone_link::only_settings(&window)?;
     // The fingerprint comes from the preview the user actually looked at, so a
     // settings.json that changed in between is refused rather than overwritten.
     let backup = hooks::write(install, &fingerprint)?;
@@ -609,10 +606,11 @@ fn agent_hooks_preview(agent: String, install: bool) -> Result<config_file::Plan
     agents::preview(&agent, install)
 }
 
-/// Only ever called from an explicit click in the settings window, with the
-/// fingerprint of the preview the user looked at.
+/// Only ever called from an explicit click in the settings window (the calling
+/// window is checked), with the fingerprint of the preview the user looked at.
 #[tauri::command]
-fn agent_hooks_apply(agent: String, install: bool, fingerprint: String) -> Result<String, String> {
+fn agent_hooks_apply(window: tauri::WebviewWindow, agent: String, install: bool, fingerprint: String) -> Result<String, String> {
+    phone_link::only_settings(&window)?;
     let backups = agents::apply(&agent, install, &fingerprint)?;
     let done = if install { "installed" } else { "removed" };
     log::line(format!("agent hooks {done} for {agent}"));
@@ -628,14 +626,16 @@ fn status_line_preview(install: bool) -> Result<HookPreview, String> {
     hooks::status_line_preview(install)
 }
 
-/// Only ever called from an explicit click in the settings window.
+/// Only ever called from an explicit click in the settings window (the calling window is checked).
 #[tauri::command]
 fn status_line_apply(
     app: AppHandle,
+    window: tauri::WebviewWindow,
     shared: State<Shared>,
     install: bool,
     fingerprint: String,
 ) -> Result<String, String> {
+    phone_link::only_settings(&window)?;
     let backup = hooks::status_line_write(install, &fingerprint)?;
     let updated = {
         let mut current = shared.settings.lock().unwrap();
@@ -877,12 +877,15 @@ fn plugins_list(shared: State<Shared>) -> Vec<PluginInfo> {
         .collect()
 }
 
+/// The change is made on a copy and only becomes the live settings once saved.
 fn save_and_announce(app: &AppHandle, shared: &Shared, change: impl FnOnce(&mut Settings)) -> Result<(), String> {
     let updated = {
-        let mut s = shared.settings.lock().unwrap();
-        change(&mut s);
-        settings::save(&s).map_err(|e| e.to_string())?;
-        s.clone()
+        let mut current = shared.settings.lock().unwrap();
+        let mut next = current.clone();
+        change(&mut next);
+        settings::save(&next).map_err(|e| e.to_string())?;
+        *current = next.clone();
+        next
     };
     let _ = app.emit("settings-changed", updated);
     plugins::runner::refresh(app);
@@ -890,9 +893,10 @@ fn save_and_announce(app: &AppHandle, shared: &Shared, change: impl FnOnce(&mut 
 }
 
 /// Trusts a plugin — exactly the manifest the user reviewed, identified by
-/// its hash. A manifest that changed in between is refused.
+/// its hash, from the settings window only. A manifest that changed in between is refused.
 #[tauri::command]
-fn plugin_enable(app: AppHandle, shared: State<Shared>, id: String, hash: String) -> Result<(), String> {
+fn plugin_enable(app: AppHandle, window: tauri::WebviewWindow, shared: State<Shared>, id: String, hash: String) -> Result<(), String> {
+    phone_link::only_settings(&window)?;
     let installed = plugins::registry::scan(&plugins::registry::dir());
     let p = installed.iter().find(|p| p.id == id).ok_or("That plugin is not in the folder any more.")?;
     if let Err(e) = &p.manifest {
@@ -1535,6 +1539,18 @@ pub fn run() {
 mod tests {
     use super::{diff_file, is_forge_instance_url};
 
+    /// Reads lib.rs: every page may invoke any command, so the ones that write another program's hooks or trust a plugin
+    /// check that the settings window called them.
+    #[test]
+    fn commands_that_write_hooks_or_trust_a_plugin_check_the_calling_window() {
+        let source = include_str!("lib.rs").replace("\r\n", "\n");
+        for name in ["hooks_apply", "agent_hooks_apply", "status_line_apply", "plugin_enable"] {
+            let start = source.find(&format!("fn {name}(")).expect("the command exists");
+            let body = &source[start..start + source[start..].find("\n}\n").expect("a command ends")];
+            assert!(body.contains("phone_link::only_settings(&window)?"), "{name} does not check the calling window");
+        }
+    }
+
     #[test]
     fn forge_links_stay_on_the_configured_instance() {
         let instance = reqwest::Url::parse("https://git.example.com/team/").unwrap();
@@ -1587,17 +1603,18 @@ fn open_in_vscode(path: Option<String>) -> bool {
             return false;
         }
     }
-    if let Some(code) = platform::find_on_path("code") {
-        let mut cmd = Command::new(code);
-        if let Some(p) = path.as_deref() {
-            cmd.arg(p);
-        }
-        if platform::no_console(&mut cmd).spawn().is_ok() {
-            return true;
-        }
+    if open_with_vscode(std::path::Path::new(path.as_deref().unwrap_or(""))) {
+        return true;
     }
     if let Some(p) = path.as_deref() {
         platform::reveal_folder(p);
     }
     false
+}
+
+/// VS Code on `path` (nothing: the editor alone), planned like "Open project":
+/// its `code.cmd` becomes Code.exe, and an unknown batch script never gets the path.
+fn open_with_vscode(path: &std::path::Path) -> bool {
+    launch::plan_editor(launch::Editor::Vscode, &launch::SystemEnv, path)
+        .is_some_and(|planned| platform::spawn_launch(&planned).is_ok())
 }

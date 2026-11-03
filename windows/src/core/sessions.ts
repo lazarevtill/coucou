@@ -44,6 +44,8 @@ export interface HookEvent {
   permission_mode?: string;
   /** Added by the app: where the session lives. */
   coucou_host?: HostInfo;
+  /** Added by the relay: Claude Code runs as administrator and Coucou may only show it (hook/src/win.rs). */
+  coucou_elevated?: boolean;
 }
 
 export interface SessionInfo {
@@ -64,6 +66,8 @@ export interface SessionInfo {
   finishedAt: number | null;
   /** Finished or failed, and the human has not looked yet. */
   unseen: boolean;
+  /** Runs as administrator: shown, never answered for (its requests stay in its terminal). */
+  elevated: boolean;
 }
 
 export type Notable = "waiting" | "approval" | "finished" | "error" | "ratelimit";
@@ -391,6 +395,11 @@ export class SessionStore {
           setWaiting(s, "question", questionText(input));
           declineApproval = true;
           if (before !== "waiting") became = "waiting";
+        } else if (s.elevated) {
+          // Coucou may not answer for an administrator session: it asks in its terminal.
+          setWaiting(s, "permission", approvalTarget(tool, input));
+          declineApproval = true;
+          if (before !== "waiting") became = "waiting";
         } else {
           s.state = "approval";
           s.waitingKind = "permission";
@@ -442,11 +451,12 @@ export class SessionStore {
       s = {
         id, cwd: "", project: "Session", host: null, state: "idle",
         waitingFor: null, waitingKind: null, steps: [], edit: null, permissionMode: null,
-        lastEventAt: now, finishedAt: null, unseen: false,
+        lastEventAt: now, finishedAt: null, unseen: false, elevated: false,
       };
       this.map.set(id, s);
     }
     if (ev.coucou_agent === "codex") s.agent = "codex";
+    if (ev.coucou_elevated === true) s.elevated = true;
     if (ev.cwd) {
       s.cwd = ev.cwd;
       s.project = aliasProjectName(lastPathComponent(ev.cwd) || "Session");

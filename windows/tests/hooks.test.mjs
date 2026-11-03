@@ -923,3 +923,34 @@ for (const agent of ["claude", "codex"]) {
     State.sessions.remove(session);
   });
 }
+
+test("an administrator session never gets a permission card, and its notice comes once per run", () => {
+  const admin = (session, extra) => hook({ session_id: session, cwd: `C:\src\${session}`, coucou_elevated: true, ...extra });
+  const notices = () => sent("show_toast").filter(({ spec }) => spec.tag === "coucou-elevated");
+
+  // Notifications switched off: nothing is said.
+  State.settings.notifications = "off";
+  admin("adm0", { hook_event_name: "SessionStart" });
+  assert.deepEqual(notices(), []);
+  State.settings.notifications = "needsYou";
+
+  // A request that reaches Coucou anyway goes straight back to the terminal.
+  admin("adm1", { hook_event_name: "PermissionRequest", request_id: "r-adm", tool_name: "Bash", tool_input: { command: "ls" } });
+  assert.deepEqual(sent("approval_decline"), [{ requestId: "r-adm" }]);
+  assert.deepEqual(sent("approval_ack"), []);
+  assert.equal(State.pendingApproval, null);
+  assert.ok(!asked.includes("alert:approval"), asked.join());
+  assert.equal(State.sessions.get("adm1").state, "waiting");
+
+  admin("adm2", { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "ls" } });
+  assert.deepEqual(notices(), [{
+    spec: {
+      tag: "coucou-elevated",
+      title: "Claude Code is running as administrator.",
+      body: "Answer its requests in that terminal: Coucou shows the session but can't answer for it.",
+      jump: null,
+      jumpLabel: "",
+    },
+  }], "one notice for two administrator sessions");
+  for (const id of ["adm0", "adm1", "adm2"]) State.sessions.remove(id);
+});

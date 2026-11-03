@@ -344,6 +344,11 @@ mod tests {
             launch.program = r"C:\unrelated\run.bat".into();
             assert_eq!(native_program(&launch, &env), None);
         }
+        // The diff card's ↗ hands VS Code a file Claude wrote: the same Code.exe, one argument.
+        let edited = plan_editor(Editor::Vscode, &env, Path::new(r"C:\a & b\edited.cmd")).unwrap();
+        assert_eq!(edited.program, PathBuf::from(VSCODE_CMD));
+        assert_eq!(native_program(&edited, &env), Some(PathBuf::from(vscode)));
+        assert_eq!(args(&edited), [r"C:\a & b\edited.cmd"]);
         env.files.remove(cursor);
         let launch = plan_editor(Editor::Cursor, &env, Path::new("")).unwrap();
         assert_eq!(native_program(&launch, &env), None);

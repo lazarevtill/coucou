@@ -189,6 +189,27 @@ test("no toast when switched off, paused, already on the island, or for a permis
   assert.equal(toastFor("ratelimit", q, NEEDS_YOU), null);
 });
 
+test("an administrator session's row, tooltip and toast name it, and a request from it is never a card", () => {
+  const s = new SessionStore();
+  const admin = { coucou_host: WT, coucou_elevated: true };
+  s.apply(ev("adm", "Notification", { notification_type: "permission_prompt", message: "Claude needs your permission to use Bash", ...admin }), T0);
+  const [row] = sessionRows(s.list());
+  assert.equal(row.host, "Windows Terminal · Administrator");
+  assert.equal(row.label, "Needs permission");
+  assert.equal(toastFor("waiting", s.get("adm"), NEEDS_YOU).title, "adm needs permission in Windows Terminal · Administrator");
+  assert.match(tooltipText(s.summary(T0), false), /adm needs you in Windows Terminal · Administrator/);
+
+  // Coucou cannot answer for it, so a request that reaches it anyway waits in the terminal.
+  s.apply(ev("adm", "PostToolUse", { ...BASH, ...admin }), T0 + 1);
+  const change = s.apply(ev("adm", "PermissionRequest", { ...BASH, ...admin }), T0 + 2);
+  assert.equal(change.became, "waiting");
+  assert.equal(change.declineApproval, true);
+  assert.equal(s.get("adm").state, "waiting");
+  assert.equal(s.get("adm").waitingKind, "permission");
+  assert.equal(s.get("adm").waitingFor, "Bash · npm test");
+  assert.equal(s.summary(T0 + 2).approval, 0);
+});
+
 test("a toast is taken back once its session no longer needs anyone", () => {
   const s = new SessionStore();
   s.apply(ev("q", "PreToolUse", ASK), T0);

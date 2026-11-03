@@ -93,19 +93,17 @@ fn hook_command(event: &str) -> String {
     agents::relay_command(Shell::Sh, event)
 }
 
+/// A hook command Coucou wrote.
+fn command_is_ours(command: Option<&Value>) -> bool {
+    command.and_then(Value::as_str).is_some_and(|c| c.contains(MARKER))
+}
+
+/// A group holding at least one of Coucou's hooks.
 fn entry_is_ours(entry: &Value) -> bool {
     entry
         .get("hooks")
         .and_then(Value::as_array)
-        .map(|hooks| {
-            hooks.iter().any(|h| {
-                h.get("command")
-                    .and_then(Value::as_str)
-                    .map(|c| c.contains(MARKER))
-                    .unwrap_or(false)
-            })
-        })
-        .unwrap_or(false)
+        .is_some_and(|hooks| hooks.iter().any(|h| command_is_ours(h.get("command"))))
 }
 
 /// The status line in settings.json is Coucou's relay (old installs wrote
@@ -126,12 +124,12 @@ fn merged(existing: &Value) -> Result<Value, String> {
     };
 
     for (event, timeout) in HOOK_EVENTS {
+        // Only Coucou's own hooks go: a user's hook in the same group stays.
         let mut list = match hooks.get(*event) {
             None => Vec::new(),
-            Some(Value::Array(list)) => list.clone(),
+            Some(Value::Array(list)) => agents::without_ours_in_groups(list, command_is_ours),
             Some(_) => return Err(unexpected(&format!("\"hooks\".\"{event}\""))),
         };
-        list.retain(|entry| !entry_is_ours(entry));
         list.push(json!({
             "hooks": [{
                 "type": "command",
@@ -162,8 +160,7 @@ fn without_ours(existing: &Value) -> Result<Value, String> {
     for (event, value) in hooks {
         match value.as_array() {
             Some(list) => {
-                let kept: Vec<Value> =
-                    list.iter().filter(|e| !entry_is_ours(e)).cloned().collect();
+                let kept = agents::without_ours_in_groups(list, command_is_ours);
                 if !kept.is_empty() {
                     out.insert(event, Value::Array(kept));
                 }
@@ -423,25 +420,40 @@ fn install_relay(src: &Path, dest: &Path) {
     if matches!((std::fs::read(src), std::fs::read(dest)), (Ok(a), Ok(b)) if a == b) {
         return;
     }
-    let pid = std::process::id();
-    let fail = |what: &str, err: std::io::Error| crate::log::line(format!("could not install {}: {what}: {err}", platform::HOOK_EXE));
-    let temp = dest.with_extension(format!("new-{pid}"));
-    if let Err(err) = std::fs::copy(src, &temp) {
-        return fail("copy", err);
+    let temp = dest.with_extension(format!("new-{}", std::process::id()));
+    let result = std::fs::copy(src, &temp).map_err(|err| ("copy", err)).and_then(|_| move_in(&temp, dest));
+    if let Err((what, err)) = result {
+        crate::log::line(format!("could not install {}: {what}: {err}", platform::HOOK_EXE));
     }
+}
+
+/// Moves `temp` to `dest`, the old relay aside first. The old one is removed
+/// only once the new one is in place, and put back if it cannot be: there is
+/// always a relay for Claude Code's hooks to run.
+#[cfg(windows)]
+fn move_in(temp: &Path, dest: &Path) -> Result<(), (&'static str, std::io::Error)> {
+    let mut aside = None;
     if dest.exists() {
         let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-        let aside = dest.with_extension(format!("old-{pid}-{stamp}"));
-        if let Err(err) = std::fs::rename(dest, &aside) {
-            let _ = std::fs::remove_file(&temp);
-            return fail("move the old relay aside", err);
+        let old = dest.with_extension(format!("old-{}-{stamp}", std::process::id()));
+        if let Err(err) = std::fs::rename(dest, &old) {
+            let _ = std::fs::remove_file(temp);
+            return Err(("move the old relay aside", err));
         }
-        // Gone now if nothing runs it; otherwise on a later start.
-        let _ = std::fs::remove_file(&aside);
+        aside = Some(old);
     }
-    if let Err(err) = std::fs::rename(&temp, dest) {
-        fail("move the new relay in", err);
+    if let Err(err) = std::fs::rename(temp, dest) {
+        if let Some(old) = &aside {
+            let _ = std::fs::rename(old, dest);
+        }
+        let _ = std::fs::remove_file(temp);
+        return Err(("move the new relay in", err));
     }
+    // Gone now if nothing runs it; otherwise on a later start.
+    if let Some(old) = aside {
+        let _ = std::fs::remove_file(old);
+    }
+    Ok(())
 }
 
 /// Old relays set aside by earlier updates, and copies an update left half-done.
@@ -526,6 +538,21 @@ mod relay_install_tests {
         assert_eq!(std::fs::metadata(&dest).unwrap().modified().unwrap(), before, "not rewritten");
         let left: Vec<String> = std::fs::read_dir(dir.join("bin")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
         assert_eq!(left, vec!["coucou-hook.exe"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn when_the_new_relay_cannot_move_in_the_old_one_stays() {
+        let (dir, _, dest) = setup("stuck", b"old relay", b"unused");
+        let temp = dir.join("bin").join("coucou-hook.new-1");
+        std::fs::write(&temp, b"new relay").unwrap();
+        // Opened without FILE_SHARE_DELETE: Windows refuses to rename it.
+        let stuck = std::fs::OpenOptions::new().read(true).share_mode(FILE_SHARE_READ).open(&temp).unwrap();
+        assert!(super::move_in(&temp, &dest).is_err());
+        assert_eq!(std::fs::read(&dest).unwrap(), b"old relay", "hooks must still find a relay");
+        drop(stuck);
+        let left: Vec<String> = std::fs::read_dir(dir.join("bin")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+        assert!(!left.iter().any(|n| n.contains(".old-")), "the old relay was put back, not left aside: {left:?}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
@@ -635,6 +662,27 @@ mod tests {
         // And removing ours puts it back exactly as it was.
         let cleaned = without_ours(&after).unwrap();
         assert_eq!(cleaned, existing);
+    }
+
+    #[test]
+    fn a_users_hook_in_the_same_group_as_ours_survives_install_and_uninstall() {
+        let mine = json!({ "type": "command", "command": "my-own-check.sh" });
+        let existing = json!({ "hooks": { "PreToolUse": [{
+            "matcher": "Bash",
+            "hooks": [
+                { "type": "command", "command": "\"C:/old/coucou-hook.exe\" PreToolUse", "timeout": 5 },
+                mine,
+            ]
+        }] } });
+        let user_only = json!([{ "matcher": "Bash", "hooks": [mine] }]);
+
+        let installed = merged(&existing).unwrap();
+        let pre = installed["hooks"]["PreToolUse"].as_array().unwrap();
+        assert_eq!(pre[0], user_only[0], "the user's hook keeps its group, without our old one");
+        assert_eq!(pre.iter().filter(|e| entry_is_ours(e)).count(), 1);
+
+        let removed = without_ours(&existing).unwrap();
+        assert_eq!(removed["hooks"]["PreToolUse"], user_only);
     }
 
     #[test]

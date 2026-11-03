@@ -4,7 +4,7 @@
 
 import { shownPath, type FileEdit } from "./edits.ts";
 import type { Notable, SessionInfo, SessionState, Summary } from "./sessions";
-import { botState, jumpLabel, waitingLine } from "./sessionView.ts";
+import { botState, hostLabel, jumpLabel, waitingLine } from "./sessionView.ts";
 import type { BotStateName } from "./layout";
 
 export type TrayState = "idle" | "working" | "attention" | "error" | "done" | "paused";
@@ -22,7 +22,7 @@ export function trayState(sum: Summary, paused: boolean): TrayState {
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 function where(s: SessionInfo): string {
-  return s.host && s.host.kind !== "unknown" ? ` in ${s.host.label}` : "";
+  return s.host && s.host.kind !== "unknown" ? ` in ${hostLabel(s)}` : "";
 }
 
 /** The tray icon's tooltip. Rust cuts it to what Windows shows (127 units). */
@@ -99,7 +99,7 @@ export function sessionRows(list: SessionInfo[]): SessionRow[] {
       id: s.id,
       agent: s.agent === "codex" ? "Codex" : "Claude Code",
       project: s.project,
-      host: known?.label ?? null,
+      host: known ? hostLabel(s) : null,
       shell: known?.shellLabel ?? null,
       state: s.state,
       label: stateLabel(s),
@@ -238,6 +238,9 @@ export function staleToasts(shown: Map<string, Notable>, list: SessionInfo[]): s
 }
 
 // ── The snapshot the island publishes ─────────────────────────────────────────
+
+/** How long a fresh permission card ignores clicks on its buttons, in the island and the flyout. */
+export const CLICK_GUARD_MS = 600;
 
 export interface ApprovalCard {
   requestId: string;

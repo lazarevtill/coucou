@@ -483,6 +483,11 @@ button.edit-toggle.open svg {
 .lines {
   max-height: 260px;
   overflow: auto;
+  /* One column as wide as the longest line: a row's color reaches the end of
+     what scrolls sideways, not just the part visible at first. */
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr);
+  align-content: start;
   padding: 4px 0;
   font: var(--mono);
   user-select: text;

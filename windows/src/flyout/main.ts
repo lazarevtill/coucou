@@ -10,7 +10,7 @@ import "./flyout.css";
 import { Bridge, onEvent, type ShellAction } from "../core/bridge";
 import { editNotes } from "../core/edits";
 import { codeLines, fileTab } from "../views/code";
-import type { ApprovalCard, ServiceRow, SessionRow, ShellSnapshot } from "../core/shell";
+import { CLICK_GUARD_MS, type ApprovalCard, type ServiceRow, type SessionRow, type ShellSnapshot } from "../core/shell";
 import { jumpNote, stepRows, type StepKind } from "../core/sessionView";
 import type { AgentTask } from "../core/state";
 import { createMiniBot, syncMiniBotStates, tickMiniBots } from "../mochi/minibots";
@@ -96,21 +96,29 @@ async function jump(id: string) {
 // ── Rendering ─────────────────────────────────────────────────────────────────
 
 let approvalKey = "";
+let approvalShownAt = 0;
 
 function renderApproval(card: ApprovalCard | null) {
   const key = card ? `${card.requestId}` : "";
   if (key === approvalKey) return;
   approvalKey = key;
+  approvalShownAt = performance.now();
   clear(approvalSlot);
   if (!card) return;
   const where = card.host ? ` · ${card.host}` : "";
+  // The card appears above the sessions and pushes them down: a click meant
+  // for a row must not land on Allow. Fresh cards ignore clicks for a moment.
+  const decide = (decision: "allow" | "deny") => () => {
+    if (performance.now() - approvalShownAt < CLICK_GUARD_MS) return;
+    act({ kind: "decide", requestId: card.requestId, decision });
+  };
   approvalSlot.append(
     h("section", { class: "approval", role: "alertdialog", "aria-label": "Permission request" },
       h("div", { class: "approval-who", text: `${card.project} needs permission${where}` }),
       h("code", { class: "approval-target", text: card.target }),
       h("div", { class: "approval-buttons" },
-        h("button", { class: "secondary", text: "Deny", onclick: () => act({ kind: "decide", requestId: card.requestId, decision: "deny" }) }),
-        h("button", { class: "primary", text: "Allow", onclick: () => act({ kind: "decide", requestId: card.requestId, decision: "allow" }) }),
+        h("button", { class: "secondary", text: "Deny", onclick: decide("deny") }),
+        h("button", { class: "primary", text: "Allow", onclick: decide("allow") }),
       ),
     ),
   );
@@ -305,18 +313,38 @@ function render(s: ShellSnapshot) {
 // ── Mochi ─────────────────────────────────────────────────────────────────────
 
 let last = performance.now();
+let pending: number | null = null;
+/** The flyout is on screen, as Rust says (`flyout-visible`): WebKitGTK keeps a
+ *  hidden window's page "visible" (#792). The window is created hidden. */
+let shown = false;
+const animating = () => shown && document.visibilityState === "visible";
+
 function frame(now: number) {
+  pending = null;
   tickMiniBots(Math.min(0.05, (now - last) / 1000));
   last = now;
-  if (document.visibilityState === "visible") requestAnimationFrame(frame);
+  if (animating()) pending = requestAnimationFrame(frame);
 }
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
+
+function wake() {
+  if (pending === null && animating()) {
     last = performance.now();
-    requestAnimationFrame(frame);
+    pending = requestAnimationFrame(frame);
   }
-});
-requestAnimationFrame(frame);
+}
+
+function setShown(visible: boolean) {
+  shown = visible;
+  wake();
+}
+
+document.addEventListener("visibilitychange", wake);
+// Listening first, then asking, misses no change in between.
+void onEvent<boolean>("flyout-visible", setShown)
+  .then(() => Bridge.flyoutVisible())
+  .then((visible) => {
+    if (visible !== null) setShown(visible);
+  });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 

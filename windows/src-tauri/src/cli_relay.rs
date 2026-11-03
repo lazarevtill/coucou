@@ -201,7 +201,7 @@ fn args(cli: Cli, r: &Request<'_>, prompt_arg: bool) -> Vec<OsString> {
     let prompt = full_prompt(r);
     let mut out: Vec<String> = Vec::new();
     match cli {
-        Cli::Claude => unreachable!("Claude Code runs through cli_agents.rs"),
+        Cli::Claude | Cli::Codex => unreachable!("Claude Code and Codex run through cli_agents.rs"),
         Cli::Gemini => {
             // Plan mode: read-only tools and Google search, nothing that writes or runs.
             if prompt_arg {
@@ -219,20 +219,6 @@ fn args(cli: Cli, r: &Request<'_>, prompt_arg: bool) -> Vec<OsString> {
         Cli::Antigravity => {
             out.extend(["-p".into(), prompt]);
             out.extend(["--output-format", "json", "--mode", "plan", "--disable-slash-commands"].map(String::from));
-        }
-        Cli::Codex => {
-            // Read-only sandbox and no shell at all; it searches only for the chat.
-            if r.web {
-                out.push("--search".into());
-            }
-            out.extend(
-                ["exec", "--json", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "--ignore-rules",
-                 "--sandbox", "read-only", "--color", "never"]
-                    .map(String::from),
-            );
-            for feature in ["shell_tool", "unified_exec", "apps", "plugins", "hooks"] {
-                out.extend(["--disable".into(), feature.into()]);
-            }
         }
         Cli::Cursor => {
             // Print mode, ask mode: answers and reads, never edits or runs (no --force).
@@ -261,21 +247,18 @@ fn args(cli: Cli, r: &Request<'_>, prompt_arg: bool) -> Vec<OsString> {
     if let Some(model) = model {
         out.extend(["--model".into(), model.to_string()]);
     }
-    if cli == Cli::Codex {
-        out.push("-".into());
-    }
     out.into_iter().map(OsString::from).collect()
 }
 
-/// Whether the prompt goes in on stdin: Codex always; Gemini, Cursor and
-/// Copilot when they are npm's `.cmd` shims; Antigravity never.
+/// Whether the prompt goes in on stdin: Gemini, Cursor and Copilot when they
+/// are npm's `.cmd` shims; Antigravity never.
 fn prompt_on_stdin(cli: Cli, exe: &Path) -> bool {
     let shim = exe
         .extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
     match cli {
-        Cli::Codex | Cli::Claude => true,
+        Cli::Claude | Cli::Codex => unreachable!("Claude Code and Codex run through cli_agents.rs"),
         Cli::Antigravity => false,
         Cli::Gemini | Cli::Cursor | Cli::Copilot => shim,
     }
@@ -309,9 +292,9 @@ async fn ask(runtime: &cli_agents::CliChat, cli: Cli, exe: &Path, r: &Request<'_
 fn parse(cli: Cli, stdout: &[u8], stderr: &[u8], success: bool) -> Result<String, String> {
     let detail = last_line(stderr);
     let result = match cli {
-        Cli::Claude | Cli::Cursor => parse_result_object(cli, stdout),
+        Cli::Claude | Cli::Codex => unreachable!("Claude Code and Codex run through cli_agents.rs"),
+        Cli::Cursor => parse_result_object(cli, stdout),
         Cli::Gemini | Cli::Antigravity => parse_response_object(cli, stdout, stderr),
-        Cli::Codex => parse_codex_events(cli, stdout),
         Cli::Copilot => {
             let text = String::from_utf8_lossy(stdout).trim().to_string();
             if success && !text.is_empty() { Ok(text) } else { Err(Failure::NoAnswer) }
@@ -350,7 +333,7 @@ enum Failure {
     Said(String),
 }
 
-/// Claude Code and Cursor: `{"result": …, "is_error": …}`.
+/// Cursor: `{"result": …, "is_error": …}`.
 fn parse_result_object(cli: Cli, stdout: &[u8]) -> Result<String, Failure> {
     let json = last_json_object(stdout).ok_or(Failure::NoAnswer)?;
     let text = json.get("result").and_then(Value::as_str).unwrap_or("").trim().to_string();
@@ -383,30 +366,6 @@ fn parse_response_object(_cli: Cli, stdout: &[u8], stderr: &[u8]) -> Result<Stri
     Err(Failure::NoAnswer)
 }
 
-/// `codex exec --json`: one event per line; the answer is the last finished agent message.
-fn parse_codex_events(_cli: Cli, stdout: &[u8]) -> Result<String, Failure> {
-    let mut answer = None;
-    let mut failure = None;
-    for line in String::from_utf8_lossy(stdout).lines() {
-        let Ok(event) = serde_json::from_str::<Value>(line) else { continue };
-        match event["type"].as_str() {
-            Some("item.completed") if event["item"]["type"] == "agent_message" => {
-                if let Some(text) = event["item"]["text"].as_str().filter(|t| !t.is_empty()) {
-                    answer = Some(text.trim().to_string());
-                }
-            }
-            Some("turn.failed") => failure = event["error"]["message"].as_str().map(String::from),
-            Some("error") => failure = event["message"].as_str().map(String::from),
-            _ => {}
-        }
-    }
-    match (answer, failure) {
-        (Some(text), _) => Ok(text),
-        (None, Some(why)) => Err(Failure::Said(why)),
-        (None, None) => Err(Failure::NoAnswer),
-    }
-}
-
 /// The last JSON object in a tool's output (some print a line or two before it).
 fn last_json_object(bytes: &[u8]) -> Option<Value> {
     let text = String::from_utf8_lossy(bytes);
@@ -421,7 +380,7 @@ fn last_json_object(bytes: &[u8]) -> Option<Value> {
 }
 
 /// The last line a tool wrote on stderr, without terminal colours.
-fn last_line(bytes: &[u8]) -> String {
+pub(crate) fn last_line(bytes: &[u8]) -> String {
     let text = String::from_utf8_lossy(bytes);
     let mut clean = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
@@ -440,7 +399,7 @@ fn last_line(bytes: &[u8]) -> String {
     clean.lines().map(str::trim).filter(|l| !l.is_empty()).last().unwrap_or("").to_string()
 }
 
-fn needs_sign_in(text: &str) -> bool {
+pub(crate) fn needs_sign_in(text: &str) -> bool {
     let t = text.to_lowercase();
     ["log in", "login", "logged in", "authenticat", "unauthorized", "401", "sign in", "signed in", "auth method",
      "invalid api key"]
@@ -577,13 +536,6 @@ mod tests {
         let agy = strings(&args(Cli::Antigravity, &request(true), true));
         assert_eq!(after(&agy, "--mode").as_deref(), Some("plan"));
 
-        let codex = strings(&args(Cli::Codex, &request(true), false));
-        assert_eq!(&codex[..2], ["--search", "exec"]);
-        assert_eq!(codex.last().map(String::as_str), Some("-"));
-        assert_eq!(after(&codex, "--sandbox").as_deref(), Some("read-only"));
-        assert!(codex.contains(&"shell_tool".to_string()) && codex.contains(&"--ephemeral".to_string()));
-        assert!(!strings(&args(Cli::Codex, &request(false), false)).contains(&"--search".to_string()));
-
         let cursor = strings(&args(Cli::Cursor, &request(true), true));
         assert_eq!(after(&cursor, "--mode").as_deref(), Some("ask"));
         assert!(!cursor.contains(&"--force".to_string()) && !cursor.contains(&"--yolo".to_string()));
@@ -603,7 +555,6 @@ mod tests {
 
     #[test]
     fn the_prompt_goes_on_stdin_through_a_cmd_shim() {
-        assert!(prompt_on_stdin(Cli::Codex, Path::new("codex")));
         assert!(!prompt_on_stdin(Cli::Antigravity, Path::new("agy.exe")));
         assert!(prompt_on_stdin(Cli::Gemini, Path::new(r"C:\npm\gemini.cmd")));
         assert!(!prompt_on_stdin(Cli::Gemini, Path::new("/usr/local/bin/gemini")));
@@ -615,8 +566,6 @@ mod tests {
         assert_eq!(parse(Cli::Cursor, b"warming up\n{\"result\":\"Yo\",\"is_error\":false}", b"", true).unwrap(), "Yo");
         assert_eq!(parse(Cli::Gemini, br#"{"response":"Bonjour","stats":{}}"#, b"", true).unwrap(), "Bonjour");
         assert_eq!(parse(Cli::Antigravity, br#"{"status":"SUCCESS","response":"Hey"}"#, b"", true).unwrap(), "Hey");
-        let events = b"{\"type\":\"thread.started\"}\n{\"type\":\"item.completed\",\"item\":{\"type\":\"reasoning\",\"text\":\"x\"}}\n{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"Final\"}}\n";
-        assert_eq!(parse(Cli::Codex, events, b"", true).unwrap(), "Final");
         assert_eq!(parse(Cli::Copilot, b"  The answer\n", b"", true).unwrap(), "The answer");
     }
 
@@ -626,8 +575,6 @@ mod tests {
         assert_eq!(parse(Cli::Gemini, b"", quota, false).unwrap_err(), "Quota exceeded");
         let auth = br#"{"error":{"message":"Please set an Auth method in your settings.json"}}"#;
         assert!(parse(Cli::Gemini, b"", auth, false).unwrap_err().ends_with("gemini"));
-        let codex = br#"{"type":"error","message":"unexpected status 401 Unauthorized"}"#;
-        assert!(parse(Cli::Codex, codex, b"", false).unwrap_err().ends_with("codex login"));
         let crash = b"\x1b[31mboom: model not found\x1b[0m\n";
         assert_eq!(parse(Cli::Copilot, b"", crash, false).unwrap_err(), "Copilot CLI gave no answer. (boom: model not found)");
         assert_eq!(parse(Cli::Cursor, br#"{"is_error":true,"result":"Usage limit"}"#, b"", false).unwrap_err(), "Usage limit");

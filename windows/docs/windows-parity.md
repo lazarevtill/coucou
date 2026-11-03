@@ -25,6 +25,10 @@ The Windows app uses native Windows services where the Mac uses Apple APIs. The 
 | Sixteen languages, including Korean, Japanese, Traditional Chinese and Thai | Complete Windows catalogs, language picker and native locale/plural rules | Native linguistic and layout review |
 | Apple iPhone/iCloud features | Windows has Android pairing; no iPhone transport equivalent yet | Cross-platform phone protocol and iPhone implementation |
 
+## Service pills
+
+The GitHub, GitLab and Gitea activity calendars count the signed-in user's own activity over the past year. GitLab's comes from at most 1,000 of the user's events, newest first; beyond that, older days show no activity and Coucou's log records that the year is incomplete.
+
 ## Floating toolbar and dictation key
 
 Flow Settings selects the dictation key and the bottom, left or right screen edge. The floating toolbar keeps its buttons in place when tooltips appear; side tooltips open toward the screen interior. Its microphone starts hands-free dictation, the record button toggles Notetaker, and the window button opens Coucou.
@@ -41,6 +45,8 @@ These editors save locally before applying changes to dictation. If the file can
 
 Deleting a dictation keeps the entry visible until the history file is updated. History erasure failures remain visible and retryable. **Erase everything** retains its confirmation if the write fails; if history was erased but statistics could not be, the error identifies that partial result and the remaining statistics stay intact.
 
+Flow's files are written beside the original, flushed to disk and renamed into place. A file that is present but cannot be used is copied beside it as `<name>.corrupt-<date>` before anything replaces it; one that cannot be read at all is copied aside once it becomes readable, and until then it is not written over. While the preferences file does not load, the history is not shortened by age.
+
 ## Call audio
 
 Notetaker fills the available width in maximized and restored windows. Its call list and note stay side by side when space permits; narrow windows place a scrollable call list above the note and keep Record/Stop at the top of that list. Capture details use two columns when they fit. Long text, speaker names and export controls wrap within the window.
@@ -49,7 +55,7 @@ Choose microphone and playback independently under Flow Settings. A laptop micro
 
 Automatic detection groups audio processes by their owning application. Multiple microphone applications or multiple outputs within one browser can be ambiguous; Coucou reports this and asks for explicit device choices. It does not read browser tabs or claim to distinguish Google Meet from another audio tab in the same browser. The source meters identify the actual device and the application supplying an automatic route.
 
-A short audio test reports levels without writing audio to disk. It shares source recovery with Notetaker. Device loss, source changes and recoverable WASAPI discontinuities remain visible after audio returns. Recoverable discontinuities do not force a working Bluetooth stream to restart. Detection runs only during a recording or an explicit audio test; Settings polling stops while its window is hidden.
+A short audio test reports levels without writing audio to disk. It shares source recovery with Notetaker. Device loss, source changes and recoverable WASAPI discontinuities remain visible after audio returns. Recoverable discontinuities do not force a working Bluetooth stream to restart. Detection runs only during a recording or an explicit audio test; Settings and Notetaker polling stop while the Coucou window is hidden.
 
 Finished recordings have **Capture details** for each source: device names used, whether audio packets arrived, the highest captured level, the final native format and retained warnings. Peaks include audio between UI updates. Problems expand the details automatically. Historical events are separate from the source's availability when recording stopped; unresolved failures stay expanded. Native device invalidation includes a readable explanation and the original driver detail. These details remain after successful transcription removes the audio files. Older notes have only their saved warning; missing diagnostics are not reconstructed. Receiving audio packets does not establish that somebody spoke. A discontinuity means audio may be missing; it does not identify a Bluetooth disconnect or another physical cause.
 
@@ -59,11 +65,13 @@ Speaker grouping applies the Mac's brief-fragment rules using the nearest establ
 
 **Export as Markdown…** opens the native Windows Save As dialog for the summary, key points, to-dos and transcript. Choose the destination and filename there; Windows asks before replacing an existing file. Cancel leaves the note and files unchanged. Export failures remain visible and can be retried. Capture diagnostics stay in the saved note inside Coucou.
 
+Deleting a call removes its folder, audio included, before the call leaves the list. If Windows refuses (a file still open in another program), the call stays listed and the reason appears under the confirmation.
+
 The playback source captures the digital mix on the selected endpoint, including other applications on that endpoint. It works with speakers, wired headphones, USB audio and supported Bluetooth endpoints. Recording cannot bypass a device's own bandwidth limits: enabling a Bluetooth headset microphone can change its playback profile. A separate laptop or USB microphone can avoid that limitation. The app shows the active source name and native format, and reports missing or failed sources.
 
 Native checks on the development laptop captured the laptop microphone and Bluetooth earbuds simultaneously at their 48 kHz stereo device format, and the laptop microphone with built-in speakers after the earbuds disconnected. A separate native fixture verified that Windows session detection found an application's actual microphone and playback endpoints. A real long Zoom recording reached a saved final transcript and recorded recovery across microphone and playback endpoint changes. That recording does not establish the exact cause of each switch, lossless capture or correct speaker identities. Controlled in-flight headset reconnection, Meet-specific choices and wired/USB hardware remain verification tasks.
 
-Microphone and playback are stored separately at the 16 kHz mono rate required by the speech models. A shared timeline preserves silence and device reconnection gaps. Disk writes run outside the audio callback. Transcript echo filtering removes repeated speaker playback from the microphone transcript; it is not an acoustic noise-cancellation driver. Audio is deleted only after the final transcript is saved and synced to disk. Write or replacement failures retain the audio and prior transcript for retry. Summary generation sends text only to the explicitly selected provider; CLI subscriptions and API connections are separate choices.
+Microphone and playback are stored separately at the 16 kHz mono rate required by the speech models. A shared timeline preserves silence and device reconnection gaps. Disk writes run outside the audio callback. Transcript echo filtering removes repeated speaker playback from the microphone transcript; it is not an acoustic noise-cancellation driver. Audio is deleted only after the final transcript is saved and synced to disk; audio left behind a saved transcript, by a failed removal or a crash, is deleted at the next launch. Write or replacement failures retain the audio and prior transcript for retry. Summary generation sends text only to the explicitly selected provider; CLI subscriptions and API connections are separate choices.
 
 ## Performance evidence
 

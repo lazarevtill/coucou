@@ -23,6 +23,7 @@ export type IslandViewName =
   | "settings"
   | "greeting"
   | "session"
+  | "diff"
   | "recap"
   | "wardrobe"
   | "update"
@@ -95,6 +96,9 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   // left column, the latest change on the right (docs/media/claude-code.png).
   // 288 stays inside the 320 px panel.
   session: { height: 288, botX: 86, botY: 92, botDiameter: 54, agentMode: "none" },
+  // The overview's diff card full size: Mochi where the overview has him, so the
+  // card keeps its left inset, and as tall as the session view for the lines.
+  diff: { height: 288, botX: 68, botY: null, botDiameter: 58, agentMode: "none" },
   // Mac: 160. The extra 24 hold the two lines with top agent, project, busiest
   // day, longest session, permissions and questions, which the Mac card leaves
   // to the shared image.
